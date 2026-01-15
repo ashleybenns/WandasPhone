@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.wandasphone.core.tts"
+    namespace = "com.tomsphone.core.tts"
     compileSdk = 34
     
     defaultConfig {

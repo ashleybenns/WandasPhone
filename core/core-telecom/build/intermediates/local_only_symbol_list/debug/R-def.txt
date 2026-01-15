@@ -1,0 +1,5 @@
+R_DEF: Internal format may change without notice
+local
+raw old_twobell_ringtone
+raw short_twobell_ringtone
+raw tannoy_bingbong

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.wandasphone.core.data"
+    namespace = "com.tomsphone.core.data"
     compileSdk = 34
     
     defaultConfig {

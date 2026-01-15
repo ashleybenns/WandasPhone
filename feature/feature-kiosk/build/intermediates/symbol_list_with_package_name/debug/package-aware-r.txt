@@ -1,0 +1,2 @@
+com.tomsphone.feature.kiosk
+xml device_admin

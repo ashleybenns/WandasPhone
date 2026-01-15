@@ -1,17 +1,16 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
 
 android {
-    namespace = "com.wandasphone"
+    namespace = "com.tomsphone"
     compileSdk = 34
     
     defaultConfig {
-        applicationId = "com.wandasphone"
+        applicationId = "com.tomsphone"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -44,6 +43,10 @@ android {
     
     buildFeatures {
         compose = true
+    }
+    
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.9"
     }
     
     packaging {

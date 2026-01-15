@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml:2:13-83
+INJECTED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml:2:13-83
+	package
+		INJECTED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml
+	xmlns:android
+		ADDED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml:2:23-81
+uses-sdk
+INJECTED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml reason: use-sdk injection requested
+INJECTED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml
+INJECTED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml
+	android:targetSdkVersion
+		INJECTED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml
+	android:minSdkVersion
+		INJECTED from /Users/ashleybenns/PhoneApp26/core/core-ui/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest14743500321720850036.xml

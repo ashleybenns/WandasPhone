@@ -1,0 +1,3 @@
+int raw old_twobell_ringtone 0x0
+int raw short_twobell_ringtone 0x0
+int raw tannoy_bingbong 0x0

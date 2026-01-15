@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.wandasphone.feature.kiosk"
+    namespace = "com.tomsphone.feature.kiosk"
     compileSdk = 34
     
     defaultConfig {

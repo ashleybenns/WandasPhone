@@ -1,13 +1,12 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
 
 android {
-    namespace = "com.wandasphone.feature.carer"
+    namespace = "com.tomsphone.feature.carer"
     compileSdk = 34
     
     defaultConfig {
@@ -32,6 +31,10 @@ android {
     
     buildFeatures {
         compose = true
+    }
+    
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.9"
     }
 }
 

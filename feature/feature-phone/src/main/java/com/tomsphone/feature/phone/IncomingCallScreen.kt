@@ -1,0 +1,276 @@
+package com.tomsphone.feature.phone
+
+import android.media.AudioManager
+import android.util.Log
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.tomsphone.core.data.model.ContactType
+import com.tomsphone.core.data.repository.ContactRepository
+import com.tomsphone.core.telecom.CallManager
+import com.tomsphone.core.telecom.MissedCallNagManager
+import com.tomsphone.core.telecom.RingtonePlayer
+import com.tomsphone.core.tts.TTSScripts
+import com.tomsphone.core.tts.WandasTTS
+import com.tomsphone.core.ui.components.InertBorderLayout
+import com.tomsphone.core.ui.theme.WandasDimensions
+import com.tomsphone.core.ui.theme.WandasTextStyles
+import com.tomsphone.core.ui.theme.wandasColors
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import javax.inject.Inject
+
+/**
+ * Incoming call screen - shown when phone is ringing
+ * 
+ * Single-activity composable version - no separate activity needed.
+ * All call handling is done via CallManager.
+ */
+@Composable
+fun IncomingCallScreen(
+    onCallAnswered: () -> Unit,
+    onCallRejected: () -> Unit,
+    viewModel: IncomingCallViewModel = hiltViewModel()
+) {
+    val callerName by viewModel.callerName.collectAsState()
+    val phoneNumber by viewModel.phoneNumber.collectAsState()
+    
+    // Start ringtone when screen appears
+    LaunchedEffect(Unit) {
+        viewModel.startRingtone()
+    }
+    
+    // Stop ringtone when screen disappears
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopRingtone()
+        }
+    }
+    
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.wandasColors.background
+    ) {
+        InertBorderLayout {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(WandasDimensions.SpacingLarge),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Top spacer
+                Spacer(modifier = Modifier.height(WandasDimensions.SpacingHuge))
+                
+                // Middle: Caller info
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Incoming call",
+                        style = WandasTextStyles.CallStatus,
+                        color = MaterialTheme.wandasColors.onBackground,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Spacer(modifier = Modifier.height(WandasDimensions.SpacingLarge))
+                    
+                    Text(
+                        text = callerName ?: "Unknown Caller",
+                        style = WandasTextStyles.ContactName,
+                        color = MaterialTheme.wandasColors.onBackground,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                
+                // Bottom: Answer and Reject buttons
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge)
+                ) {
+                    // Answer button - GREEN, large
+                    Button(
+                        onClick = {
+                            viewModel.answerCall()
+                            onCallAnswered()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(WandasDimensions.ContactButtonHeight),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4CAF50), // Green
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                        contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = WandasDimensions.ElevationMedium
+                        )
+                    ) {
+                        Text(
+                            text = "Answer",
+                            style = WandasTextStyles.ButtonLarge,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    
+                    // Reject button - Grey, slightly smaller
+                    Button(
+                        onClick = {
+                            viewModel.rejectCall()
+                            onCallRejected()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(WandasDimensions.ButtonHeightLarge),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF757575), // Grey
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
+                        contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = WandasDimensions.ElevationSmall
+                        )
+                    ) {
+                        Text(
+                            text = "Reject",
+                            style = WandasTextStyles.ButtonMedium,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(WandasDimensions.SpacingLarge))
+            }
+        }
+    }
+}
+
+/**
+ * ViewModel for incoming call screen
+ */
+@HiltViewModel
+class IncomingCallViewModel @Inject constructor(
+    private val callManager: CallManager,
+    private val tts: WandasTTS,
+    private val ringtonePlayer: RingtonePlayer,
+    private val contactRepository: ContactRepository,
+    private val missedCallNagManager: MissedCallNagManager
+) : ViewModel() {
+    
+    companion object {
+        private const val TAG = "IncomingCallVM"
+    }
+    
+    private var ringtoneJob: Job? = null
+    
+    // Get caller info from current call
+    val callerName: StateFlow<String?> = callManager.currentCall
+        .map { it?.contactName }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    
+    val phoneNumber: StateFlow<String?> = callManager.currentCall
+        .map { it?.phoneNumber }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    
+    /**
+     * Start ringtone and TTS announcement loop
+     */
+    fun startRingtone() {
+        if (ringtoneJob?.isActive == true) return
+        
+        ringtoneJob = viewModelScope.launch {
+            Log.d(TAG, "Starting ringtone loop")
+            while (isActive) {
+                try {
+                    // Play ringtone
+                    ringtonePlayer.playAndWait(RingtonePlayer.Ringtone.OLD_TWOBELL)
+                    
+                    // Announce caller
+                    val name = callerName.value
+                    TTSScripts.callerAnnouncement(name)?.let { message ->
+                        tts.speak(message)
+                    }
+                    
+                    // Brief pause before repeating
+                    delay(1500)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in ringtone loop: ${e.message}")
+                    delay(2000)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Stop ringtone and TTS
+     */
+    fun stopRingtone() {
+        Log.d(TAG, "Stopping ringtone")
+        ringtoneJob?.cancel()
+        ringtoneJob = null
+        ringtonePlayer.stop()
+        tts.stop()
+    }
+    
+    /**
+     * Answer the incoming call
+     */
+    fun answerCall() {
+        Log.d(TAG, "Answering call")
+        stopRingtone()
+        callManager.answerCall()
+    }
+    
+    /**
+     * Reject the incoming call
+     */
+    fun rejectCall() {
+        Log.d(TAG, "Rejecting call")
+        stopRingtone()
+        callManager.endCall()
+        
+        // Check if this is a CARER contact - if so, trigger missed call nag
+        viewModelScope.launch {
+            try {
+                val number = phoneNumber.value ?: return@launch
+                val contact = contactRepository.getContactByPhone(number).first()
+                
+                if (contact?.contactType == ContactType.CARER) {
+                    Log.d(TAG, "Rejected call from CARER ${contact.name} - triggering nag")
+                    missedCallNagManager.onMissedCall(number, contact.name)
+                } else {
+                    Log.d(TAG, "Rejected call from non-carer - no nag needed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking contact type: ${e.message}")
+            }
+        }
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        stopRingtone()
+    }
+}

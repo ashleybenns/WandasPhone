@@ -1,11 +1,10 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
 }
 
 android {
-    namespace = "com.wandasphone.core.ui"
+    namespace = "com.tomsphone.core.ui"
     compileSdk = 34
     
     defaultConfig {
@@ -30,6 +29,10 @@ android {
     
     buildFeatures {
         compose = true
+    }
+    
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.9"
     }
 }
 
