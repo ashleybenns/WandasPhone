@@ -19,6 +19,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import com.tomsphone.core.telecom.RingtonePlayer
 import javax.inject.Inject
 
@@ -60,102 +62,69 @@ class WandasCallScreeningService : CallScreeningService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     override fun onScreenCall(callDetails: Call.Details) {
-        Log.d(TAG, "Screening call from ${callDetails.handle}")
+        Log.d(TAG, "========================================")
+        Log.d(TAG, "onScreenCall START")
         
         val phoneNumber = callDetails.handle?.schemeSpecificPart ?: "Unknown"
+        Log.d(TAG, "Phone number: $phoneNumber")
         
-        serviceScope.launch {
-            try {
-                val settings = settingsRepository.getSettings().first()
-                
-                // Try to find contact - also try normalized versions of the number
-                val normalizedNumber = normalizePhoneNumber(phoneNumber)
-                var contact = contactRepository.getContactByPhone(phoneNumber).first()
-                if (contact == null && normalizedNumber != phoneNumber) {
-                    contact = contactRepository.getContactByPhone(normalizedNumber).first()
+        // SYNCHRONOUS screening - must respond before returning
+        val response = try {
+            runBlocking {
+                withTimeout(3000) { // 3 second timeout
+                    screenCall(phoneNumber)
                 }
-                
-                Log.d(TAG, "Incoming: $phoneNumber, normalized: $normalizedNumber, contact: ${contact?.name}")
-                
-                val isKnownContact = contact != null
-                val shouldAutoAnswer = settings.autoAnswerEnabled && isKnownContact
-                // TODO: Re-enable rejection once phone number matching is fixed
-                // For now, don't reject so we can test incoming calls
-                val shouldReject = false // !isKnownContact && settings.rejectUnknownCalls
-                
-                // Build response
-                val response = CallScreeningService.CallResponse.Builder()
-                
-                when {
-                    shouldReject -> {
-                        // Silently reject unknown calls
-                        response
-                            .setRejectCall(true)
-                            .setSkipCallLog(false)
-                            .setSkipNotification(true)
-                        
-                        Log.d(TAG, "Rejecting unknown call from $phoneNumber")
-                        
-                        // Log missed call
-                        logMissedCall(phoneNumber, null)
-                    }
-                    shouldAutoAnswer -> {
-                        // Accept call (will auto-answer after delay)
-                        response
-                            .setRejectCall(false)
-                            .setSkipCallLog(false)
-                            .setSkipNotification(false)
-                        
-                        Log.d(TAG, "Accepting known call from ${contact?.name}")
-                        
-                        // Announce caller - skip ringtone for now to avoid crashes
-                        try {
-                            TTSScripts.callerAnnouncement(contact?.name)?.let { announcement ->
-                                tts.speak(announcement)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error announcing caller: ${e.message}")
-                        }
-                        
-                        // Schedule auto-answer
-                        val delayMs = settings.autoAnswerDelaySeconds * 1000L
-                        launch {
-                            delay(delayMs)
-                            callManager.answerCall()
-                            Log.d(TAG, "Auto-answered call from ${contact?.name}")
-                        }
-                    }
-                    else -> {
-                        // Let it ring normally
-                        response
-                            .setRejectCall(false)
-                            .setSkipCallLog(false)
-                            .setSkipNotification(false)
-                        
-                        Log.d(TAG, "Allowing call to ring from $phoneNumber")
-                        
-                        // Announce caller - skip ringtone for now to avoid crashes
-                        try {
-                            TTSScripts.callerAnnouncement(contact?.name)?.let { announcement ->
-                                tts.speak(announcement)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error announcing caller: ${e.message}")
-                        }
-                    }
-                }
-                
-                respondToCall(callDetails, response.build())
-            } catch (e: Exception) {
-                Log.e(TAG, "Error screening call: ${e.message}")
-                // In case of error, allow the call through
-                val response = CallScreeningService.CallResponse.Builder()
-                    .setRejectCall(false)
-                    .setSkipCallLog(false)
-                    .setSkipNotification(false)
-                    .build()
-                respondToCall(callDetails, response)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Screening error: ${e.message}", e)
+            // On any error, allow call through
+            CallScreeningService.CallResponse.Builder()
+                .setRejectCall(false)
+                .setSkipCallLog(false)
+                .setSkipNotification(false)
+                .build()
+        }
+        
+        // Respond BEFORE returning
+        respondToCall(callDetails, response)
+        Log.d(TAG, "onScreenCall END - responded")
+        Log.d(TAG, "========================================")
+    }
+    
+    /**
+     * Perform the actual screening logic
+     */
+    private suspend fun screenCall(phoneNumber: String): CallScreeningService.CallResponse {
+        val settings = settingsRepository.getSettings().first()
+        Log.d(TAG, "Settings: rejectUnknown=${settings.rejectUnknownCalls}")
+        
+        // Find contact
+        val normalizedNumber = normalizePhoneNumber(phoneNumber)
+        var contact = contactRepository.getContactByPhone(phoneNumber).first()
+        if (contact == null && normalizedNumber != phoneNumber) {
+            contact = contactRepository.getContactByPhone(normalizedNumber).first()
+        }
+        Log.d(TAG, "Contact: ${contact?.name ?: "NOT FOUND"}")
+        
+        val isKnownContact = contact != null
+        val shouldReject = !isKnownContact && settings.rejectUnknownCalls
+        
+        Log.d(TAG, "Decision: known=$isKnownContact, reject=$shouldReject")
+        
+        return if (shouldReject) {
+            Log.d(TAG, ">>> REJECTING unknown call")
+            CallScreeningService.CallResponse.Builder()
+                .setRejectCall(true)
+                .setSkipCallLog(false)
+                .setSkipNotification(true)
+                .build()
+        } else {
+            Log.d(TAG, ">>> ALLOWING call from ${contact?.name ?: phoneNumber}")
+            CallScreeningService.CallResponse.Builder()
+                .setRejectCall(false)
+                .setSkipCallLog(false)
+                .setSkipNotification(false)
+                .build()
         }
     }
     

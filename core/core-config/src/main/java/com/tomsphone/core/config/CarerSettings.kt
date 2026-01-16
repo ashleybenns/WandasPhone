@@ -19,7 +19,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CarerSettings(
     // ========== USER IDENTITY ==========
-    val userName: String = "Tom",
+    val userName: String = "Jim",  // Test name to verify propagation
     val featureLevel: FeatureLevel = FeatureLevel.MINIMAL,
     
     // ========== CONTACTS ==========

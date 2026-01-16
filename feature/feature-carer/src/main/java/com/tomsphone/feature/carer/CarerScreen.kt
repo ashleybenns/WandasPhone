@@ -66,6 +66,49 @@ fun CarerScreen(
                     modifier = Modifier.padding(WandasDimensions.SpacingMedium)
                 )
                 
+                // User Name Setting
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.wandasColors.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(WandasDimensions.SpacingMedium)
+                    ) {
+                        Text(
+                            text = "User Name",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.wandasColors.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
+                        
+                        var userNameInput by remember { mutableStateOf(settings.userName) }
+                        
+                        // Update when settings change
+                        LaunchedEffect(settings.userName) {
+                            userNameInput = settings.userName
+                        }
+                        
+                        OutlinedTextField(
+                            value = userNameInput,
+                            onValueChange = { userNameInput = it },
+                            label = { Text("Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
+                        
+                        Button(
+                            onClick = { viewModel.setUserName(userNameInput) },
+                            enabled = userNameInput != settings.userName && userNameInput.isNotBlank()
+                        ) {
+                            Text("Save Name")
+                        }
+                    }
+                }
+                
                 // Feature Level Selection
                 Card(
                     modifier = Modifier.fillMaxWidth(),

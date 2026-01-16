@@ -1,5 +1,6 @@
 package com.tomsphone.feature.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.FeatureLevel
@@ -23,10 +24,12 @@ import javax.inject.Inject
  * 
  * Responsibilities:
  * - Load contacts based on feature level
- * - Handle tap-to-call
+ * - Handle tap-to-call with 1-second animation
  * - Display status messages in the top text box
- * - Track inactivity
  * - Carer settings access (7-tap hidden button)
+ * 
+ * NOTE: End call UI is on separate screens (EndOutgoingCallScreen, EndIncomingCallScreen)
+ * Navigation is handled by MainActivity observing call states.
  */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -36,6 +39,10 @@ class HomeViewModel @Inject constructor(
     private val missedCallNagManager: MissedCallNagManager,
     private val tts: WandasTTS
 ) : ViewModel() {
+    
+    companion object {
+        private const val TAG = "HomeViewModel"
+    }
     
     // Current feature level
     val featureLevel: StateFlow<FeatureLevel> = settingsRepository.getFeatureLevel()
@@ -73,7 +80,6 @@ class HomeViewModel @Inject constructor(
         )
     
     // Status message displayed in top text box
-    // Default: "[User]'s phone", changes to "Calling [name]", "Missed call...", etc.
     private val _statusMessage = MutableStateFlow<String?>(null)
     private var statusMessageResetJob: Job? = null
     
@@ -86,47 +92,13 @@ class HomeViewModel @Inject constructor(
         initialValue = "Tom's phone"
     )
     
-    // Calling state - when active, shows only the calling contact button
-    // Other buttons vanish, tapped button fades to black
+    // Calling animation state - when active, shows the black button for 1 second
     private val _callingContact = MutableStateFlow<Contact?>(null)
     val callingContact: StateFlow<Contact?> = _callingContact.asStateFlow()
     
-    // Show end call button after brief "calling" animation
-    private val _showEndCallButton = MutableStateFlow(false)
-    val showEndCallButton: StateFlow<Boolean> = _showEndCallButton.asStateFlow()
-    
-    // Current call state from CallManager
-    val currentCallState: StateFlow<CallState> = callManager.currentCall
-        .map { it?.state ?: CallState.IDLE }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = CallState.IDLE
-        )
-    
-    // Is call currently active (connected)?
-    val isCallActive: StateFlow<Boolean> = currentCallState
-        .map { it == CallState.ACTIVE }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
-    
-    // End call button state - requires double tap
-    private val _endCallTapCount = MutableStateFlow(0)
-    private var endCallResetJob: Job? = null
-    
-    // Track if we've seen an active call (to avoid false "call ended" on initial IDLE)
-    private var hasSeenActiveCall = false
-    
-    val endCallConfirmPending: StateFlow<Boolean> = _endCallTapCount
-        .map { it == 1 }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
+    // Expose currentCall for UI to prevent standby flash
+    // HomeScreen uses this to detect active outgoing calls
+    val currentCallForUI = callManager.currentCall
     
     // Carer settings tap counter
     private val _carerTapCount = MutableStateFlow(0)
@@ -142,16 +114,13 @@ class HomeViewModel @Inject constructor(
         }
         
         // Monitor missed calls and update status message
-        // Message STAYS until user calls back (nag is dismissed)
         viewModelScope.launch {
             missedCallNagManager.activeMissedCalls.collect { missedCalls ->
                 if (missedCalls.isNotEmpty()) {
                     val caller = missedCalls.first().contactName ?: "someone"
                     val user = userName.value
-                    // Two-line message: "[User] you missed a call.\nPlease call [carer] now."
                     setStatus("$user, you missed a call.\nPlease call $caller now.")
                 } else {
-                    // No active missed calls - clear if we were showing missed call message
                     if (_statusMessage.value?.contains("missed a call") == true) {
                         _statusMessage.value = null
                     }
@@ -159,63 +128,19 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // Monitor call state changes
+        // Listen for call state changes (for logging only)
+        // NOTE: We don't clear _statusMessage or _callingContact here to avoid race conditions.
+        // State is cleared via clearCallingStateIfNoCall() when HomeScreen is visible with no active call.
         viewModelScope.launch {
             callManager.currentCall.collect { callInfo ->
                 val state = callInfo?.state ?: CallState.IDLE
-                
-                when (state) {
-                    CallState.DIALING, CallState.CONNECTING, CallState.RINGING -> {
-                        // Call in progress but not yet connected
-                        // Keep the calling UI visible
-                    }
-                    CallState.ACTIVE -> {
-                        // Call connected - mark that we've seen an active call
-                        hasSeenActiveCall = true
-                        
-                        // Show end call button for ANY active call (outgoing OR incoming)
-                        _showEndCallButton.value = true
-                        
-                        // Update status with contact name
-                        if (_callingContact.value != null) {
-                            // Outgoing call - we already have the contact
-                            setStatus("On call with ${_callingContact.value?.name}")
-                        } else {
-                            // Incoming call or outgoing without contact - look up the name
-                            val phoneNumber = callInfo?.phoneNumber
-                            if (phoneNumber != null) {
-                                // Look up contact name from phone number
-                                val contact = contactRepository.getContactByPhone(phoneNumber).first()
-                                val displayName = contact?.name ?: phoneNumber
-                                setStatus("On call with $displayName")
-                            } else {
-                                setStatus("On call")
-                            }
-                        }
-                    }
-                    CallState.DISCONNECTED, CallState.IDLE -> {
-                        // Call ended - reset UI if we were showing end call button
-                        if (_showEndCallButton.value || _callingContact.value != null) {
-                            _callingContact.value = null
-                            _showEndCallButton.value = false
-                            _endCallTapCount.value = 0
-                            if (hasSeenActiveCall) {
-                                setTemporaryStatus("Call ended", 3000)
-                            }
-                            hasSeenActiveCall = false
-                            // Don't announce "call ended" - it talks over voicemail etc.
-                        }
-                    }
-                    else -> {
-                        // Other states (HOLDING, DISCONNECTING, etc.)
-                    }
-                }
+                Log.d(TAG, "currentCall: state=$state, callingContact=${_callingContact.value?.name}, status=${_statusMessage.value}")
             }
         }
     }
     
     /**
-     * Set a temporary status message that reverts to default after delay
+     * Set a temporary status message
      */
     private fun setTemporaryStatus(message: String, durationMs: Long = 5000) {
         statusMessageResetJob?.cancel()
@@ -236,86 +161,57 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * Clear any temporary status and exit calling mode
-     * Reverts to default "[User]'s phone" display
-     * 
-     * NOTE: Only clears if there's no active call in progress
+     * Clear calling state - called by HomeScreen when screen is visible
+     * and there's no active call
      */
-    fun clearStatus() {
-        // Don't clear if we're in an active call or dialing
-        val currentState = currentCallState.value
-        if (currentState != CallState.IDLE && currentState != CallState.DISCONNECTED) {
-            return
-        }
+    fun clearCallingStateIfNoCall() {
+        val call = callManager.currentCall.value
+        val hasActiveCall = call != null && 
+            call.state != CallState.IDLE && 
+            call.state != CallState.DISCONNECTED
         
-        statusMessageResetJob?.cancel()
-        _statusMessage.value = null
-        _callingContact.value = null
+        if (!hasActiveCall) {
+            Log.d(TAG, "Clearing calling state (no active call)")
+            _callingContact.value = null
+            _statusMessage.value = null
+        }
     }
     
     /**
-     * User tapped a contact button - place call
+     * User tapped a contact button - start calling animation then place call
      * 
      * UX Flow:
-     * 1. Button fades to black immediately (visual feedback)
-     * 2. After brief animation (500ms), End Call button appears
-     * 3. User can end call at any point (dialing, ringing, connected)
+     * 1. Show "calling animation" (black button) for 1 second
+     * 2. Place the call
+     * 3. MainActivity navigates to EndOutgoingCallScreen when it sees outgoing call state
      */
     fun onContactTap(contact: Contact) {
-        // Immediately enter calling mode - visual feedback FIRST
-        // This is critical: user sees instant response to their tap
+        Log.d(TAG, "onContactTap: ${contact.name}")
+        
+        // Immediately enter calling mode - show the "calling animation"
         _callingContact.value = contact
-        _showEndCallButton.value = false  // Start with calling animation
         setStatus("Calling ${contact.name}")
         
         viewModelScope.launch {
-            // Use speakNow to interrupt any ongoing TTS (like nag messages)
+            // Use speakNow to interrupt any ongoing TTS
             tts.speakNow(TTSScripts.calling(contact.name))
             
-            // Place the call (this will also stop nag audio)
+            // Show the calling animation for 1 second
+            delay(1000)
+            
+            Log.d(TAG, "Animation complete, placing call")
+            
+            // Place the call - MainActivity will handle navigation
             val result = callManager.placeCall(contact.phoneNumber)
             
             if (result.isFailure) {
-                // Exit calling mode on failure
+                Log.e(TAG, "Failed to place call: ${result.exceptionOrNull()}")
                 _callingContact.value = null
-                _showEndCallButton.value = false
                 setTemporaryStatus("Couldn't place call")
                 tts.speakNow("Sorry, I couldn't place that call.")
-            } else {
-                // Brief delay to show button fade to black, then show end call button
-                // 1 second gives visual feedback without needing to read button text
-                // (status box at top already says "Calling [name]")
-                delay(1000)
-                _showEndCallButton.value = true
             }
-        }
-    }
-    
-    /**
-     * End call button tapped - requires double tap for protection
-     * 
-     * First tap: Shows "Tap again to end call"
-     * Second tap: Actually ends the call
-     * Resets after 3 seconds if not completed
-     */
-    fun onEndCallTap() {
-        endCallResetJob?.cancel()
-        _endCallTapCount.value += 1
-        
-        if (_endCallTapCount.value >= 2) {
-            // Second tap - end the call
-            _endCallTapCount.value = 0
-            callManager.endCall()
-            tts.speakNow("Ending call")
-        } else {
-            // First tap - show confirmation message
-            tts.speak("Tap again to end call")
-            
-            // Reset after 3 seconds if they don't tap again
-            endCallResetJob = viewModelScope.launch {
-                delay(3000)
-                _endCallTapCount.value = 0
-            }
+            // On success, the call state collector clears _callingContact
+            // and MainActivity navigates to EndOutgoingCallScreen
         }
     }
     
@@ -325,7 +221,6 @@ class HomeViewModel @Inject constructor(
     fun onCarerButtonTap() {
         _carerTapCount.value += 1
         
-        // Check if we've reached the threshold
         viewModelScope.launch {
             val settings = settingsRepository.getSettings().first()
             if (_carerTapCount.value >= settings.settingsAccessTapCount) {
@@ -334,9 +229,8 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // Reset counter after 3 seconds of no taps
         viewModelScope.launch {
-            kotlinx.coroutines.delay(3000)
+            delay(3000)
             _carerTapCount.value = 0
         }
     }
@@ -349,37 +243,9 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * Emergency button tapped
-     * 
-     * TODO: Restore emergency call functionality before production!
-     * For development: goes directly to carer settings
+     * Emergency button tapped - DEV MODE: goes to settings
      */
     fun onEmergencyButtonTap() {
-        // DEV MODE: Go straight to settings
         _showCarerAccess.value = true
-        
-        /* PRODUCTION: Uncomment this block and remove above
-        _emergencyTapCount.value += 1
-        
-        viewModelScope.launch {
-            val settings = settingsRepository.getSettings().first()
-            if (_emergencyTapCount.value >= settings.emergencyTapCount) {
-                // Place emergency call
-                tts.speakNow(TTSScripts.emergencyCallStarting())
-                callManager.placeCall(settings.emergencyNumber)
-                _emergencyTapCount.value = 0
-            }
-        }
-        
-        // Reset after 2 seconds
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(2000)
-            _emergencyTapCount.value = 0
-        }
-        */
     }
-    
-    // Keep for production use
-    private val _emergencyTapCount = MutableStateFlow(0)
 }
-

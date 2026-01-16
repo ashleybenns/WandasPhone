@@ -43,7 +43,7 @@ abstract class DataModule {
             return Room.databaseBuilder(
                 context,
                 WandasDatabase::class.java,
-                "toms_phone_db"  // Changed from wandas to avoid conflicts
+                "toms_phone_db_v4"  // Force fresh DB with Dev as CARER
             )
                 .fallbackToDestructiveMigration()
                 .addCallback(SeedDatabaseCallback())
@@ -70,7 +70,7 @@ private class SeedDatabaseCallback : RoomDatabase.Callback() {
         
         // Test contacts - REMOVE BEFORE PRODUCTION
         // 1. Ashley - 07597086211 - CARER - Primary (main test contact)
-        // 2. Dev - 07510940646 - GREY_LIST (can receive calls, no nag)
+        // 2. Dev - 07510940646 - CARER (second test contact)
         
         db.execSQL(
             "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt) " +
@@ -79,7 +79,7 @@ private class SeedDatabaseCallback : RoomDatabase.Callback() {
         
         db.execSQL(
             "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt) " +
-            "VALUES ('Dev', '07510940646', NULL, 2, 0, 'GREY_LIST', $now, $now)"
+            "VALUES ('Dev', '07510940646', NULL, 2, 0, 'CARER', $now, $now)"
         )
     }
 }

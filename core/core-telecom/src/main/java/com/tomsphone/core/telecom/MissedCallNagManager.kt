@@ -127,6 +127,48 @@ class MissedCallNagManager @Inject constructor(
     }
     
     /**
+     * Dismiss nag only if calling the most recent missed caller
+     * Returns true if nag was dismissed, false if calling someone else
+     */
+    suspend fun dismissIfCallingMissedCaller(phoneNumber: String): Boolean {
+        val mostRecentMissedCall = _activeMissedCalls.value.firstOrNull()
+        
+        if (mostRecentMissedCall == null) {
+            Log.d(TAG, "No active missed calls to dismiss")
+            return false
+        }
+        
+        // Normalize both numbers for comparison
+        val callingNormalized = normalizePhoneNumber(phoneNumber)
+        val missedNormalized = normalizePhoneNumber(mostRecentMissedCall.phoneNumber)
+        
+        if (callingNormalized == missedNormalized) {
+            Log.d(TAG, "Calling the missed caller (${mostRecentMissedCall.contactName}) - dismissing nag")
+            stopAllAudio()
+            callLogRepository.markAsRead(mostRecentMissedCall.id)
+            stopNagging()
+            return true
+        } else {
+            Log.d(TAG, "Calling ${phoneNumber}, but missed call is from ${mostRecentMissedCall.contactName} - nag continues")
+            // Still stop audio briefly so user can make the call, but nag will resume
+            stopAllAudio()
+            return false
+        }
+    }
+    
+    /**
+     * Normalize phone number for comparison (UK format)
+     */
+    private fun normalizePhoneNumber(phone: String): String {
+        var digits = phone.replace(Regex("[^0-9]"), "")
+        // Handle UK +44 prefix -> 0
+        if (digits.startsWith("44") && digits.length > 10) {
+            digits = "0" + digits.substring(2)
+        }
+        return digits
+    }
+    
+    /**
      * Stop all audio (ringtone + TTS) immediately
      * Call this when user takes action like placing a call
      */

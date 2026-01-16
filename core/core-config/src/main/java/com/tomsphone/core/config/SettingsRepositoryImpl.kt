@@ -78,7 +78,7 @@ class SettingsRepositoryImpl @Inject constructor(
     
     override fun getUserName(): Flow<String> {
         return dataStore.data.map { preferences ->
-            preferences[USER_NAME_KEY] ?: "Wanda"
+            preferences[USER_NAME_KEY] ?: CarerSettings().userName  // Use default from CarerSettings
         }
     }
     

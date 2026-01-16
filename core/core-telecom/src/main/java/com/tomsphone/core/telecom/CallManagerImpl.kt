@@ -36,6 +36,12 @@ class CallManagerImpl @Inject constructor(
     private val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     
+    // SEPARATE FLOWS for clean UI handling:
+    // - _incomingRingingCall: For incoming RINGING calls (IncomingCallScreen observes)
+    // - _currentCall: For outgoing calls and ACTIVE incoming calls (HomeScreen observes)
+    private val _incomingRingingCall = MutableStateFlow<CallInfo?>(null)
+    override val incomingRingingCall: StateFlow<CallInfo?> = _incomingRingingCall
+    
     private val _currentCall = MutableStateFlow<CallInfo?>(null)
     override val currentCall: StateFlow<CallInfo?> = _currentCall
     
@@ -75,13 +81,18 @@ class CallManagerImpl @Inject constructor(
                 Log.d(TAG, "Placed call via Intent (fallback) to $phoneNumber")
             }
             
-            // Cancel missed call nag in background
+            // Only dismiss nag if calling the person who called
+            // If calling someone else, the nag will resume after this call
             scope.launch {
                 try {
-                    missedCallNagManager.get().dismissAll()
-                    Log.d(TAG, "Dismissed missed call nag")
+                    val dismissed = missedCallNagManager.get().dismissIfCallingMissedCaller(phoneNumber)
+                    if (dismissed) {
+                        Log.d(TAG, "Dismissed missed call nag (calling the missed caller)")
+                    } else {
+                        Log.d(TAG, "Nag not dismissed (calling different person)")
+                    }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to dismiss nag: ${e.message}")
+                    Log.e(TAG, "Failed to check nag: ${e.message}")
                 }
             }
         }
@@ -200,9 +211,72 @@ class CallManagerImpl @Inject constructor(
     /**
      * Update current call state (called from InCallService)
      */
+    /**
+     * Update call state - routes to appropriate flow based on call direction/state
+     * 
+     * ROUTING LOGIC:
+     * - Incoming RINGING → incomingRingingCall (IncomingCallScreen observes)
+     * - Incoming ACTIVE → currentCall (call was answered, HomeScreen shows end call)
+     * - Incoming DISCONNECTED/IDLE → clear both flows
+     * - Outgoing (any state) → currentCall (HomeScreen handles)
+     * - null → clear both flows
+     */
     fun updateCallState(callInfo: CallInfo?) {
-        _currentCall.value = callInfo
-        Log.d(TAG, "Call state updated: ${callInfo?.state}")
+        if (callInfo == null) {
+            Log.d(TAG, "Call state cleared (null)")
+            _incomingRingingCall.value = null
+            _currentCall.value = null
+            return
+        }
+        
+        val isIncoming = callInfo.direction == CallDirection.INCOMING
+        val state = callInfo.state
+        
+        Log.d(TAG, "updateCallState: state=$state, incoming=$isIncoming")
+        
+        when {
+            // Incoming RINGING → only to incomingRingingCall
+            isIncoming && state == CallState.RINGING -> {
+                Log.d(TAG, ">>> Routing to incomingRingingCall ONLY (currentCall stays: ${_currentCall.value?.state})")
+                _incomingRingingCall.value = callInfo
+                // DON'T update currentCall - HomeScreen shouldn't see this
+                // EXPLICIT: Make sure currentCall is not touched
+            }
+            
+            // Incoming ACTIVE (answered) → move from incoming to current
+            isIncoming && state == CallState.ACTIVE -> {
+                Log.d(TAG, ">>> Incoming call answered - moving to currentCall")
+                _incomingRingingCall.value = null  // Clear incoming
+                _currentCall.value = callInfo      // Now HomeScreen can see it
+            }
+            
+            // Incoming DISCONNECTED/IDLE → clear both
+            isIncoming && (state == CallState.DISCONNECTED || state == CallState.IDLE) -> {
+                Log.d(TAG, ">>> Incoming call ended - clearing both flows")
+                _incomingRingingCall.value = null
+                _currentCall.value = null
+            }
+            
+            // Outgoing calls → always to currentCall
+            !isIncoming -> {
+                Log.d(TAG, ">>> Outgoing call - routing to currentCall")
+                _currentCall.value = callInfo
+            }
+            
+            // Other incoming states (CONNECTING, etc.) → keep in incoming flow
+            else -> {
+                Log.d(TAG, ">>> Other incoming state - keeping in incomingRingingCall")
+                _incomingRingingCall.value = callInfo
+            }
+        }
+    }
+    
+    /**
+     * Clear incoming ringing call (called when answered/rejected)
+     */
+    fun clearIncomingCall() {
+        Log.d(TAG, "Clearing incoming ringing call")
+        _incomingRingingCall.value = null
     }
 }
 

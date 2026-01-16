@@ -32,15 +32,14 @@ class RingtonePlayer @Inject constructor(
      * Available ringtones and audio alerts
      */
     enum class Ringtone(@RawRes val resId: Int) {
-        /** Main incoming call ringtone with TTS */
+        /** Main incoming call ringtone with baked-in TTS (legacy) */
         OLD_TWOBELL(R.raw.old_twobell_ringtone),
+        
+        /** Short two-bell sound only (no TTS) - used with dynamic TTS */
+        SHORT_TWOBELL(R.raw.short_twobell_ringtone),
         
         /** Tannoy-style bing-bong for missed call nag attention */
         TANNOY_BINGBONG(R.raw.tannoy_bingbong)
-        
-        // Add more ringtones here:
-        // CLASSIC_RING(R.raw.ringtone_classic),
-        // GENTLE_CHIME(R.raw.ringtone_gentle),
     }
     
     /**

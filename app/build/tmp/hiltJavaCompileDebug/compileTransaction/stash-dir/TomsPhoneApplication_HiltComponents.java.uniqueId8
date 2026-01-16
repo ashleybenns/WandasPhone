@@ -9,6 +9,8 @@ import com.tomsphone.core.telecom.WandasInCallService_GeneratedInjector;
 import com.tomsphone.core.tts.TTSModule;
 import com.tomsphone.feature.carer.CarerViewModel_HiltModules;
 import com.tomsphone.feature.home.HomeViewModel_HiltModules;
+import com.tomsphone.feature.phone.EndIncomingCallViewModel_HiltModules;
+import com.tomsphone.feature.phone.EndOutgoingCallViewModel_HiltModules;
 import com.tomsphone.feature.phone.InCallViewModel_HiltModules;
 import com.tomsphone.feature.phone.IncomingCallViewModel_HiltModules;
 import dagger.Binds;
@@ -169,6 +171,8 @@ public final class TomsPhoneApplication_HiltComponents {
   @Subcomponent(
       modules = {
           CarerViewModel_HiltModules.KeyModule.class,
+          EndIncomingCallViewModel_HiltModules.KeyModule.class,
+          EndOutgoingCallViewModel_HiltModules.KeyModule.class,
           HiltWrapper_ActivityRetainedComponentManager_LifecycleModule.class,
           HiltWrapper_SavedStateHandleModule.class,
           HomeViewModel_HiltModules.KeyModule.class,
@@ -212,6 +216,8 @@ public final class TomsPhoneApplication_HiltComponents {
   @Subcomponent(
       modules = {
           CarerViewModel_HiltModules.BindsModule.class,
+          EndIncomingCallViewModel_HiltModules.BindsModule.class,
+          EndOutgoingCallViewModel_HiltModules.BindsModule.class,
           HiltWrapper_HiltViewModelFactory_ViewModelModule.class,
           HomeViewModel_HiltModules.BindsModule.class,
           InCallViewModel_HiltModules.BindsModule.class,

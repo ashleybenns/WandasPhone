@@ -3,8 +3,10 @@ package com.tomsphone.core.telecom;
 import com.tomsphone.core.config.SettingsRepository;
 import com.tomsphone.core.data.repository.ContactRepository;
 import com.tomsphone.core.tts.WandasTTS;
+import dagger.Lazy;
 import dagger.MembersInjector;
 import dagger.internal.DaggerGenerated;
+import dagger.internal.DoubleCheck;
 import dagger.internal.InjectedFieldSignature;
 import dagger.internal.QualifierMetadata;
 import javax.annotation.processing.Generated;
@@ -31,20 +33,25 @@ public final class WandasInCallService_MembersInjector implements MembersInjecto
 
   private final Provider<ContactRepository> contactRepositoryProvider;
 
+  private final Provider<MissedCallNagManager> missedCallNagManagerProvider;
+
   public WandasInCallService_MembersInjector(Provider<CallManagerImpl> callManagerProvider,
       Provider<WandasTTS> ttsProvider, Provider<SettingsRepository> settingsRepositoryProvider,
-      Provider<ContactRepository> contactRepositoryProvider) {
+      Provider<ContactRepository> contactRepositoryProvider,
+      Provider<MissedCallNagManager> missedCallNagManagerProvider) {
     this.callManagerProvider = callManagerProvider;
     this.ttsProvider = ttsProvider;
     this.settingsRepositoryProvider = settingsRepositoryProvider;
     this.contactRepositoryProvider = contactRepositoryProvider;
+    this.missedCallNagManagerProvider = missedCallNagManagerProvider;
   }
 
   public static MembersInjector<WandasInCallService> create(
       Provider<CallManagerImpl> callManagerProvider, Provider<WandasTTS> ttsProvider,
       Provider<SettingsRepository> settingsRepositoryProvider,
-      Provider<ContactRepository> contactRepositoryProvider) {
-    return new WandasInCallService_MembersInjector(callManagerProvider, ttsProvider, settingsRepositoryProvider, contactRepositoryProvider);
+      Provider<ContactRepository> contactRepositoryProvider,
+      Provider<MissedCallNagManager> missedCallNagManagerProvider) {
+    return new WandasInCallService_MembersInjector(callManagerProvider, ttsProvider, settingsRepositoryProvider, contactRepositoryProvider, missedCallNagManagerProvider);
   }
 
   @Override
@@ -53,6 +60,7 @@ public final class WandasInCallService_MembersInjector implements MembersInjecto
     injectTts(instance, ttsProvider.get());
     injectSettingsRepository(instance, settingsRepositoryProvider.get());
     injectContactRepository(instance, contactRepositoryProvider.get());
+    injectMissedCallNagManager(instance, DoubleCheck.lazy(missedCallNagManagerProvider));
   }
 
   @InjectedFieldSignature("com.tomsphone.core.telecom.WandasInCallService.callManager")
@@ -75,5 +83,11 @@ public final class WandasInCallService_MembersInjector implements MembersInjecto
   public static void injectContactRepository(WandasInCallService instance,
       ContactRepository contactRepository) {
     instance.contactRepository = contactRepository;
+  }
+
+  @InjectedFieldSignature("com.tomsphone.core.telecom.WandasInCallService.missedCallNagManager")
+  public static void injectMissedCallNagManager(WandasInCallService instance,
+      Lazy<MissedCallNagManager> missedCallNagManager) {
+    instance.missedCallNagManager = missedCallNagManager;
   }
 }

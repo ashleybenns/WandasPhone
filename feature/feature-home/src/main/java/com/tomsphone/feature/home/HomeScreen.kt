@@ -1,58 +1,93 @@
 package com.tomsphone.feature.home
 
+import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.telecom.CallDirection
+import com.tomsphone.core.telecom.CallManager
+import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.ui.components.CallingStateButton
 import com.tomsphone.core.ui.components.ContactButton
 import com.tomsphone.core.ui.components.EmergencyButton
-import com.tomsphone.core.ui.components.EndCallButton
 import com.tomsphone.core.ui.components.InertBorderLayout
 import com.tomsphone.core.ui.components.StatusMessageBox
 import com.tomsphone.core.ui.theme.WandasDimensions
-import com.tomsphone.core.ui.theme.WandasTextStyles
 import com.tomsphone.core.ui.theme.wandasColors
 
 /**
- * Level 1 Home Screen
+ * Level 1 Home Screen - STANDBY STATE ONLY
  * 
- * Features:
- * - Status message box at top (fixed 3-line height)
- *   - Default: "[User]'s phone"
- *   - Shows: "Calling [name]", "Missed call from [name]", etc.
- * - 2 carer contact buttons (tap to call)
- * - Emergency button (3-tap protection, dev mode: settings shortcut)
- * - Hidden carer access (7 taps on status message box)
- * - Inert border to prevent accidental touches
- * - Full screen (no status bar - cleaner interface)
+ * Shows:
+ * - Status message box at top
+ * - Contact buttons (tap to call)
+ * - Emergency button
+ * - Brief calling animation (1 second black button)
+ * 
+ * End call UI is on separate screens.
+ * 
+ * IMPORTANT: To prevent "standby flash" during outgoing calls,
+ * we check BOTH callingContact AND currentCall. If there's an
+ * active outgoing call, we show the calling UI even if callingContact
+ * gets cleared due to timing issues.
  */
 @Composable
 fun HomeScreen(
-    onNavigateToCall: () -> Unit,
     onNavigateToCarer: () -> Unit,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    callManager: CallManager? = null // Optional for direct call state observation
 ) {
-    val featureLevel by viewModel.featureLevel.collectAsState()
     val displayMessage by viewModel.displayMessage.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
     val showCarerAccess by viewModel.showCarerAccess.collectAsState()
     val callingContact by viewModel.callingContact.collectAsState()
-    val showEndCallButton by viewModel.showEndCallButton.collectAsState()
-    val endCallConfirmPending by viewModel.endCallConfirmPending.collectAsState()
     
-    // Calling mode: when user taps a contact, that button fades to black
-    // and all other buttons disappear
-    val isCallingMode = callingContact != null
+    // Also observe currentCall directly to prevent standby flash
+    val currentCall by viewModel.currentCallForUI.collectAsState()
     
-    // Clear any stale status when screen is shown
-    LaunchedEffect(Unit) {
-        viewModel.clearStatus()
+    // Show calling UI if:
+    // 1. callingContact is set (user just tapped, animation in progress), OR
+    // 2. There's an active outgoing call (prevents flash while navigating to yellow screen)
+    val hasActiveOutgoingCall = currentCall?.let { call ->
+        call.direction == CallDirection.OUTGOING &&
+        (call.state == CallState.DIALING || call.state == CallState.RINGING || 
+         call.state == CallState.CONNECTING || call.state == CallState.ACTIVE)
+    } ?: false
+    
+    val isCallingMode = callingContact != null || hasActiveOutgoingCall
+    val callingContactName = callingContact?.name ?: currentCall?.contactName ?: "..."
+    
+    Log.d("HomeScreen", "COMPOSE: callingContact=${callingContact?.name}, hasActiveOutgoing=$hasActiveOutgoingCall, isCallingMode=$isCallingMode")
+    
+    // When HomeScreen becomes visible and there's no active call, clear stale calling state
+    // This handles returning from yellow/green screen after call ends
+    LaunchedEffect(hasActiveOutgoingCall) {
+        if (!hasActiveOutgoingCall && callingContact == null) {
+            // No active call and no animation - this is normal standby
+        } else if (!hasActiveOutgoingCall) {
+            // Animation was set but no active call - clear it
+            viewModel.clearCallingStateIfNoCall()
+        }
+    }
+    
+    // If there's an active outgoing call, show a black screen
+    // This prevents the standby flash while MainActivity navigates to yellow screen
+    if (hasActiveOutgoingCall && callingContact == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            // Just show black - navigation to yellow will happen momentarily
+        }
+        return
     }
     
     Surface(
@@ -62,8 +97,7 @@ fun HomeScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top: Status message box - FULL WIDTH (no inert border)
-            // Hidden carer access via 7 taps (disabled during calling)
+            // Top: Status message box - FULL WIDTH
             StatusMessageBox(
                 message = displayMessage,
                 onHiddenTap = { if (!isCallingMode) viewModel.onCarerButtonTap() },
@@ -81,64 +115,51 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Middle: Contact buttons OR in-call UI
-                    // IMPORTANT: Maintain stable layout - buttons don't move
+                    // Middle: Contact buttons OR calling animation
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                    if (showEndCallButton) {
-                        // END CALL MODE: Show end call button
-                        // Works for both outgoing calls (after dialing) and incoming calls (after answering)
-                        Spacer(modifier = Modifier.height(WandasDimensions.ContactButtonHeight))
-                        
-                        EndCallButton(
-                            onClick = { viewModel.onEndCallTap() },
-                            confirmPending = endCallConfirmPending
-                        )
-                        
-                        Spacer(modifier = Modifier.height(WandasDimensions.ContactButtonHeight))
-                    } else if (isCallingMode) {
-                        // CALLING ANIMATION: Brief black button before end call appears (outgoing only)
-                        contacts.take(2).forEachIndexed { index, contact ->
-                            val isThisContactCalling = callingContact?.id == contact.id
-                            
-                            if (isThisContactCalling) {
-                                CallingStateButton(
-                                    contactName = contact.name,
+                        if (callingContact != null) {
+                            // CALLING ANIMATION: Brief black button (1 second)
+                            contacts.take(2).forEachIndexed { index, contact ->
+                                val isThisContactCalling = callingContact?.id == contact.id
+                                
+                                if (isThisContactCalling) {
+                                    CallingStateButton(
+                                        contactName = contact.name,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(WandasDimensions.ContactButtonHeight)
+                                    )
+                                }
+                            }
+                        } else {
+                            // NORMAL MODE: Show contact buttons
+                            contacts.take(2).forEach { contact ->
+                                ContactButton(
+                                    name = contact.name,
+                                    phoneNumber = contact.phoneNumber,
+                                    onClick = { viewModel.onContactTap(contact) },
                                     modifier = Modifier.fillMaxWidth()
-                                )
-                            } else {
-                                Spacer(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(WandasDimensions.ContactButtonHeight)
                                 )
                             }
                         }
-                    } else {
-                        // NORMAL MODE: Show contact buttons
-                        contacts.take(2).forEach { contact ->
-                            ContactButton(
-                                name = contact.name,
-                                phoneNumber = contact.phoneNumber,
-                                onClick = { viewModel.onContactTap(contact) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
                     }
-                }
-                
-                    // Bottom: Emergency button - HIDE when in call or calling
-                    if (!isCallingMode && !showEndCallButton) {
+                    
+                    // Bottom: Emergency button - HIDE when in calling animation
+                    if (callingContact == null) {
                         EmergencyButton(
                             text = "Emergency",
                             onClick = { viewModel.onEmergencyButtonTap() },
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        // Keep space so layout doesn't jump
                         Spacer(modifier = Modifier.height(WandasDimensions.EmergencyButtonHeight))
                     }
                 }
@@ -148,10 +169,7 @@ fun HomeScreen(
     
     // Carer access dialog
     if (showCarerAccess) {
-        // TODO: Show carer PIN dialog
-        // For now just dismiss
         viewModel.dismissCarerAccess()
         onNavigateToCarer()
     }
 }
-

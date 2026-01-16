@@ -32,6 +32,10 @@ import com.tomsphone.feature.carer.CarerViewModel;
 import com.tomsphone.feature.carer.CarerViewModel_HiltModules_KeyModule_ProvideFactory;
 import com.tomsphone.feature.home.HomeViewModel;
 import com.tomsphone.feature.home.HomeViewModel_HiltModules_KeyModule_ProvideFactory;
+import com.tomsphone.feature.phone.EndIncomingCallViewModel;
+import com.tomsphone.feature.phone.EndIncomingCallViewModel_HiltModules_KeyModule_ProvideFactory;
+import com.tomsphone.feature.phone.EndOutgoingCallViewModel;
+import com.tomsphone.feature.phone.EndOutgoingCallViewModel_HiltModules_KeyModule_ProvideFactory;
 import com.tomsphone.feature.phone.InCallViewModel;
 import com.tomsphone.feature.phone.InCallViewModel_HiltModules_KeyModule_ProvideFactory;
 import com.tomsphone.feature.phone.IncomingCallViewModel;
@@ -395,7 +399,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
     @Override
     public Set<String> getViewModelKeys() {
-      return SetBuilder.<String>newSetBuilder(4).add(CarerViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(HomeViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(InCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(IncomingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).build();
+      return SetBuilder.<String>newSetBuilder(6).add(CarerViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(EndIncomingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(EndOutgoingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(HomeViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(InCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(IncomingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).build();
     }
 
     @Override
@@ -429,6 +433,10 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
     private Provider<CarerViewModel> carerViewModelProvider;
 
+    private Provider<EndIncomingCallViewModel> endIncomingCallViewModelProvider;
+
+    private Provider<EndOutgoingCallViewModel> endOutgoingCallViewModelProvider;
+
     private Provider<HomeViewModel> homeViewModelProvider;
 
     private Provider<InCallViewModel> inCallViewModelProvider;
@@ -449,14 +457,16 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
     private void initialize(final SavedStateHandle savedStateHandleParam,
         final ViewModelLifecycle viewModelLifecycleParam) {
       this.carerViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
-      this.homeViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
-      this.inCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
-      this.incomingCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
+      this.endIncomingCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
+      this.endOutgoingCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
+      this.homeViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
+      this.inCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 4);
+      this.incomingCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 5);
     }
 
     @Override
     public Map<String, javax.inject.Provider<ViewModel>> getHiltViewModelMap() {
-      return MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(4).put("com.tomsphone.feature.carer.CarerViewModel", ((Provider) carerViewModelProvider)).put("com.tomsphone.feature.home.HomeViewModel", ((Provider) homeViewModelProvider)).put("com.tomsphone.feature.phone.InCallViewModel", ((Provider) inCallViewModelProvider)).put("com.tomsphone.feature.phone.IncomingCallViewModel", ((Provider) incomingCallViewModelProvider)).build();
+      return MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(6).put("com.tomsphone.feature.carer.CarerViewModel", ((Provider) carerViewModelProvider)).put("com.tomsphone.feature.phone.EndIncomingCallViewModel", ((Provider) endIncomingCallViewModelProvider)).put("com.tomsphone.feature.phone.EndOutgoingCallViewModel", ((Provider) endOutgoingCallViewModelProvider)).put("com.tomsphone.feature.home.HomeViewModel", ((Provider) homeViewModelProvider)).put("com.tomsphone.feature.phone.InCallViewModel", ((Provider) inCallViewModelProvider)).put("com.tomsphone.feature.phone.IncomingCallViewModel", ((Provider) incomingCallViewModelProvider)).build();
     }
 
     @Override
@@ -488,14 +498,20 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
           case 0: // com.tomsphone.feature.carer.CarerViewModel 
           return (T) new CarerViewModel(singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get());
 
-          case 1: // com.tomsphone.feature.home.HomeViewModel 
+          case 1: // com.tomsphone.feature.phone.EndIncomingCallViewModel 
+          return (T) new EndIncomingCallViewModel(singletonCImpl.callManagerImplProvider.get());
+
+          case 2: // com.tomsphone.feature.phone.EndOutgoingCallViewModel 
+          return (T) new EndOutgoingCallViewModel(singletonCImpl.callManagerImplProvider.get());
+
+          case 3: // com.tomsphone.feature.home.HomeViewModel 
           return (T) new HomeViewModel(singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.callManagerImplProvider.get(), singletonCImpl.missedCallNagManagerProvider.get(), singletonCImpl.androidTTSImplProvider.get());
 
-          case 2: // com.tomsphone.feature.phone.InCallViewModel 
+          case 4: // com.tomsphone.feature.phone.InCallViewModel 
           return (T) new InCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.bindCallLogRepositoryProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.androidTTSImplProvider.get());
 
-          case 3: // com.tomsphone.feature.phone.IncomingCallViewModel 
-          return (T) new IncomingCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.androidTTSImplProvider.get(), singletonCImpl.ringtonePlayerProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.missedCallNagManagerProvider.get());
+          case 5: // com.tomsphone.feature.phone.IncomingCallViewModel 
+          return (T) new IncomingCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.androidTTSImplProvider.get(), singletonCImpl.ringtonePlayerProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.missedCallNagManagerProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get());
 
           default: throw new AssertionError(id);
         }

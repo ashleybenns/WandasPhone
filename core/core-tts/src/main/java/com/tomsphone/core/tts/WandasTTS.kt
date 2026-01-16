@@ -19,6 +19,12 @@ interface WandasTTS {
     fun speakNow(message: String)
     
     /**
+     * Speak and suspend until speech completes
+     * Useful for chaining audio: ringtone -> TTS -> pause -> TTS
+     */
+    suspend fun speakAndWait(message: String)
+    
+    /**
      * Stop current speech
      */
     fun stop()

@@ -174,7 +174,8 @@ class IncomingCallViewModel @Inject constructor(
     private val tts: WandasTTS,
     private val ringtonePlayer: RingtonePlayer,
     private val contactRepository: ContactRepository,
-    private val missedCallNagManager: MissedCallNagManager
+    private val missedCallNagManager: MissedCallNagManager,
+    private val settingsRepository: com.tomsphone.core.config.SettingsRepository
 ) : ViewModel() {
     
     companion object {
@@ -183,36 +184,81 @@ class IncomingCallViewModel @Inject constructor(
     
     private var ringtoneJob: Job? = null
     
-    // Get caller info from current call
-    val callerName: StateFlow<String?> = callManager.currentCall
-        .map { it?.contactName }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    
-    val phoneNumber: StateFlow<String?> = callManager.currentCall
+    // Use incomingRingingCall (not currentCall) - this is the dedicated flow for ringing calls
+    val phoneNumber: StateFlow<String?> = callManager.incomingRingingCall
         .map { it?.phoneNumber }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     
+    // Caller name - try from call info first, then do our own lookup
+    private val _callerName = MutableStateFlow<String?>(null)
+    val callerName: StateFlow<String?> = _callerName.asStateFlow()
+    
+    init {
+        // Monitor incomingRingingCall for contact name, with backup lookup
+        viewModelScope.launch {
+            callManager.incomingRingingCall.collect { callInfo ->
+                if (callInfo?.contactName != null) {
+                    _callerName.value = callInfo.contactName
+                } else if (callInfo?.phoneNumber != null && _callerName.value == null) {
+                    // Service didn't find contact - try our own lookup
+                    val contact = contactRepository.getContactByPhone(callInfo.phoneNumber).first()
+                    if (contact != null) {
+                        _callerName.value = contact.name
+                        Log.d(TAG, "Found contact via backup lookup: ${contact.name}")
+                    }
+                }
+            }
+        }
+    }
+    
     /**
      * Start ringtone and TTS announcement loop
+     * 
+     * Pattern:
+     * 1. Play short_twobell_ringtone.mp3
+     * 2. TTS: "[userName]"
+     * 3. 500ms pause
+     * 4. TTS: "That's your phone ringing."
+     * 5. 500ms pause
+     * 6. TTS: "[callerName] is calling" (if known)
+     * 7. Repeat
      */
     fun startRingtone() {
         if (ringtoneJob?.isActive == true) return
         
         ringtoneJob = viewModelScope.launch {
             Log.d(TAG, "Starting ringtone loop")
+            
+            // Get userName from settings
+            val userName = settingsRepository.getUserName().first()
+            
+            // Wait briefly for contact lookup to complete before first announcement
+            delay(300)
+            
             while (isActive) {
                 try {
-                    // Play ringtone
-                    ringtonePlayer.playAndWait(RingtonePlayer.Ringtone.OLD_TWOBELL)
+                    // 1. Play short two-bell ringtone sound
+                    ringtonePlayer.playAndWait(RingtonePlayer.Ringtone.SHORT_TWOBELL)
                     
-                    // Announce caller
+                    // 2. TTS: "[userName]"
+                    tts.speakAndWait(userName)
+                    
+                    // 3. 500ms pause
+                    delay(500)
+                    
+                    // 4. TTS: "That's your phone ringing."
+                    tts.speakAndWait("That's your phone ringing.")
+                    
+                    // 5. 500ms pause
+                    delay(500)
+                    
+                    // 6. Announce caller (if known)
                     val name = callerName.value
-                    TTSScripts.callerAnnouncement(name)?.let { message ->
-                        tts.speak(message)
+                    if (name != null) {
+                        tts.speakAndWait("$name is calling.")
+                        delay(500)
                     }
                     
-                    // Brief pause before repeating
-                    delay(1500)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

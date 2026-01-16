@@ -6,11 +6,26 @@ import kotlinx.coroutines.flow.StateFlow
  * Main interface for call management
  * 
  * Abstracts Android Telecom API complexities
+ * 
+ * Call flows are SEPARATED for clean UI handling:
+ * - incomingRingingCall: Only for incoming calls that are RINGING (not yet answered)
+ * - currentCall: For outgoing calls AND answered incoming calls (ACTIVE state)
+ * 
+ * This separation prevents race conditions where HomeScreen might briefly
+ * show call UI before navigation to IncomingCallScreen completes.
  */
 interface CallManager {
     
     /**
-     * Current call state
+     * Incoming call that is RINGING (not yet answered/rejected)
+     * IncomingCallScreen observes this.
+     * HomeScreen does NOT observe this.
+     */
+    val incomingRingingCall: StateFlow<CallInfo?>
+    
+    /**
+     * Current active call state - for outgoing calls and ACTIVE incoming calls
+     * HomeScreen observes this for end call button, status messages, etc.
      */
     val currentCall: StateFlow<CallInfo?>
     

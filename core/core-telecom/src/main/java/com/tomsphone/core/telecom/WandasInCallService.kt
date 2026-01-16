@@ -18,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 /**
@@ -49,12 +50,18 @@ class WandasInCallService : InCallService() {
     @Inject
     lateinit var contactRepository: ContactRepository
     
+    @Inject
+    lateinit var missedCallNagManager: dagger.Lazy<MissedCallNagManager>
+    
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     private var currentCall: Call? = null
     private var isSpeakerOn = false
     private var isMuted = false
     private var wasCallActive = false  // Track if call was ever connected
+    private var wasIncomingCall = false  // Track if this was an incoming call
+    private var lastIncomingPhoneNumber: String? = null  // For missed call nag
+    private var lastIncomingContactName: String? = null
     
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
@@ -70,16 +77,59 @@ class WandasInCallService : InCallService() {
     
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
-        Log.d(TAG, "Call added: ${call.details.handle}")
+        val isIncoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING
+        val phoneNumber = call.details.handle?.schemeSpecificPart ?: "Unknown"
+        
+        Log.d(TAG, "========================================")
+        Log.d(TAG, "onCallAdded: $phoneNumber, incoming=$isIncoming, state=${call.state}")
+        
+        // BACKUP: If CallScreeningService didn't reject, check here
+        if (isIncoming) {
+            // Synchronously check if caller is allowed
+            val isAllowed = runBlocking {
+                try {
+                    val settings = settingsRepository.getSettings().first()
+                    if (!settings.rejectUnknownCalls) {
+                        Log.d(TAG, "rejectUnknownCalls is disabled, allowing")
+                        true
+                    } else {
+                        val contact = findContactByPhone(phoneNumber)
+                        Log.d(TAG, "Contact lookup: ${contact ?: "NOT FOUND"}")
+                        contact != null
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error checking caller: ${e.message}")
+                    true // Allow on error
+                }
+            }
+            
+            if (!isAllowed) {
+                Log.d(TAG, ">>> REJECTING unknown caller in InCallService")
+                call.reject(false, null)
+                Log.d(TAG, "========================================")
+                return // Don't process further
+            }
+            Log.d(TAG, ">>> Caller is allowed")
+        }
+        
+        Log.d(TAG, "========================================")
         
         currentCall?.unregisterCallback(callCallback)
         currentCall = call
         call.registerCallback(callCallback)
         wasCallActive = false  // Reset for new call
+        wasIncomingCall = isIncoming
+        lastIncomingPhoneNumber = if (isIncoming) phoneNumber else null
+        lastIncomingContactName = null  // Will be set during contact lookup
         
         // Enable speakerphone when call is added
         serviceScope.launch {
             enableSpeakerBasedOnSettings()
+            
+            // Look up contact name for missed call tracking
+            if (isIncoming) {
+                lastIncomingContactName = findContactByPhone(phoneNumber)
+            }
         }
         
         handleCallStateChange(call, call.state)
@@ -87,7 +137,7 @@ class WandasInCallService : InCallService() {
     
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
-        Log.d(TAG, "Call removed, wasActive: $wasCallActive")
+        Log.d(TAG, "Call removed, wasActive: $wasCallActive, wasIncoming: $wasIncomingCall")
         
         call.unregisterCallback(callCallback)
         if (currentCall == call) {
@@ -96,12 +146,24 @@ class WandasInCallService : InCallService() {
         
         callManager.updateCallState(null)
         
-        // Only announce "call ended" if the call was actually connected
-        // Don't announce for rejected/unanswered calls
+        // Handle call end based on type
         if (wasCallActive) {
+            // Call was connected - announce "call ended"
             tts.speak(TTSScripts.callEnded())
+        } else if (wasIncomingCall && lastIncomingPhoneNumber != null) {
+            // Incoming call was NOT answered → trigger missed call nag
+            Log.d(TAG, "Unanswered incoming call from ${lastIncomingContactName ?: lastIncomingPhoneNumber} - triggering nag")
+            missedCallNagManager.get().onMissedCall(
+                lastIncomingPhoneNumber!!,
+                lastIncomingContactName
+            )
         }
+        
+        // Reset state
         wasCallActive = false
+        wasIncomingCall = false
+        lastIncomingPhoneNumber = null
+        lastIncomingContactName = null
     }
     
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
@@ -272,7 +334,23 @@ class WandasInCallService : InCallService() {
             CallDirection.OUTGOING
         }
         
-        // Look up contact name asynchronously, then update call state
+        // Emit state IMMEDIATELY so UI can react (especially for incoming calls)
+        // Contact name will be updated in a follow-up emission
+        val immediateCallInfo = CallInfo(
+            callId = call.details.handle.toString(),
+            phoneNumber = phoneNumber,
+            contactName = null,  // Will be updated shortly
+            contactId = null,
+            state = wandasState,
+            direction = direction,
+            startTime = System.currentTimeMillis(),
+            isSpeakerOn = isSpeakerOn,
+            isMuted = isMuted
+        )
+        callManager.updateCallState(immediateCallInfo)
+        Log.d(TAG, "Call state (immediate): $wandasState, direction: $direction")
+        
+        // Then look up contact name and update again
         serviceScope.launch {
             val contactName = try {
                 findContactByPhone(phoneNumber)
@@ -281,21 +359,11 @@ class WandasInCallService : InCallService() {
                 null
             }
             
-            val callInfo = CallInfo(
-                callId = call.details.handle.toString(),
-                phoneNumber = phoneNumber,
-                contactName = contactName,
-                contactId = null,
-                state = wandasState,
-                direction = direction,
-                startTime = System.currentTimeMillis(),
-                isSpeakerOn = isSpeakerOn,
-                isMuted = isMuted
-            )
-            
-            callManager.updateCallState(callInfo)
-            
-            Log.d(TAG, "Call state: $wandasState, direction: $direction, contact: $contactName")
+            if (contactName != null) {
+                val updatedCallInfo = immediateCallInfo.copy(contactName = contactName)
+                callManager.updateCallState(updatedCallInfo)
+                Log.d(TAG, "Call state (with contact): $wandasState, contact: $contactName")
+            }
         }
         
         // When call becomes active, ensure speaker is set correctly
@@ -349,13 +417,20 @@ class WandasInCallService : InCallService() {
                 else -> CallState.IDLE
             }
             
+            // FIX: Use actual direction from call details, not hardcoded OUTGOING
+            val direction = if (call.details.callDirection == Call.Details.DIRECTION_INCOMING) {
+                CallDirection.INCOMING
+            } else {
+                CallDirection.OUTGOING
+            }
+            
             val callInfo = CallInfo(
                 callId = call.details.handle.toString(),
                 phoneNumber = phoneNumber,
                 contactName = null,
                 contactId = null,
                 state = state,
-                direction = CallDirection.OUTGOING,
+                direction = direction,
                 startTime = System.currentTimeMillis(),
                 isSpeakerOn = isSpeakerOn,
                 isMuted = isMuted

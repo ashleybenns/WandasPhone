@@ -28,7 +28,7 @@ object TTSScripts {
         return "Call ended."
     }
     
-    fun incomingCall(callerName: String?, userName: String = "Wanda"): String {
+    fun incomingCall(callerName: String?, userName: String = "Jim"): String {
         return if (callerName != null) {
             "$userName, $callerName is calling."
         } else {
@@ -49,7 +49,7 @@ object TTSScripts {
         }
     }
     
-    fun missedCallReminder(callerName: String, userName: String = "Wanda"): String {
+    fun missedCallReminder(callerName: String, userName: String = "Jim"): String {
         return "$userName, you missed a call. Please call $callerName now."
     }
     
