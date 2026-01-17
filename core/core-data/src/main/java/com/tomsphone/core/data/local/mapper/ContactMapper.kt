@@ -22,7 +22,12 @@ fun ContactEntity.toContact(): Contact {
             ContactType.GREY_LIST  // Default to grey list for safety
         },
         createdAt = createdAt,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        // Button configuration
+        buttonColor = buttonColor,
+        autoAnswerEnabled = autoAnswerEnabled,
+        buttonPosition = buttonPosition,
+        isHalfWidth = isHalfWidth
     )
 }
 
@@ -36,7 +41,11 @@ fun Contact.toEntity(): ContactEntity {
         isPrimary = isPrimary,
         contactType = contactType.name,
         createdAt = createdAt,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        // Button configuration
+        buttonColor = buttonColor,
+        autoAnswerEnabled = autoAnswerEnabled,
+        buttonPosition = buttonPosition,
+        isHalfWidth = isHalfWidth
     )
 }
-

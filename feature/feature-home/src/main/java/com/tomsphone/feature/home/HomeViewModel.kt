@@ -3,7 +3,9 @@ package com.tomsphone.feature.home
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tomsphone.core.config.CarerSettings
 import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.config.HomeButtonConfig
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.repository.ContactRepository
@@ -79,6 +81,100 @@ class HomeViewModel @Inject constructor(
             initialValue = emptyList()
         )
     
+    // Settings for building home buttons
+    private val settings: StateFlow<CarerSettings> = settingsRepository.getSettings()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = CarerSettings()
+        )
+    
+    /**
+     * Home screen buttons - built from contacts + settings
+     * 
+     * Runtime model that combines:
+     * - Contact data (stored in Room)
+     * - CarerSettings (stored in DataStore)
+     * 
+     * Each underlying setting is discrete for remote sync and paywall gating.
+     */
+    val homeButtons: StateFlow<List<HomeButtonConfig>> = combine(
+        contacts,
+        settings
+    ) { contactList, carerSettings ->
+        buildHomeButtons(contactList, carerSettings)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    
+    /**
+     * Build the list of buttons for the home screen.
+     * 
+     * Order:
+     * 1. Contact buttons (sorted by buttonPosition)
+     * 2. Menu buttons (if Level 2+)
+     * 3. Emergency button (if enabled)
+     */
+    private fun buildHomeButtons(
+        contacts: List<Contact>,
+        settings: CarerSettings
+    ): List<HomeButtonConfig> {
+        val buttons = mutableListOf<HomeButtonConfig>()
+        
+        // 1. Contact buttons - only CARER contacts that can call out
+        val callableContacts = contacts
+            .filter { it.canCallOut }
+            .sortedBy { it.buttonPosition }
+            .take(settings.homeMaxButtons)
+        
+        callableContacts.forEach { contact ->
+            buttons.add(
+                HomeButtonConfig.ContactButton(
+                    contactId = contact.id,
+                    name = contact.name,
+                    phoneNumber = contact.phoneNumber,
+                    color = contact.buttonColor,
+                    showAutoAnswerWarning = contact.autoAnswerEnabled,
+                    isHalfWidth = contact.isHalfWidth
+                )
+            )
+        }
+        
+        // 2. Menu buttons (Level 2+)
+        if (settings.featureLevel.level >= 2) {
+            if (settings.homeShowMissedCallsButton) {
+                buttons.add(
+                    HomeButtonConfig.MenuButton(
+                        id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
+                        label = "Missed Calls",
+                        color = settings.homeMissedCallsButtonColor,
+                        isHalfWidth = true  // Menu buttons are typically half-width
+                    )
+                )
+            }
+            
+            if (settings.homeShowContactsListButton) {
+                buttons.add(
+                    HomeButtonConfig.MenuButton(
+                        id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
+                        label = "Contacts",
+                        color = settings.homeContactsListButtonColor,
+                        isHalfWidth = true
+                    )
+                )
+            }
+        }
+        
+        // 3. Emergency button (always last, if enabled)
+        if (settings.homeShowEmergencyButton) {
+            buttons.add(HomeButtonConfig.EmergencyButton())
+        }
+        
+        return buttons
+    }
+    
     // Status message displayed in top text box
     private val _statusMessage = MutableStateFlow<String?>(null)
     private var statusMessageResetJob: Job? = null
@@ -119,7 +215,11 @@ class HomeViewModel @Inject constructor(
                 if (missedCalls.isNotEmpty()) {
                     val caller = missedCalls.first().contactName ?: "someone"
                     val user = userName.value
-                    setStatus("$user, you missed a call.\nPlease call $caller now.")
+                    // 3 lines with breaks at logical phrase boundaries:
+                    // Line 1: "[User],"
+                    // Line 2: "you missed a call."
+                    // Line 3: "Please call [carer] now."
+                    setStatus("$user,\nyou missed a call.\nPlease call $caller now.")
                 } else {
                     if (_statusMessage.value?.contains("missed a call") == true) {
                         _statusMessage.value = null
@@ -212,6 +312,54 @@ class HomeViewModel @Inject constructor(
             }
             // On success, the call state collector clears _callingContact
             // and MainActivity navigates to EndOutgoingCallScreen
+        }
+    }
+    
+    /**
+     * User tapped a contact button (from HomeButtonConfig)
+     * 
+     * Used by the new data-driven HomeScreen.
+     */
+    fun onContactButtonTap(button: HomeButtonConfig.ContactButton) {
+        Log.d(TAG, "onContactButtonTap: ${button.name}")
+        
+        // Create a minimal Contact for the calling animation
+        // (we only need name and phoneNumber for the call)
+        val contact = Contact(
+            id = button.contactId,
+            name = button.name,
+            phoneNumber = button.phoneNumber,
+            photoUri = null,
+            priority = 0,
+            isPrimary = false,
+            contactType = com.tomsphone.core.data.model.ContactType.CARER,
+            createdAt = 0,
+            updatedAt = 0,
+            buttonColor = button.color,
+            autoAnswerEnabled = button.showAutoAnswerWarning,
+            buttonPosition = 0,
+            isHalfWidth = button.isHalfWidth
+        )
+        
+        onContactTap(contact)
+    }
+    
+    /**
+     * User tapped a menu button (Level 2+)
+     */
+    fun onMenuButtonTap(button: HomeButtonConfig.MenuButton) {
+        Log.d(TAG, "onMenuButtonTap: ${button.id}")
+        
+        // TODO: Navigate to appropriate list screen
+        when (button.id) {
+            HomeButtonConfig.MenuButton.ID_MISSED_CALLS -> {
+                // Navigate to missed calls list
+                Log.d(TAG, "TODO: Navigate to missed calls list")
+            }
+            HomeButtonConfig.MenuButton.ID_CONTACTS_LIST -> {
+                // Navigate to contacts list
+                Log.d(TAG, "TODO: Navigate to contacts list")
+            }
         }
     }
     

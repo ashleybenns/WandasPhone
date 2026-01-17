@@ -83,7 +83,40 @@ class WandasInCallService : InCallService() {
         Log.d(TAG, "========================================")
         Log.d(TAG, "onCallAdded: $phoneNumber, incoming=$isIncoming, state=${call.state}")
         
-        // BACKUP: If CallScreeningService didn't reject, check here
+        // PROTECTION: Reject if there's already an active call
+        // User cannot juggle multiple calls - this is by design for accessibility
+        currentCall?.let { existingCall ->
+            val existingState = existingCall.state
+            if (existingState == Call.STATE_ACTIVE || 
+                existingState == Call.STATE_DIALING || 
+                existingState == Call.STATE_RINGING ||
+                existingState == Call.STATE_CONNECTING) {
+                
+                Log.d(TAG, ">>> REJECTING second call - already have call in state $existingState")
+                
+                // If the rejected call is from a known contact, save as missed call
+                // This allows it to appear in missed calls list (Level 2+)
+                if (isIncoming) {
+                    serviceScope.launch {
+                        try {
+                            val contactName = findContactByPhone(phoneNumber)
+                            if (contactName != null) {
+                                Log.d(TAG, "Saving rejected second call as missed: $contactName")
+                                missedCallNagManager.get().onMissedCall(phoneNumber, contactName)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error saving missed call: ${e.message}")
+                        }
+                    }
+                }
+                
+                call.reject(false, null)
+                Log.d(TAG, "========================================")
+                return // Don't process further
+            }
+        }
+        
+        // BACKUP: If CallScreeningService didn't reject unknown caller, check here
         if (isIncoming) {
             // Synchronously check if caller is allowed
             val isAllowed = runBlocking {

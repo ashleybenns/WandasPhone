@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ (API 31+) backup rules.
+    
+    SECURITY: This app stores sensitive user data (contacts, auto-answer settings,
+    PIN) that must NOT be backed up to any cloud service or transferred to other devices.
+    
+    This prevents:
+    - Google Cloud Backup restoring old/wrong settings
+    - Device-to-device transfer (e.g., Samsung Smart Switch) copying data
+    - Previous user's data appearing on new user's device
+    
+    All data is explicitly excluded from both cloud backup and device transfer.
+-->
+<data-extraction-rules>
+    <!-- Block all cloud backup -->
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    
+    <!-- Block device-to-device transfer -->
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>

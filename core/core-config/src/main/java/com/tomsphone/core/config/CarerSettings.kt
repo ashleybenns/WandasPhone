@@ -8,6 +8,12 @@ import kotlinx.serialization.Serializable
  * User never sees or changes these settings.
  * Only accessible via PIN-protected carer mode.
  * 
+ * SECURITY: Default values are designed for FACTORY RESET scenarios.
+ * When the app is reset or newly installed, these defaults ensure:
+ * - No automatic call answering (privacy protection)
+ * - No access to previous user's data
+ * - Safe, accessible configuration
+ * 
  * Settings are organized into logical groups:
  * - User identity
  * - Call handling
@@ -19,57 +25,85 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CarerSettings(
     // ========== USER IDENTITY ==========
-    val userName: String = "Jim",  // Test name to verify propagation
+    // Default: Generic name, carer should personalize
+    val userName: String = "User",
+    // Default: Minimal features for safety
     val featureLevel: FeatureLevel = FeatureLevel.MINIMAL,
     
     // ========== CONTACTS ==========
+    // Default: No primary contact (carer must set up)
     val primaryContactId: Long? = null,
-    val maxContactsOnHome: Int = 2,  // 1-6 contacts on home screen
+    
+    // ========== HOME SCREEN LAYOUT ==========
+    // Each setting is discrete for individual remote sync and paywall gating
+    val homeMaxButtons: Int = 4,                    // 1-6 contact buttons on home screen
+    val homeShowEmergencyButton: Boolean = true,    // SAFE: Emergency always visible
+    val homeShowMissedCallsButton: Boolean = false, // Level 2+: Show missed calls list button
+    val homeShowContactsListButton: Boolean = false,// Level 2+: Show contacts list button
+    val homeMissedCallsButtonColor: Long? = null,   // ARGB, null = theme default
+    val homeContactsListButtonColor: Long? = null,  // ARGB, null = theme default
     
     // ========== CALL HANDLING ==========
+    // SECURITY CRITICAL: Auto-answer MUST default to false
+    // If enabled, anyone could listen without user consent
     val autoAnswerEnabled: Boolean = false,
-    val autoAnswerContacts: Set<Long> = emptySet(),  // Specific contacts, empty = all carers
+    // Default: No contacts have auto-answer (even if enabled globally)
+    val autoAnswerContacts: Set<Long> = emptySet(),
     val autoAnswerDelaySeconds: Int = 3,  // 1-10 seconds before auto-answer
+    // ACCESSIBILITY: Speakerphone on by default for ease of use
     val speakerphoneAlwaysOn: Boolean = true,
     val speakerVolume: Int = 80,  // 0-100 percent
-    val rejectUnknownCalls: Boolean = true,  // Silently reject non-whitelist calls
+    // SAFETY: Reject unknown calls by default (scam protection)
+    val rejectUnknownCalls: Boolean = true,
     
     // ========== MISSED CALL NAGGING ==========
+    // SAFE: Reminders on - helps user return important calls
     val missedCallNagEnabled: Boolean = true,
     val missedCallNagInterval: MissedCallNagInterval = MissedCallNagInterval.IMMEDIATE_THEN_MINUTE,
     val missedCallNagOnlyCarers: Boolean = true,  // Only nag for carer contacts
     val missedCallNagSound: NagSound = NagSound.TANNOY_BINGBONG,
     
     // ========== INTERACTION CONFIG ==========
+    // Default: Safe interaction settings (see InteractionConfig for details)
     val interaction: InteractionConfig = InteractionConfig(),
     
     // ========== UI APPEARANCE ==========
+    // Default: High contrast for accessibility
     val ui: UIConfig = UIConfig(),
     
     // ========== AUDIO & TTS ==========
+    // ACCESSIBILITY: TTS on by default for audio-first experience
     val ttsEnabled: Boolean = true,
     val ttsSpeed: Float = 1.0f,  // 0.5 - 2.0
-    val ttsVolume: Int = 100,    // 0-100 percent
+    val ttsVolume: Int = 100,    // Full volume for hearing
     val ringtone: RingtoneOption = RingtoneOption.OLD_TWOBELL,
-    val ringtoneVolume: Int = 100,  // 0-100 percent
+    val ringtoneVolume: Int = 100,  // Full volume
     
     // ========== SAFETY & SECURITY ==========
-    val carerPin: String = "",  // Hashed
-    val settingsAccessTapCount: Int = 7,  // Taps on clock to access settings
-    val emergencyNumber: String = "999",  // UK default
-    val emergencyTapCount: Int = 3,  // Required taps for emergency
+    // SECURITY: No PIN set - carer must create one on first access
+    val carerPin: String = "",
+    // Hidden access: 7 taps on clock (not obvious to user)
+    val settingsAccessTapCount: Int = 7,
+    // UK default emergency number
+    val emergencyNumber: String = "999",
+    // SAFETY: 3 taps required for emergency (prevents accidental calls)
+    val emergencyTapCount: Int = 3,
     val inactivityTimeoutSeconds: Int = 120,  // Return to home after inactivity
     
     // ========== KIOSK MODE ==========
-    val kioskModeEnabled: Boolean = false,  // Full kiosk (requires device owner)
+    // SAFE: Kiosk OFF by default (requires device owner setup)
+    val kioskModeEnabled: Boolean = false,
     val allowStatusBar: Boolean = false,
     val allowNavigationBar: Boolean = false,
     
     // ========== ALWAYS ON MODE ==========
     // For use on charging stand - phone is always visible and ready
-    val pinnedModeEnabled: Boolean = false,  // Simple app pinning (no device owner needed)
-    val screenAlwaysOn: Boolean = true,      // Keep screen on (especially when charging)
-    val lockVolumeButtons: Boolean = true,   // Prevent accidental volume changes
+    // SAFE: Pinned mode OFF by default (carer must enable)
+    val pinnedModeEnabled: Boolean = false,
+    // ACCESSIBILITY: Screen stays on when configured for stand
+    val screenAlwaysOn: Boolean = true,
+    // SAFE: Volume lock ON to prevent accidental muting
+    val lockVolumeButtons: Boolean = true,
     val screenBrightness: Int = 80           // 0-100 percent (when controlled)
 )
 

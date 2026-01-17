@@ -43,7 +43,7 @@ abstract class DataModule {
             return Room.databaseBuilder(
                 context,
                 WandasDatabase::class.java,
-                "toms_phone_db_v4"  // Force fresh DB with Dev as CARER
+                "toms_phone_db_v5"  // v5: Added button config fields to contacts
             )
                 .fallbackToDestructiveMigration()
                 .addCallback(SeedDatabaseCallback())
@@ -60,26 +60,40 @@ abstract class DataModule {
 
 /**
  * Seeds the database with test contacts on first creation.
- * TODO: Remove this before production - contacts should be added via carer setup.
+ * 
+ * SECURITY NOTE:
+ * - Only seeds test contacts in DEBUG builds
+ * - Production builds start with empty database
+ * - Carer adds contacts via settings
  */
 private class SeedDatabaseCallback : RoomDatabase.Callback() {
     override fun onCreate(db: SupportSQLiteDatabase) {
         super.onCreate(db)
         
+        // Only seed test data in debug builds
+        // Production builds start completely empty for security
+        if (!com.tomsphone.core.data.BuildConfig.DEBUG) {
+            return
+        }
+        
         val now = System.currentTimeMillis()
         
-        // Test contacts - REMOVE BEFORE PRODUCTION
+        // DEBUG ONLY: Test contacts
         // 1. Ashley - 07597086211 - CARER - Primary (main test contact)
         // 2. Dev - 07510940646 - CARER (second test contact)
         
+        // Seed contacts with all columns including new button config fields
+        // Columns: name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt,
+        //          buttonColor, autoAnswerEnabled, buttonPosition, isHalfWidth
+        
         db.execSQL(
-            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt) " +
-            "VALUES ('Ashley', '07597086211', NULL, 1, 1, 'CARER', $now, $now)"
+            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, buttonPosition, isHalfWidth) " +
+            "VALUES ('Ashley', '07597086211', NULL, 1, 1, 'CARER', $now, $now, NULL, 0, 0, 0)"
         )
         
         db.execSQL(
-            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt) " +
-            "VALUES ('Dev', '07510940646', NULL, 2, 0, 'CARER', $now, $now)"
+            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, buttonPosition, isHalfWidth) " +
+            "VALUES ('Dev', '07510940646', NULL, 2, 0, 'CARER', $now, $now, NULL, 0, 1, 0)"
         )
     }
 }

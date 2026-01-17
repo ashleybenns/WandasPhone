@@ -13,12 +13,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
+import com.tomsphone.core.ui.theme.WandasDimensions
+import com.tomsphone.core.ui.theme.WandasTextStyles
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,14 +30,14 @@ import javax.inject.Inject
 /**
  * End Outgoing Call Screen - YELLOW background
  * 
- * Shown when:
- * - User taps a contact button and the 1-second animation completes
- * - Stays visible while outgoing call is dialing, ringing, or active
+ * Layout:
+ * - Status text at top (same position as HomeScreen)
+ * - Button area divided into TWO equal zones:
+ *   - Top zone: End call button (always visible)
+ *   - Bottom zone: Speaker toggle (may or may not be visible)
  * 
- * Features:
- * - Yellow background for visual distinction
- * - Shows "Calling [name]" or "On call with [name]"
- * - Double-tap protected end call button
+ * The end call button position is FIXED regardless of speaker toggle visibility.
+ * This ensures familiarity - user always taps the same spot to end call.
  */
 @Composable
 fun EndOutgoingCallScreen(
@@ -46,6 +47,21 @@ fun EndOutgoingCallScreen(
 ) {
     val callState by viewModel.callState.collectAsState()
     val confirmPending by viewModel.confirmPending.collectAsState()
+    val showSpeakerToggle by viewModel.showSpeakerToggle.collectAsState()
+    val isSpeakerOn by viewModel.isSpeakerOn.collectAsState()
+    
+    // Status message - ONE LINE like HomeScreen
+    val statusMessage = when (callState) {
+        CallState.ACTIVE -> "On call with $contactName"
+        else -> "Calling $contactName"
+    }
+    
+    // End call instruction - break at comma for readability
+    val instructionText = if (confirmPending) {
+        "Tap again to end"
+    } else {
+        "To end call,\npress twice"
+    }
     
     // Watch for call ending
     LaunchedEffect(callState) {
@@ -59,72 +75,126 @@ fun EndOutgoingCallScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFFFC107)), // Amber/Yellow
-        contentAlignment = Alignment.Center
+            .background(Color(0xFFFFC107)) // Amber/Yellow
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
-            
-            // Status text
-            Text(
-                text = when (callState) {
-                    CallState.ACTIVE -> "On call with"
-                    else -> "Calling"
-                },
-                fontSize = 24.sp,
-                color = Color.Black,
-                textAlign = TextAlign.Center
-            )
-            
-            Text(
-                text = contactName,
-                fontSize = 48.sp,
-                color = Color.Black,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-            
-            Spacer(modifier = Modifier.weight(1f))
-            
-            // End call instruction
-            Text(
-                text = if (confirmPending) "Tap again to end" else "To end call, press twice",
-                fontSize = 18.sp,
-                color = Color.Black.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-            
-            // End call button - round, red
-            Button(
-                onClick = { viewModel.onEndCallTap() },
-                modifier = Modifier.size(120.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD32F2F), // Red
-                    contentColor = Color.White
-                )
+            // Status text box - SAME as HomeScreen (top, fixed height)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .padding(horizontal = WandasDimensions.SpacingLarge),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "End",
-                    fontSize = 24.sp
+                    text = statusMessage,
+                    style = WandasTextStyles.StatusMessage,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3
                 )
             }
             
-            Spacer(modifier = Modifier.height(48.dp))
+            // Button area - divided into TWO equal zones
+            // This ensures end call button stays in same position
+            // regardless of speaker toggle visibility
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = WandasDimensions.SpacingLarge)
+            ) {
+                // TOP ZONE: End call button (always in top half)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        // End call instruction
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = instructionText,
+                                style = WandasTextStyles.StatusMessage,
+                                color = Color.Black.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(WandasDimensions.SpacingMedium))
+                        
+                        // End call button - round, red
+                        Button(
+                            onClick = { viewModel.onEndCallTap() },
+                            modifier = Modifier.size(WandasDimensions.EndCallButtonSize),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFD32F2F),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(
+                                text = "End",
+                                style = WandasTextStyles.ButtonMedium
+                            )
+                        }
+                    }
+                }
+                
+                // BOTTOM ZONE: Speaker toggle (always takes equal space)
+                // Button is only visible if showSpeakerToggle is true
+                // But space is ALWAYS reserved to keep end call in same position
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (showSpeakerToggle) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            // Speaker button - round, grey/green based on state
+                            Button(
+                                onClick = { viewModel.toggleSpeaker() },
+                                modifier = Modifier.size(WandasDimensions.EndCallButtonSize),
+                                shape = CircleShape,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSpeakerOn) Color(0xFF4CAF50) else Color(0xFF757575),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text(
+                                    text = if (isSpeakerOn) "Speaker\nON" else "Speaker\nOFF",
+                                    style = WandasTextStyles.ButtonSmall,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                    // If showSpeakerToggle is false, the Box is empty but still takes space
+                }
+            }
         }
     }
 }
 
 @HiltViewModel
 class EndOutgoingCallViewModel @Inject constructor(
-    private val callManager: CallManager
+    private val callManager: CallManager,
+    private val settingsRepository: com.tomsphone.core.config.SettingsRepository
 ) : ViewModel() {
     
     companion object {
@@ -134,6 +204,16 @@ class EndOutgoingCallViewModel @Inject constructor(
     val callState: StateFlow<CallState> = callManager.currentCall
         .map { it?.state ?: CallState.IDLE }
         .stateIn(viewModelScope, SharingStarted.Eagerly, CallState.IDLE)
+    
+    // Speaker toggle visibility - based on feature level (Level 2+)
+    val showSpeakerToggle: StateFlow<Boolean> = settingsRepository.getSettings()
+        .map { it.featureLevel.level >= 2 && !it.speakerphoneAlwaysOn }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    
+    // Speaker state
+    val isSpeakerOn: StateFlow<Boolean> = callManager.currentCall
+        .map { it?.isSpeakerOn ?: true }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
     private val _tapCount = MutableStateFlow(0)
     private var resetJob: Job? = null
@@ -159,5 +239,10 @@ class EndOutgoingCallViewModel @Inject constructor(
                 Log.d(TAG, "Tap reset after timeout")
             }
         }
+    }
+    
+    fun toggleSpeaker() {
+        Log.d(TAG, "Toggling speaker")
+        callManager.toggleSpeaker()
     }
 }

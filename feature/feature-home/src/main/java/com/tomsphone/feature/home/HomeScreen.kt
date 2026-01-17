@@ -10,41 +10,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tomsphone.core.config.HomeButtonConfig
 import com.tomsphone.core.telecom.CallDirection
-import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.ui.components.CallingStateButton
-import com.tomsphone.core.ui.components.ContactButton
+import com.tomsphone.core.ui.components.ConfigurableButton
 import com.tomsphone.core.ui.components.EmergencyButton
+import com.tomsphone.core.ui.components.HalfWidthButtonRow
 import com.tomsphone.core.ui.components.InertBorderLayout
 import com.tomsphone.core.ui.components.StatusMessageBox
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 
 /**
- * Level 1 Home Screen - STANDBY STATE ONLY
+ * Home Screen - Data-driven button rendering
  * 
  * Shows:
  * - Status message box at top
- * - Contact buttons (tap to call)
- * - Emergency button
+ * - Configurable buttons (contact, menu, emergency)
  * - Brief calling animation (1 second black button)
  * 
- * End call UI is on separate screens.
+ * Buttons are built from:
+ * - Contact data (stored in Room DB)
+ * - CarerSettings (stored in DataStore)
  * 
- * IMPORTANT: To prevent "standby flash" during outgoing calls,
- * we check BOTH callingContact AND currentCall. If there's an
- * active outgoing call, we show the calling UI even if callingContact
- * gets cleared due to timing issues.
+ * Each setting is individually addressable for remote sync and paywall gating.
  */
 @Composable
 fun HomeScreen(
     onNavigateToCarer: () -> Unit,
-    viewModel: HomeViewModel = hiltViewModel(),
-    callManager: CallManager? = null // Optional for direct call state observation
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
     val displayMessage by viewModel.displayMessage.collectAsState()
-    val contacts by viewModel.contacts.collectAsState()
+    val homeButtons by viewModel.homeButtons.collectAsState()
     val showCarerAccess by viewModel.showCarerAccess.collectAsState()
     val callingContact by viewModel.callingContact.collectAsState()
     
@@ -61,12 +59,10 @@ fun HomeScreen(
     } ?: false
     
     val isCallingMode = callingContact != null || hasActiveOutgoingCall
-    val callingContactName = callingContact?.name ?: currentCall?.contactName ?: "..."
     
-    Log.d("HomeScreen", "COMPOSE: callingContact=${callingContact?.name}, hasActiveOutgoing=$hasActiveOutgoingCall, isCallingMode=$isCallingMode")
+    Log.d("HomeScreen", "COMPOSE: callingContact=${callingContact?.name}, hasActiveOutgoing=$hasActiveOutgoingCall, isCallingMode=$isCallingMode, buttons=${homeButtons.size}")
     
     // When HomeScreen becomes visible and there's no active call, clear stale calling state
-    // This handles returning from yellow/green screen after call ends
     LaunchedEffect(hasActiveOutgoingCall) {
         if (!hasActiveOutgoingCall && callingContact == null) {
             // No active call and no animation - this is normal standby
@@ -115,20 +111,25 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Middle: Contact buttons OR calling animation
+                    // Buttons area
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // Separate contact buttons from other buttons
+                        val contactButtons = homeButtons.filterIsInstance<HomeButtonConfig.ContactButton>()
+                        val menuButtons = homeButtons.filterIsInstance<HomeButtonConfig.MenuButton>()
+                        val emergencyButton = homeButtons.filterIsInstance<HomeButtonConfig.EmergencyButton>().firstOrNull()
+                        
                         if (callingContact != null) {
-                            // CALLING ANIMATION: Brief black button (1 second)
-                            contacts.take(2).forEachIndexed { index, contact ->
-                                val isThisContactCalling = callingContact?.id == contact.id
+                            // CALLING ANIMATION: Show black button for calling contact, spacers for others
+                            contactButtons.forEach { button ->
+                                val isThisContactCalling = callingContact?.id == button.contactId
                                 
                                 if (isThisContactCalling) {
                                     CallingStateButton(
-                                        contactName = contact.name,
+                                        contactName = button.name,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 } else {
@@ -140,26 +141,89 @@ fun HomeScreen(
                                 }
                             }
                         } else {
-                            // NORMAL MODE: Show contact buttons
-                            contacts.take(2).forEach { contact ->
-                                ContactButton(
-                                    name = contact.name,
-                                    phoneNumber = contact.phoneNumber,
-                                    onClick = { viewModel.onContactTap(contact) },
-                                    modifier = Modifier.fillMaxWidth()
+                            // NORMAL MODE: Render all buttons from config
+                            
+                            // Contact buttons (full width)
+                            contactButtons.filter { !it.isHalfWidth }.forEach { button ->
+                                RenderContactButton(
+                                    button = button,
+                                    onClick = { viewModel.onContactButtonTap(button) }
                                 )
+                            }
+                            
+                            // Half-width contact buttons (paired)
+                            val halfWidthContacts = contactButtons.filter { it.isHalfWidth }
+                            halfWidthContacts.chunked(2).forEach { pair ->
+                                if (pair.size == 2) {
+                                    HalfWidthButtonRow(
+                                        leftButton = { modifier ->
+                                            RenderContactButton(
+                                                button = pair[0],
+                                                onClick = { viewModel.onContactButtonTap(pair[0]) },
+                                                modifier = modifier
+                                            )
+                                        },
+                                        rightButton = { modifier ->
+                                            RenderContactButton(
+                                                button = pair[1],
+                                                onClick = { viewModel.onContactButtonTap(pair[1]) },
+                                                modifier = modifier
+                                            )
+                                        }
+                                    )
+                                } else {
+                                    // Odd number - show single half-width as full width
+                                    RenderContactButton(
+                                        button = pair[0],
+                                        onClick = { viewModel.onContactButtonTap(pair[0]) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                            
+                            // Menu buttons (typically half-width, paired)
+                            menuButtons.chunked(2).forEach { pair ->
+                                if (pair.size == 2 && pair[0].isHalfWidth && pair[1].isHalfWidth) {
+                                    HalfWidthButtonRow(
+                                        leftButton = { modifier ->
+                                            RenderMenuButton(
+                                                button = pair[0],
+                                                onClick = { viewModel.onMenuButtonTap(pair[0]) },
+                                                modifier = modifier
+                                            )
+                                        },
+                                        rightButton = { modifier ->
+                                            RenderMenuButton(
+                                                button = pair[1],
+                                                onClick = { viewModel.onMenuButtonTap(pair[1]) },
+                                                modifier = modifier
+                                            )
+                                        }
+                                    )
+                                } else {
+                                    // Full width menu buttons
+                                    pair.forEach { button ->
+                                        RenderMenuButton(
+                                            button = button,
+                                            onClick = { viewModel.onMenuButtonTap(button) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                     
                     // Bottom: Emergency button - HIDE when in calling animation
-                    if (callingContact == null) {
+                    val emergencyButton = homeButtons.filterIsInstance<HomeButtonConfig.EmergencyButton>().firstOrNull()
+                    if (emergencyButton != null && callingContact == null) {
                         EmergencyButton(
-                            text = "Emergency",
+                            text = emergencyButton.label,
                             onClick = { viewModel.onEmergencyButtonTap() },
                             modifier = Modifier.fillMaxWidth()
                         )
-                    } else {
+                    } else if (emergencyButton != null) {
+                        // Maintain layout space
                         Spacer(modifier = Modifier.height(WandasDimensions.EmergencyButtonHeight))
                     }
                 }
@@ -172,4 +236,43 @@ fun HomeScreen(
         viewModel.dismissCarerAccess()
         onNavigateToCarer()
     }
+}
+
+/**
+ * Render a contact button from HomeButtonConfig
+ */
+@Composable
+private fun RenderContactButton(
+    button: HomeButtonConfig.ContactButton,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ConfigurableButton(
+        label = button.name,
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        backgroundColor = button.color?.let { Color(it) } 
+            ?: MaterialTheme.wandasColors.primaryButton,
+        textColor = MaterialTheme.wandasColors.onPrimaryButton,
+        warningText = if (button.showAutoAnswerWarning) "Auto-Answer" else null
+    )
+}
+
+/**
+ * Render a menu button from HomeButtonConfig
+ */
+@Composable
+private fun RenderMenuButton(
+    button: HomeButtonConfig.MenuButton,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ConfigurableButton(
+        label = button.label,
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        backgroundColor = button.color?.let { Color(it) } 
+            ?: MaterialTheme.wandasColors.secondaryButton,
+        textColor = MaterialTheme.wandasColors.onSecondaryButton
+    )
 }

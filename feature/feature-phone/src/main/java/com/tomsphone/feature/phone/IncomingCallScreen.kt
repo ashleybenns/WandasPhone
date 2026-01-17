@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -37,8 +38,9 @@ import javax.inject.Inject
 /**
  * Incoming call screen - shown when phone is ringing
  * 
- * Single-activity composable version - no separate activity needed.
- * All call handling is done via CallManager.
+ * Layout matches HomeScreen:
+ * - Status text at top (3 lines, 140dp, full width)
+ * - Answer/Reject buttons in same position as contact buttons
  */
 @Composable
 fun IncomingCallScreen(
@@ -48,6 +50,10 @@ fun IncomingCallScreen(
 ) {
     val callerName by viewModel.callerName.collectAsState()
     val phoneNumber by viewModel.phoneNumber.collectAsState()
+    
+    // Status message - one line, matching HomeScreen format
+    val displayName = callerName ?: "Unknown Caller"
+    val statusMessage = "$displayName is calling"
     
     // Start ringtone when screen appears
     LaunchedEffect(Unit) {
@@ -65,101 +71,101 @@ fun IncomingCallScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.wandasColors.background
     ) {
-        InertBorderLayout {
-            Column(
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Top: Status text box - SAME as HomeScreen (3 lines, 140dp, full width)
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(WandasDimensions.SpacingLarge),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .padding(horizontal = WandasDimensions.SpacingLarge),
+                contentAlignment = Alignment.Center
             ) {
-                // Top spacer
-                Spacer(modifier = Modifier.height(WandasDimensions.SpacingHuge))
-                
-                // Middle: Caller info
+                Text(
+                    text = statusMessage,
+                    style = WandasTextStyles.StatusMessage,
+                    color = MaterialTheme.wandasColors.onBackground,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3
+                )
+            }
+            
+            // Rest of screen has inert border for buttons - SAME as HomeScreen
+            InertBorderLayout(
+                modifier = Modifier.weight(1f)
+            ) {
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(WandasDimensions.SpacingLarge),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "Incoming call",
-                        style = WandasTextStyles.CallStatus,
-                        color = MaterialTheme.wandasColors.onBackground,
-                        textAlign = TextAlign.Center
-                    )
-                    
-                    Spacer(modifier = Modifier.height(WandasDimensions.SpacingLarge))
-                    
-                    Text(
-                        text = callerName ?: "Unknown Caller",
-                        style = WandasTextStyles.ContactName,
-                        color = MaterialTheme.wandasColors.onBackground,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                
-                // Bottom: Answer and Reject buttons
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge)
-                ) {
-                    // Answer button - GREEN, large
-                    Button(
-                        onClick = {
-                            viewModel.answerCall()
-                            onCallAnswered()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(WandasDimensions.ContactButtonHeight),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4CAF50), // Green
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
-                        contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = WandasDimensions.ElevationMedium
-                        )
+                    // Top: Answer and Reject buttons - SAME position as HomeScreen contact buttons
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "Answer",
-                            style = WandasTextStyles.ButtonLarge,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
+                        // Answer button - GREEN, large (same size as contact buttons)
+                        Button(
+                            onClick = {
+                                viewModel.answerCall()
+                                onCallAnswered()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(WandasDimensions.ContactButtonHeight),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF4CAF50), // Green
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                            contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = WandasDimensions.ElevationMedium
+                            )
+                        ) {
+                            Text(
+                                text = "Answer",
+                                style = WandasTextStyles.ButtonLarge,
+                                color = Color.White,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        
+                        // Reject button - RED, same size as contact buttons
+                        Button(
+                            onClick = {
+                                viewModel.rejectCall()
+                                onCallRejected()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(WandasDimensions.ContactButtonHeight),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFD32F2F), // Red
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                            contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = WandasDimensions.ElevationMedium
+                            )
+                        ) {
+                            Text(
+                                text = "Reject",
+                                style = WandasTextStyles.ButtonLarge,
+                                color = Color.White,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                     
-                    // Reject button - Grey, slightly smaller
-                    Button(
-                        onClick = {
-                            viewModel.rejectCall()
-                            onCallRejected()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(WandasDimensions.ButtonHeightLarge),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF757575), // Grey
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
-                        contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = WandasDimensions.ElevationSmall
-                        )
-                    ) {
-                        Text(
-                            text = "Reject",
-                            style = WandasTextStyles.ButtonMedium,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    // Spacer where Emergency button would be on HomeScreen
+                    Spacer(modifier = Modifier.height(WandasDimensions.EmergencyButtonHeight))
                 }
-                
-                Spacer(modifier = Modifier.height(WandasDimensions.SpacingLarge))
             }
         }
     }

@@ -53,5 +53,13 @@ interface SettingsRepository {
      * Set carer PIN
      */
     suspend fun setPin(hashedPin: String): Result<Unit>
+    
+    /**
+     * Clear all settings (factory reset)
+     * 
+     * SECURITY: This permanently deletes all settings.
+     * Used during factory reset to ensure no user data remains.
+     */
+    suspend fun clearAllSettings(): Result<Unit>
 }
 

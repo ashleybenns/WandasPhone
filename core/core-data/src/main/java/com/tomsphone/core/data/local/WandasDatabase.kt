@@ -12,7 +12,7 @@ import com.tomsphone.core.data.local.entity.ContactEntity
         ContactEntity::class,
         CallLogEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class WandasDatabase : RoomDatabase() {

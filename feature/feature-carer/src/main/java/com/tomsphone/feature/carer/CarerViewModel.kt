@@ -1,5 +1,6 @@
 package com.tomsphone.feature.carer
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.CarerSettings
@@ -7,8 +8,9 @@ import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.repository.ContactRepository
-import com.tomsphone.core.ui.theme.ThemeOption
+import com.tomsphone.core.config.ThemeOption
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
@@ -23,9 +25,11 @@ import javax.inject.Inject
  * - Adjust settings
  * - Select theme
  * - Configure auto-answer
+ * - Factory reset (wipe all data)
  */
 @HiltViewModel
-class CarerViewModel @Inject constructor(
+class CarerSettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val contactRepository: ContactRepository
 ) : ViewModel() {
@@ -94,9 +98,8 @@ class CarerViewModel @Inject constructor(
     fun setTheme(theme: ThemeOption) {
         viewModelScope.launch {
             val current = settings.first()
-            val newTheme = com.tomsphone.core.config.ThemeOption.valueOf(theme.name)
             settingsRepository.updateSettings(
-                current.copy(ui = current.ui.copy(theme = newTheme))
+                current.copy(ui = current.ui.copy(theme = theme))
             )
         }
     }
@@ -189,12 +192,109 @@ class CarerViewModel @Inject constructor(
         }
     }
     
+    // ========== CALL HANDLING SETTINGS ==========
+    
+    /**
+     * Toggle reject unknown calls
+     */
+    fun setRejectUnknownCalls(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(rejectUnknownCalls = enabled))
+        }
+    }
+    
+    /**
+     * Toggle speakerphone always on
+     */
+    fun setSpeakerphoneAlwaysOn(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(speakerphoneAlwaysOn = enabled))
+        }
+    }
+    
+    /**
+     * Toggle missed call nag enabled
+     */
+    fun setMissedCallNagEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(missedCallNagEnabled = enabled))
+        }
+    }
+    
+    /**
+     * Set missed call nag interval
+     */
+    fun setMissedCallNagInterval(interval: com.tomsphone.core.config.MissedCallNagInterval) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(missedCallNagInterval = interval))
+        }
+    }
+    
+    // ========== USER PROFILE SETTINGS ==========
+    
+    /**
+     * Set emergency number
+     */
+    fun setEmergencyNumber(number: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(emergencyNumber = number))
+        }
+    }
+    
     /**
      * Hash PIN for secure storage
      */
     private fun hashPin(pin: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(pin.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
+    }
+    
+    // ========== FACTORY RESET ==========
+    
+    /**
+     * Factory reset - wipe ALL app data.
+     * 
+     * This deletes:
+     * - All settings (DataStore)
+     * - All contacts (Room database)
+     * - All call logs (Room database)
+     * 
+     * After reset, the app will behave as if newly installed.
+     * 
+     * SECURITY: This is the only way to securely delete all user data
+     * before giving the phone to a new user.
+     * 
+     * @param onComplete Called after local data is deleted. Caller should restart the app.
+     */
+    fun factoryReset(onComplete: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                // 1. Clear DataStore (settings)
+                settingsRepository.clearAllSettings()
+                
+                // 2. Delete Room database (contacts, call logs)
+                // Database name must match DataModule.kt
+                context.deleteDatabase("toms_phone_db_v5")
+                
+                // 3. TODO: Delete remote data when carer portal is implemented
+                // When the cloud carer portal is added, call the server API here:
+                // carerPortalApi.deleteUserData(userId)
+                // This ensures no copies remain on remote servers.
+                
+                // 4. Signal completion - caller should restart app
+                onComplete()
+                
+            } catch (e: Exception) {
+                android.util.Log.e("CarerSettingsVM", "Factory reset failed: ${e.message}")
+                // Still call onComplete to allow app restart attempt
+                onComplete()
+            }
+        }
     }
 }
 

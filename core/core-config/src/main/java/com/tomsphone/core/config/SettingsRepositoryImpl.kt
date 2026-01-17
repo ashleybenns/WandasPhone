@@ -111,5 +111,13 @@ class SettingsRepositoryImpl @Inject constructor(
             }
         }
     }
+    
+    override suspend fun clearAllSettings(): Result<Unit> {
+        return runCatching {
+            dataStore.edit { preferences ->
+                preferences.clear()
+            }
+        }
+    }
 }
 

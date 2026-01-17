@@ -12,7 +12,22 @@ data class Contact(
     val isPrimary: Boolean,
     val contactType: ContactType,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    
+    // ========== BUTTON CONFIGURATION ==========
+    // Each field is individually addressable for remote sync and paywall gating
+    
+    /** Button background color (ARGB), null = use theme default */
+    val buttonColor: Long? = null,
+    
+    /** Whether this contact has auto-answer enabled */
+    val autoAnswerEnabled: Boolean = false,
+    
+    /** Position on home screen (0 = top, higher = lower) */
+    val buttonPosition: Int = 0,
+    
+    /** Whether button should be half-width (for split layouts) */
+    val isHalfWidth: Boolean = false
 ) {
     /**
      * Whether this contact can be called by the user
@@ -25,4 +40,3 @@ data class Contact(
      */
     val triggersMissedCallNag: Boolean get() = contactType == ContactType.CARER
 }
-
