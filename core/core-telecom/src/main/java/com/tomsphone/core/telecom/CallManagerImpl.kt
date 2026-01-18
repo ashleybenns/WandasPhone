@@ -208,6 +208,9 @@ class CallManagerImpl @Inject constructor(
         }
     }
     
+    // Track whether we've notified nagManager of call start (to only notify once)
+    private var hasNotifiedCallStart = false
+    
     /**
      * Update current call state (called from InCallService)
      */
@@ -220,12 +223,23 @@ class CallManagerImpl @Inject constructor(
      * - Incoming DISCONNECTED/IDLE → clear both flows
      * - Outgoing (any state) → currentCall (HomeScreen handles)
      * - null → clear both flows
+     * 
+     * Also notifies MissedCallNagManager of call lifecycle to prevent race conditions.
      */
     fun updateCallState(callInfo: CallInfo?) {
         if (callInfo == null) {
             Log.d(TAG, "Call state cleared (null)")
             _incomingRingingCall.value = null
             _currentCall.value = null
+            // Notify nag manager that call ended
+            if (hasNotifiedCallStart) {
+                try {
+                    missedCallNagManager.get().onCallEnded()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to notify nag manager of call end: ${e.message}")
+                }
+                hasNotifiedCallStart = false
+            }
             return
         }
         
@@ -248,6 +262,15 @@ class CallManagerImpl @Inject constructor(
                 Log.d(TAG, ">>> Incoming call answered - moving to currentCall")
                 _incomingRingingCall.value = null  // Clear incoming
                 _currentCall.value = callInfo      // Now HomeScreen can see it
+                // Notify nag manager that an active call started
+                if (!hasNotifiedCallStart) {
+                    try {
+                        missedCallNagManager.get().onCallStarted()
+                        hasNotifiedCallStart = true
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to notify nag manager of call start: ${e.message}")
+                    }
+                }
             }
             
             // Incoming DISCONNECTED/IDLE → clear both
@@ -255,12 +278,42 @@ class CallManagerImpl @Inject constructor(
                 Log.d(TAG, ">>> Incoming call ended - clearing both flows")
                 _incomingRingingCall.value = null
                 _currentCall.value = null
+                // Notify nag manager that call ended
+                if (hasNotifiedCallStart) {
+                    try {
+                        missedCallNagManager.get().onCallEnded()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to notify nag manager of call end: ${e.message}")
+                    }
+                    hasNotifiedCallStart = false
+                }
             }
             
             // Outgoing calls → always to currentCall
             !isIncoming -> {
                 Log.d(TAG, ">>> Outgoing call - routing to currentCall")
                 _currentCall.value = callInfo
+                // For outgoing calls, HomeViewModel already calls onCallStarted()
+                // But track it here too in case it's missed
+                if (state == CallState.ACTIVE && !hasNotifiedCallStart) {
+                    try {
+                        missedCallNagManager.get().onCallStarted()
+                        hasNotifiedCallStart = true
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to notify nag manager of call start: ${e.message}")
+                    }
+                }
+                // Handle outgoing call end
+                if (state == CallState.DISCONNECTED || state == CallState.IDLE) {
+                    if (hasNotifiedCallStart) {
+                        try {
+                            missedCallNagManager.get().onCallEnded()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to notify nag manager of call end: ${e.message}")
+                        }
+                        hasNotifiedCallStart = false
+                    }
+                }
             }
             
             // Other incoming states (CONNECTING, etc.) → keep in incoming flow

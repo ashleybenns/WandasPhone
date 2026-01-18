@@ -11,9 +11,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.WandasTextStyles
 import com.tomsphone.core.ui.theme.wandasColors
@@ -25,6 +28,7 @@ import com.tomsphone.core.ui.theme.wandasColors
  * - Custom background/text colors
  * - Optional warning badge at bottom (e.g., "Auto-Answer")
  * - Full-width or half-width layouts
+ * - Scales with user text size setting
  * 
  * Used for contact buttons, menu buttons, etc.
  */
@@ -38,9 +42,13 @@ fun ConfigurableButton(
     warningText: String? = null,
     enabled: Boolean = true
 ) {
+    // Use scaled dimensions
+    val buttonHeight = ScaledDimensions.contactButtonHeight
+    val textSize = ScaledDimensions.contactNameTextSize
+    
     Button(
         onClick = onClick,
-        modifier = modifier.height(WandasDimensions.ContactButtonHeight),
+        modifier = modifier.height(buttonHeight),
         colors = ButtonDefaults.buttonColors(
             containerColor = backgroundColor,
             contentColor = textColor,
@@ -69,7 +77,10 @@ fun ConfigurableButton(
                 // Main label
                 Text(
                     text = label,
-                    style = WandasTextStyles.ContactName,
+                    style = TextStyle(
+                        fontSize = textSize,
+                        fontWeight = FontWeight.SemiBold
+                    ),
                     color = textColor,
                     textAlign = TextAlign.Center
                 )
@@ -86,7 +97,10 @@ fun ConfigurableButton(
             // Single label, centered
             Text(
                 text = label,
-                style = WandasTextStyles.ContactName,
+                style = TextStyle(
+                    fontSize = textSize,
+                    fontWeight = FontWeight.SemiBold
+                ),
                 color = textColor,
                 textAlign = TextAlign.Center
             )

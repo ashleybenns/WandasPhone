@@ -105,6 +105,18 @@ class CarerSettingsViewModel @Inject constructor(
     }
     
     /**
+     * Update user text size (for user-facing screens only)
+     */
+    fun setUserTextSize(textSize: com.tomsphone.core.config.UserTextSize) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(
+                current.copy(ui = current.ui.copy(userTextSize = textSize))
+            )
+        }
+    }
+    
+    /**
      * Update user name
      */
     fun setUserName(name: String) {

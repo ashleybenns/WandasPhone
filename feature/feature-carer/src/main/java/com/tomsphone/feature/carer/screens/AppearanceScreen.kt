@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.ThemeOption
+import com.tomsphone.core.config.UserTextSize
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
@@ -85,13 +86,44 @@ fun AppearanceScreen(
                         }
                     }
                     
-                    // Font Scale (placeholder)
-                    SettingCard(title = "Text Size") {
+                    // User Text Size
+                    SettingCard(title = "User Text Size") {
                         Text(
-                            text = "Text size adjustment will be available in a future update.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                            text = "Controls text and button size on user screens (Home, Call). Carer screens stay at normal size.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
+                        
+                        UserTextSize.entries.forEach { textSize ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = settings.ui.userTextSize == textSize,
+                                    onClick = {
+                                        viewModel.setUserTextSize(textSize)
+                                        saveToastState.show("Text size saved: ${textSize.displayName}")
+                                    }
+                                )
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
+                                
+                                Column {
+                                    Text(
+                                        text = textSize.displayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.wandasColors.onSurface
+                                    )
+                                    Text(
+                                        text = "${(textSize.scale * 100).toInt()}% scale",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
                     }
                     
                     // Button Size (placeholder)

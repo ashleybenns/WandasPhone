@@ -38,8 +38,11 @@ class RingtonePlayer @Inject constructor(
         /** Short two-bell sound only (no TTS) - used with dynamic TTS */
         SHORT_TWOBELL(R.raw.short_twobell_ringtone),
         
-        /** Tannoy-style bing-bong for missed call nag attention */
-        TANNOY_BINGBONG(R.raw.tannoy_bingbong)
+        /** Tannoy-style bing-bong for missed call nag attention (original) */
+        TANNOY_BINGBONG(R.raw.tannoy_bingbong),
+        
+        /** Tannoy-style bing-bong - trimmed version for nag */
+        TANNOY_SHORT(R.raw.tannoy_short)
     }
     
     /**

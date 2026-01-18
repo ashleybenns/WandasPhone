@@ -21,9 +21,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.WandasTextStyles
 import com.tomsphone.core.ui.theme.wandasColors
@@ -72,6 +75,7 @@ fun LargeButton(
 
 /**
  * Contact button for home screen
+ * Uses scaled dimensions based on user text size setting
  */
 @Composable
 fun ContactButton(
@@ -82,9 +86,13 @@ fun ContactButton(
     backgroundColor: Color = MaterialTheme.wandasColors.primaryButton,
     textColor: Color = MaterialTheme.wandasColors.onPrimaryButton
 ) {
+    // Use scaled dimensions
+    val buttonHeight = ScaledDimensions.contactButtonHeight
+    val textSize = ScaledDimensions.contactNameTextSize
+    
     Button(
         onClick = onClick,
-        modifier = modifier.height(WandasDimensions.ContactButtonHeight),
+        modifier = modifier.height(buttonHeight),
         colors = ButtonDefaults.buttonColors(
             containerColor = backgroundColor,
             contentColor = textColor
@@ -97,7 +105,10 @@ fun ContactButton(
     ) {
         Text(
             text = name,
-            style = WandasTextStyles.ContactName,
+            style = TextStyle(
+                fontSize = textSize,
+                fontWeight = FontWeight.SemiBold
+            ),
             color = textColor,
             textAlign = TextAlign.Center
         )
@@ -106,6 +117,7 @@ fun ContactButton(
 
 /**
  * Emergency button with distinct styling
+ * Uses scaled dimensions based on user text size setting
  */
 @Composable
 fun EmergencyButton(
@@ -113,9 +125,13 @@ fun EmergencyButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Use scaled dimensions
+    val buttonHeight = ScaledDimensions.emergencyButtonHeight
+    val textSize = ScaledDimensions.buttonTextSize
+    
     Button(
         onClick = onClick,
-        modifier = modifier.height(WandasDimensions.EmergencyButtonHeight),
+        modifier = modifier.height(buttonHeight),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.wandasColors.emergencyButton,
             contentColor = MaterialTheme.wandasColors.onEmergencyButton
@@ -131,7 +147,10 @@ fun EmergencyButton(
     ) {
         Text(
             text = text,
-            style = WandasTextStyles.ButtonMedium,
+            style = TextStyle(
+                fontSize = textSize,
+                fontWeight = FontWeight.Medium
+            ),
             textAlign = TextAlign.Center
         )
     }
@@ -170,12 +189,17 @@ fun HangUpButton(
 /**
  * Button shown when a call is being placed (dialing)
  * Fades to black, shows "Calling [name]"
+ * Uses scaled dimensions based on user text size setting
  */
 @Composable
 fun CallingStateButton(
     contactName: String,
     modifier: Modifier = Modifier
 ) {
+    // Use scaled dimensions
+    val buttonHeight = ScaledDimensions.contactButtonHeight
+    val textSize = ScaledDimensions.contactNameTextSize
+    
     val backgroundColor by animateColorAsState(
         targetValue = Color.Black,
         animationSpec = tween(durationMillis = 300),
@@ -184,7 +208,7 @@ fun CallingStateButton(
     
     Box(
         modifier = modifier
-            .height(WandasDimensions.ContactButtonHeight)
+            .height(buttonHeight)
             .background(
                 color = backgroundColor,
                 shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
@@ -193,7 +217,10 @@ fun CallingStateButton(
     ) {
         Text(
             text = contactName,
-            style = WandasTextStyles.ContactName,
+            style = TextStyle(
+                fontSize = textSize,
+                fontWeight = FontWeight.SemiBold
+            ),
             color = Color.White,
             textAlign = TextAlign.Center
         )

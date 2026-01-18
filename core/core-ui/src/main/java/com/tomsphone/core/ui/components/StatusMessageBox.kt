@@ -12,17 +12,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
-import com.tomsphone.core.ui.theme.WandasTextStyles
 import com.tomsphone.core.ui.theme.wandasColors
 
 /**
  * Status message box displayed at top of home screen
  * 
  * Features:
- * - Fixed height for 3 lines of text
+ * - Height scales with user text size setting
  * - NOT a button - no visual feedback on tap
  * - Hidden carer access: requires 7 taps (configurable)
  * - Displays: "[User]'s phone", "Calling [name]", "Missed call..."
@@ -31,16 +33,17 @@ import com.tomsphone.core.ui.theme.wandasColors
 fun StatusMessageBox(
     message: String,
     onHiddenTap: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    textColor: Color = MaterialTheme.wandasColors.onBackground
 ) {
-    // Fixed height calculated for 3 lines of StatusMessage style
-    // Line height is 40.sp, so 3 lines = 120.sp + padding
-    val fixedHeight = 140.dp
+    // Height scales with user text size setting
+    val scaledHeight = ScaledDimensions.statusBoxHeight
+    val scaledTextSize = ScaledDimensions.statusTextSize
     
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(fixedHeight)
+            .height(scaledHeight)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null  // No visual feedback - it's not a button
@@ -52,8 +55,12 @@ fun StatusMessageBox(
     ) {
         Text(
             text = message,
-            style = WandasTextStyles.StatusMessage,
-            color = MaterialTheme.wandasColors.onBackground,
+            style = TextStyle(
+                fontSize = scaledTextSize,
+                fontWeight = FontWeight.Medium,
+                lineHeight = scaledTextSize * 1.2f
+            ),
+            color = textColor,
             textAlign = TextAlign.Center,
             maxLines = 3
         )

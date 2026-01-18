@@ -48,12 +48,19 @@ class MissedCallNagManager @Inject constructor(
     private val _activeMissedCalls = MutableStateFlow<List<CallLogEntry>>(emptyList())
     val activeMissedCalls: StateFlow<List<CallLogEntry>> = _activeMissedCalls.asStateFlow()
     
+    // Suppress nag restart briefly after user dismisses (prevents race with Room Flow)
+    private var nagSuppressedUntil: Long = 0
+    
+    // Track if a call is in progress - completely suppress nag while calling
+    private var callInProgress: Boolean = false
+    
     init {
         // Monitor for new missed calls - only nag for CARER contacts
         scope.launch {
             callLogRepository.getMissedCalls(10)
                 .map { calls -> calls.filter { !it.isRead } }
                 .collect { missedCalls ->
+                    Log.d(TAG, "getMissedCalls returned ${missedCalls.size} unread calls: ${missedCalls.map { "${it.id}:${it.contactName}" }}")
                     // Filter to only carer contacts for nagging
                     val carerMissedCalls = missedCalls.filter { call ->
                         val contact = call.contactId?.let { id ->
@@ -64,8 +71,20 @@ class MissedCallNagManager @Inject constructor(
                     
                     _activeMissedCalls.value = carerMissedCalls
                     
-                    // Check if nagging is enabled
+                    // Check if nagging is enabled and not suppressed
                     val settings = settingsRepository.getSettings().first()
+                    val now = System.currentTimeMillis()
+                    
+                    // Don't restart nag while a call is in progress
+                    if (callInProgress) {
+                        Log.d(TAG, "Nag suppressed - call in progress")
+                        return@collect
+                    }
+                    
+                    if (now < nagSuppressedUntil) {
+                        Log.d(TAG, "Nag suppressed for ${nagSuppressedUntil - now}ms more")
+                        return@collect
+                    }
                     
                     if (carerMissedCalls.isNotEmpty() && settings.missedCallNagEnabled) {
                         startNagging(carerMissedCalls.first())
@@ -90,10 +109,10 @@ class MissedCallNagManager @Inject constructor(
             delay(nagInterval.initialDelaySeconds * 1000L)
             
             while (isActive) {
-                // Play tannoy-style bing-bong attention sound
-                ringtonePlayer.playAndWait(RingtonePlayer.Ringtone.TANNOY_BINGBONG)
+                // Play tannoy-style bing-bong attention sound (trimmed version)
+                ringtonePlayer.playAndWait(RingtonePlayer.Ringtone.TANNOY_SHORT)
                 
-                delay(300)  // Brief pause after bing-bong
+                delay(150)  // Brief pause after bing-bong
                 
                 // Speak reminder
                 val message = TTSScripts.missedCallReminder(
@@ -142,11 +161,28 @@ class MissedCallNagManager @Inject constructor(
         val callingNormalized = normalizePhoneNumber(phoneNumber)
         val missedNormalized = normalizePhoneNumber(mostRecentMissedCall.phoneNumber)
         
+        Log.d(TAG, "Comparing: calling='$callingNormalized' vs missed='$missedNormalized'")
+        
         if (callingNormalized == missedNormalized) {
-            Log.d(TAG, "Calling the missed caller (${mostRecentMissedCall.contactName}) - dismissing nag")
+            Log.d(TAG, "Calling the missed caller (${mostRecentMissedCall.contactName}) - dismissing nag, id=${mostRecentMissedCall.id}")
+            
+            // Suppress nag restart for 5 seconds to prevent race with Room Flow
+            nagSuppressedUntil = System.currentTimeMillis() + 5000
+            
+            // IMMEDIATELY clear state to prevent race conditions with Room Flow
+            _activeMissedCalls.value = emptyList()
+            
             stopAllAudio()
-            callLogRepository.markAsRead(mostRecentMissedCall.id)
             stopNagging()
+            
+            // Mark as read in database (Room Flow will confirm the state)
+            val result = callLogRepository.markAsRead(mostRecentMissedCall.id)
+            if (result.isSuccess) {
+                Log.d(TAG, "Successfully marked call ${mostRecentMissedCall.id} as read")
+            } else {
+                Log.e(TAG, "FAILED to mark call ${mostRecentMissedCall.id} as read: ${result.exceptionOrNull()}")
+            }
+            
             return true
         } else {
             Log.d(TAG, "Calling ${phoneNumber}, but missed call is from ${mostRecentMissedCall.contactName} - nag continues")
@@ -176,6 +212,27 @@ class MissedCallNagManager @Inject constructor(
         ringtonePlayer.stop()
         tts.stop()
         Log.d(TAG, "Stopped all nag audio")
+    }
+    
+    /**
+     * Notify that a call has started - suppresses all nagging until call ends
+     */
+    fun onCallStarted() {
+        callInProgress = true
+        stopAllAudio()
+        stopNagging()
+        Log.d(TAG, "Call started - nag fully suppressed")
+    }
+    
+    /**
+     * Notify that a call has ended - allows nag to resume if needed
+     * Sets a brief suppression window to allow database to sync
+     */
+    fun onCallEnded() {
+        callInProgress = false
+        // Extend suppression for 3 seconds after call ends to allow database sync
+        nagSuppressedUntil = System.currentTimeMillis() + 3000
+        Log.d(TAG, "Call ended - nag suppressed for 3s to allow DB sync")
     }
     
     /**

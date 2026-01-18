@@ -82,12 +82,11 @@ fun CarerMainMenuScreen(
                     currentLevel = featureLevel
                 )
                 
-                // Appearance - Level 2+
+                // Appearance - always visible (accessibility is essential)
                 CarerMenuButton(
                     title = "Appearance",
                     description = "Theme, text size, button size",
                     onClick = onNavigateToAppearance,
-                    minLevel = FeatureLevel.BASIC,
                     currentLevel = featureLevel
                 )
                 

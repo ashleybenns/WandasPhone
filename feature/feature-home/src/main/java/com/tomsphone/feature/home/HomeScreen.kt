@@ -19,6 +19,7 @@ import com.tomsphone.core.ui.components.EmergencyButton
 import com.tomsphone.core.ui.components.HalfWidthButtonRow
 import com.tomsphone.core.ui.components.InertBorderLayout
 import com.tomsphone.core.ui.components.StatusMessageBox
+import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 
@@ -104,26 +105,28 @@ fun HomeScreen(
             InertBorderLayout(
                 modifier = Modifier.weight(1f)
             ) {
+                // Separate buttons by type
+                val contactButtons = homeButtons.filterIsInstance<HomeButtonConfig.ContactButton>()
+                val menuButtons = homeButtons.filterIsInstance<HomeButtonConfig.MenuButton>()
+                val emergencyButton = homeButtons.filterIsInstance<HomeButtonConfig.EmergencyButton>().firstOrNull()
+                
+                // Layout: Contact buttons in middle (distributed), Emergency fixed at bottom
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(WandasDimensions.SpacingLarge),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
+                        .padding(ScaledDimensions.edgePadding),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Buttons area
+                    // MIDDLE: Contact/Menu buttons - fill available space with even distribution
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        // Separate contact buttons from other buttons
-                        val contactButtons = homeButtons.filterIsInstance<HomeButtonConfig.ContactButton>()
-                        val menuButtons = homeButtons.filterIsInstance<HomeButtonConfig.MenuButton>()
-                        val emergencyButton = homeButtons.filterIsInstance<HomeButtonConfig.EmergencyButton>().firstOrNull()
-                        
                         if (callingContact != null) {
-                            // CALLING ANIMATION: Show black button for calling contact, spacers for others
+                            // CALLING ANIMATION: Show black button for calling contact
                             contactButtons.forEach { button ->
                                 val isThisContactCalling = callingContact?.id == button.contactId
                                 
@@ -136,14 +139,14 @@ fun HomeScreen(
                                     Spacer(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(WandasDimensions.ContactButtonHeight)
+                                            .height(ScaledDimensions.contactButtonHeight)
                                     )
                                 }
                             }
                         } else {
-                            // NORMAL MODE: Render all buttons from config
+                            // NORMAL MODE: Render contact buttons
                             
-                            // Contact buttons (full width)
+                            // Full-width contact buttons
                             contactButtons.filter { !it.isHalfWidth }.forEach { button ->
                                 RenderContactButton(
                                     button = button,
@@ -172,7 +175,6 @@ fun HomeScreen(
                                         }
                                     )
                                 } else {
-                                    // Odd number - show single half-width as full width
                                     RenderContactButton(
                                         button = pair[0],
                                         onClick = { viewModel.onContactButtonTap(pair[0]) },
@@ -181,7 +183,7 @@ fun HomeScreen(
                                 }
                             }
                             
-                            // Menu buttons (typically half-width, paired)
+                            // Menu buttons (Level 2+)
                             menuButtons.chunked(2).forEach { pair ->
                                 if (pair.size == 2 && pair[0].isHalfWidth && pair[1].isHalfWidth) {
                                     HalfWidthButtonRow(
@@ -201,7 +203,6 @@ fun HomeScreen(
                                         }
                                     )
                                 } else {
-                                    // Full width menu buttons
                                     pair.forEach { button ->
                                         RenderMenuButton(
                                             button = button,
@@ -214,17 +215,19 @@ fun HomeScreen(
                         }
                     }
                     
-                    // Bottom: Emergency button - HIDE when in calling animation
-                    val emergencyButton = homeButtons.filterIsInstance<HomeButtonConfig.EmergencyButton>().firstOrNull()
+                    // BOTTOM: Emergency button - fixed at bottom, close to inert gutter
                     if (emergencyButton != null && callingContact == null) {
+                        Spacer(modifier = Modifier.height(ScaledDimensions.buttonSpacing))
                         EmergencyButton(
                             text = emergencyButton.label,
                             onClick = { viewModel.onEmergencyButtonTap() },
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else if (emergencyButton != null) {
-                        // Maintain layout space
-                        Spacer(modifier = Modifier.height(WandasDimensions.EmergencyButtonHeight))
+                        // Maintain layout space during calling animation
+                        Spacer(modifier = Modifier.height(
+                            ScaledDimensions.buttonSpacing + ScaledDimensions.emergencyButtonHeight
+                        ))
                     }
                 }
             }

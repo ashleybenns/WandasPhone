@@ -162,8 +162,10 @@ data class UIConfig(
     val showBattery: Boolean = true,
     val clockFormat: ClockFormat = ClockFormat.TWELVE_HOUR,
     
-    // ===== FONTS =====
-    val fontScale: Float = 1.0f,  // 0.8 - 1.5 multiplier
+    // ===== USER TEXT SIZE =====
+    // Controls text/button scaling on USER-facing screens (Home, Call screens)
+    // Carer settings screens always use normal size for readability
+    val userTextSize: UserTextSize = UserTextSize.NORMAL,
     
     // ===== IN-CALL SCREEN =====
     val showCallDuration: Boolean = true,
@@ -222,6 +224,24 @@ enum class NagSound {
     GENTLE_CHIME,     // Softer reminder
     SPOKEN_ONLY,      // Just TTS, no sound
     NONE              // Silent (just visual)
+}
+
+/**
+ * User-facing text size presets
+ * 
+ * Controls scaling of text AND containers on user screens.
+ * Carer settings screens are NOT affected (always normal size).
+ */
+enum class UserTextSize(
+    val scale: Float,
+    val displayName: String
+) {
+    COMPACT(0.8f, "Compact (80%)"),        // For crowded screens with many buttons
+    SMALL(0.9f, "Small (90%)"),            // Slightly reduced
+    NORMAL(1.0f, "Normal (100%)"),         // Default - comfortable size
+    MEDIUM(1.05f, "Medium (105%)"),        // Slightly larger
+    LARGE(1.1f, "Large (110%)"),           // Max width for S22
+    EXTRA_LARGE(1.15f, "Extra Large (115%)")  // May overflow on smaller screens
 }
 
 /**

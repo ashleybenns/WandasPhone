@@ -175,13 +175,20 @@ class HomeViewModel @Inject constructor(
         return buttons
     }
     
-    // Status message displayed in top text box
-    private val _statusMessage = MutableStateFlow<String?>(null)
+    // Status messages with priority levels to prevent race conditions
+    // Priority: calling > missed_call > default
+    private val _callingStatus = MutableStateFlow<String?>(null)      // Highest priority
+    private val _missedCallStatus = MutableStateFlow<String?>(null)   // Medium priority
     private var statusMessageResetJob: Job? = null
     
-    // Combine user name with status message for display
-    val displayMessage: StateFlow<String> = combine(userName, _statusMessage) { name, status ->
-        status ?: "$name's phone"
+    // Combine with priority: calling > missed_call > default
+    val displayMessage: StateFlow<String> = combine(
+        userName, 
+        _callingStatus, 
+        _missedCallStatus
+    ) { name, callingMsg, missedMsg ->
+        // Priority-based selection
+        callingMsg ?: missedMsg ?: "$name's phone"
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -209,55 +216,53 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // Monitor missed calls and update status message
+        // Monitor missed calls and update status message (medium priority)
         viewModelScope.launch {
             missedCallNagManager.activeMissedCalls.collect { missedCalls ->
                 if (missedCalls.isNotEmpty()) {
                     val caller = missedCalls.first().contactName ?: "someone"
                     val user = userName.value
                     // 3 lines with breaks at logical phrase boundaries:
-                    // Line 1: "[User],"
-                    // Line 2: "you missed a call."
-                    // Line 3: "Please call [carer] now."
-                    setStatus("$user,\nyou missed a call.\nPlease call $caller now.")
+                    // Line 1: "[User]."
+                    // Line 2: "You missed a call."
+                    // Line 3: "Call [carer] now."
+                    _missedCallStatus.value = "$user.\nYou missed a call.\nCall $caller now."
                 } else {
-                    if (_statusMessage.value?.contains("missed a call") == true) {
-                        _statusMessage.value = null
-                    }
+                    _missedCallStatus.value = null
                 }
             }
         }
         
         // Listen for call state changes (for logging only)
-        // NOTE: We don't clear _statusMessage or _callingContact here to avoid race conditions.
+        // NOTE: We don't clear _callingStatus or _callingContact here to avoid race conditions.
         // State is cleared via clearCallingStateIfNoCall() when HomeScreen is visible with no active call.
         viewModelScope.launch {
             callManager.currentCall.collect { callInfo ->
                 val state = callInfo?.state ?: CallState.IDLE
-                Log.d(TAG, "currentCall: state=$state, callingContact=${_callingContact.value?.name}, status=${_statusMessage.value}")
+                Log.d(TAG, "currentCall: state=$state, callingContact=${_callingContact.value?.name}, callingStatus=${_callingStatus.value}, missedStatus=${_missedCallStatus.value}")
             }
         }
     }
     
     /**
-     * Set a temporary status message
+     * Set a temporary calling status message (highest priority)
      */
-    private fun setTemporaryStatus(message: String, durationMs: Long = 5000) {
+    private fun setTemporaryCallingStatus(message: String, durationMs: Long = 5000) {
         statusMessageResetJob?.cancel()
-        _statusMessage.value = message
+        _callingStatus.value = message
         
         statusMessageResetJob = viewModelScope.launch {
             delay(durationMs)
-            _statusMessage.value = null
+            _callingStatus.value = null
         }
     }
     
     /**
-     * Set status message that stays until cleared
+     * Set calling status message that stays until cleared (highest priority)
      */
-    private fun setStatus(message: String?) {
+    private fun setCallingStatus(message: String?) {
         statusMessageResetJob?.cancel()
-        _statusMessage.value = message
+        _callingStatus.value = message
     }
     
     /**
@@ -273,7 +278,9 @@ class HomeViewModel @Inject constructor(
         if (!hasActiveCall) {
             Log.d(TAG, "Clearing calling state (no active call)")
             _callingContact.value = null
-            _statusMessage.value = null
+            _callingStatus.value = null
+            // Notify nag manager that call ended (if it was in progress)
+            missedCallNagManager.onCallEnded()
         }
     }
     
@@ -290,7 +297,10 @@ class HomeViewModel @Inject constructor(
         
         // Immediately enter calling mode - show the "calling animation"
         _callingContact.value = contact
-        setStatus("Calling ${contact.name}")
+        setCallingStatus("Calling ${contact.name}")
+        
+        // Notify nag manager that a call is starting - suppresses all nagging
+        missedCallNagManager.onCallStarted()
         
         viewModelScope.launch {
             // Use speakNow to interrupt any ongoing TTS
@@ -307,7 +317,8 @@ class HomeViewModel @Inject constructor(
             if (result.isFailure) {
                 Log.e(TAG, "Failed to place call: ${result.exceptionOrNull()}")
                 _callingContact.value = null
-                setTemporaryStatus("Couldn't place call")
+                setTemporaryCallingStatus("Couldn't place call")
+                missedCallNagManager.onCallEnded()  // Allow nag to resume
                 tts.speakNow("Sorry, I couldn't place that call.")
             }
             // On success, the call state collector clears _callingContact

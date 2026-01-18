@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
+import com.tomsphone.core.ui.theme.UserScalingProvider
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
@@ -80,7 +81,7 @@ class MainActivity : ComponentActivity() {
         }
         
         setContent {
-            WandasPhoneApp(callManager)
+            WandasPhoneApp(callManager, settingsRepository)
         }
     }
     
@@ -173,12 +174,16 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun WandasPhoneApp(callManager: CallManager) {
+fun WandasPhoneApp(callManager: CallManager, settingsRepository: SettingsRepository) {
     val navController = rememberNavController()
     
     // Observe both call flows
     val incomingCall by callManager.incomingRingingCall.collectAsState(initial = null)
     val currentCall by callManager.currentCall.collectAsState(initial = null)
+    
+    // Observe user text size setting (scale factor)
+    val settings by settingsRepository.getSettings().collectAsState(initial = null)
+    val userTextScale = settings?.ui?.userTextSize?.scale ?: 1.0f  // Default to NORMAL (100%)
     
     // Track the last outgoing contact name for navigation
     var lastOutgoingContactName by remember { mutableStateOf("Caller") }
@@ -271,47 +276,59 @@ fun WandasPhoneApp(callManager: CallManager) {
             navController = navController,
             startDestination = "home"
         ) {
+            // USER SCREENS - wrapped with UserScalingProvider
+            // These scale text/buttons based on carer-configured userTextSize
+            
             composable("home") {
-                HomeScreen(
-                    onNavigateToCarer = {
-                        navController.navigate("carer")
-                    }
-                )
+                UserScalingProvider(scale = userTextScale) {
+                    HomeScreen(
+                        onNavigateToCarer = {
+                            navController.navigate("carer")
+                        }
+                    )
+                }
             }
             
             // Incoming call - Answer/Reject
             composable("incoming") {
-                IncomingCallScreen(
-                    onCallAnswered = {
-                        // Will navigate to endIncoming when call becomes ACTIVE
-                        Log.d("WandasPhoneApp", "Call answered - waiting for ACTIVE state")
-                    },
-                    onCallRejected = {
-                        navController.popBackStack("home", inclusive = false)
-                    }
-                )
+                UserScalingProvider(scale = userTextScale) {
+                    IncomingCallScreen(
+                        onCallAnswered = {
+                            // Will navigate to endIncoming when call becomes ACTIVE
+                            Log.d("WandasPhoneApp", "Call answered - waiting for ACTIVE state")
+                        },
+                        onCallRejected = {
+                            navController.popBackStack("home", inclusive = false)
+                        }
+                    )
+                }
             }
             
             // End call screen for INCOMING (GREEN)
             composable("endIncoming") {
-                EndIncomingCallScreen(
-                    onCallEnded = {
-                        navController.popBackStack("home", inclusive = false)
-                    }
-                )
+                UserScalingProvider(scale = userTextScale) {
+                    EndIncomingCallScreen(
+                        onCallEnded = {
+                            navController.popBackStack("home", inclusive = false)
+                        }
+                    )
+                }
             }
             
             // End call screen for OUTGOING (YELLOW)
             composable("endOutgoing/{contactName}") { backStackEntry ->
                 val contactName = backStackEntry.arguments?.getString("contactName") ?: "Caller"
-                EndOutgoingCallScreen(
-                    contactName = contactName,
-                    onCallEnded = {
-                        navController.popBackStack("home", inclusive = false)
-                    }
-                )
+                UserScalingProvider(scale = userTextScale) {
+                    EndOutgoingCallScreen(
+                        contactName = contactName,
+                        onCallEnded = {
+                            navController.popBackStack("home", inclusive = false)
+                        }
+                    )
+                }
             }
             
+            // CARER SCREEN - NO scaling, uses normal text size for readability
             composable("carer") {
                 com.tomsphone.feature.carer.CarerScreen(
                     onNavigateBack = {
