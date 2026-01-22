@@ -90,7 +90,12 @@ class MainActivity : ComponentActivity() {
         }
         
         setContent {
-            WandasPhoneApp(callManager, settingsRepository, batteryMonitor)
+            WandasPhoneApp(
+                callManager = callManager, 
+                settingsRepository = settingsRepository, 
+                batteryMonitor = batteryMonitor,
+                onExitApp = { exitApp() }
+            )
         }
     }
     
@@ -157,6 +162,27 @@ class MainActivity : ComponentActivity() {
         }
     }
     
+    /**
+     * Exit the app - unpin and close
+     * Used by carer as an escape hatch when pinning causes issues
+     */
+    private fun exitApp() {
+        Log.d(TAG, "Carer requested app exit")
+        
+        // Stop lock task (unpin)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                stopLockTask()
+                Log.d(TAG, "Stopped lock task")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to stop lock task: ${e.message}")
+            }
+        }
+        
+        // Finish the activity
+        finish()
+    }
+    
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (lockVolumeButtons) {
             when (event.keyCode) {
@@ -204,7 +230,8 @@ class MainActivity : ComponentActivity() {
 fun WandasPhoneApp(
     callManager: CallManager, 
     settingsRepository: SettingsRepository,
-    batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor
+    batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor,
+    onExitApp: () -> Unit
 ) {
     val navController = rememberNavController()
     
@@ -479,7 +506,8 @@ fun WandasPhoneApp(
                 com.tomsphone.feature.carer.CarerScreen(
                     onNavigateBack = {
                         navController.popBackStack()
-                    }
+                    },
+                    onExitApp = onExitApp
                 )
             }
         }

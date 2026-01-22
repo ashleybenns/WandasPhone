@@ -25,6 +25,7 @@ import com.tomsphone.core.ui.theme.wandasColors
 @Composable
 fun CarerScreen(
     onNavigateBack: () -> Unit,
+    onExitApp: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val isPinVerified by viewModel.isPinVerified.collectAsState()
@@ -43,6 +44,7 @@ fun CarerScreen(
     if (isPinVerified) {
         CarerNavigation(
             onExitCarerSettings = onNavigateBack,
+            onExitApp = onExitApp,
             featureLevel = settings.featureLevel
         )
     }

@@ -36,6 +36,7 @@ object CarerRoutes {
 @Composable
 fun CarerNavigation(
     onExitCarerSettings: () -> Unit,
+    onExitApp: () -> Unit,
     featureLevel: FeatureLevel,
     navController: NavHostController = rememberNavController()
 ) {
@@ -54,6 +55,7 @@ fun CarerNavigation(
                 onNavigateToFeatureLevel = { navController.navigate(CarerRoutes.FEATURE_LEVEL) },
                 onNavigateToAlwaysOn = { navController.navigate(CarerRoutes.ALWAYS_ON) },
                 onNavigateToFactoryReset = { navController.navigate(CarerRoutes.FACTORY_RESET) },
+                onExitApp = onExitApp,
                 onBack = onExitCarerSettings
             )
         }

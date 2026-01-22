@@ -32,6 +32,7 @@ fun CarerMainMenuScreen(
     onNavigateToFeatureLevel: () -> Unit,
     onNavigateToAlwaysOn: () -> Unit,
     onNavigateToFactoryReset: () -> Unit,
+    onExitApp: () -> Unit,
     onBack: () -> Unit
 ) {
     Surface(
@@ -130,6 +131,32 @@ fun CarerMainMenuScreen(
                 
                 Text(
                     text = "Wipe all data before giving phone to new user",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Exit App - unpin and close
+                OutlinedButton(
+                    onClick = onExitApp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.wandasColors.onBackground
+                    )
+                ) {
+                    Text(
+                        text = "Exit App",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                
+                Text(
+                    text = "Unpin and close the app (carer escape)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.padding(top = 4.dp)
