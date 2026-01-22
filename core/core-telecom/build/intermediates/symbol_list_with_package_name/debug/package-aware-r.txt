@@ -2,3 +2,4 @@ com.tomsphone.core.telecom
 raw old_twobell_ringtone
 raw short_twobell_ringtone
 raw tannoy_bingbong
+raw tannoy_short

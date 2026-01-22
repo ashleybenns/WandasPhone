@@ -63,6 +63,18 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
     
+    // CameraX for photo capture
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    
+    // Accompanist for permissions
+    implementation(libs.accompanist.permissions)
+    
+    // Coil for image loading
+    implementation(libs.coil.compose)
+    
     debugImplementation(libs.compose.ui.tooling)
 }
 

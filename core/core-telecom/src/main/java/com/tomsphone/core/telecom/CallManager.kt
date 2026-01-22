@@ -30,6 +30,17 @@ interface CallManager {
     val currentCall: StateFlow<CallInfo?>
     
     /**
+     * Emergency mode - when true, unknown calls should be allowed through
+     * Set when user initiates an emergency call, cleared when returning to home
+     */
+    val isEmergencyMode: StateFlow<Boolean>
+    
+    /**
+     * Enable emergency mode - allows unknown callers through screening
+     */
+    fun setEmergencyMode(enabled: Boolean)
+    
+    /**
      * Place an outgoing call
      */
     fun placeCall(phoneNumber: String): Result<Unit>

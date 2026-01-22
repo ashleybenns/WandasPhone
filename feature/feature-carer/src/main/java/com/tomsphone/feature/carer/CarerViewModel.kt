@@ -259,6 +259,136 @@ class CarerSettingsViewModel @Inject constructor(
     }
     
     /**
+     * Set emergency test mode
+     */
+    fun setEmergencyTestMode(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(emergencyTestMode = enabled))
+        }
+    }
+    
+    /**
+     * Set user address for emergency info
+     */
+    fun setUserAddress(address: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userAddress = address))
+        }
+    }
+    
+    /**
+     * Set user blood type
+     */
+    fun setUserBloodType(bloodType: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userBloodType = bloodType))
+        }
+    }
+    
+    /**
+     * Set user allergies
+     */
+    fun setUserAllergies(allergies: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userAllergies = allergies))
+        }
+    }
+    
+    /**
+     * Set user medications
+     */
+    fun setUserMedications(medications: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userMedications = medications))
+        }
+    }
+    
+    /**
+     * Set user medical conditions
+     */
+    fun setUserMedicalConditions(conditions: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userMedicalConditions = conditions))
+        }
+    }
+    
+    /**
+     * Set user emergency notes
+     */
+    fun setUserEmergencyNotes(notes: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userEmergencyNotes = notes))
+        }
+    }
+    
+    /**
+     * Set user surname
+     */
+    fun setUserSurname(surname: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userSurname = surname))
+        }
+    }
+    
+    /**
+     * Set emergency contact 1 name
+     */
+    fun setEmergencyContact1Name(name: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(emergencyContact1Name = name))
+        }
+    }
+    
+    /**
+     * Set emergency contact 1 phone
+     */
+    fun setEmergencyContact1Phone(phone: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(emergencyContact1Phone = phone))
+        }
+    }
+    
+    /**
+     * Set emergency contact 2 name
+     */
+    fun setEmergencyContact2Name(name: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(emergencyContact2Name = name))
+        }
+    }
+    
+    /**
+     * Set emergency contact 2 phone
+     */
+    fun setEmergencyContact2Phone(phone: String) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(emergencyContact2Phone = phone))
+        }
+    }
+    
+    /**
+     * Set user photo URI (for Emergency ID photo)
+     */
+    fun setUserPhotoUri(uri: String?) {
+        viewModelScope.launch {
+            val current = settings.first()
+            settingsRepository.updateSettings(current.copy(userPhotoUri = uri))
+        }
+    }
+    
+    /**
      * Hash PIN for secure storage
      */
     private fun hashPin(pin: String): String {

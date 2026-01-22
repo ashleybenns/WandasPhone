@@ -62,7 +62,7 @@ fun FeatureLevelScreen(
                     verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
                 ) {
                     Text(
-                        text = "Choose the right level for your user. Higher levels add more features but also more complexity.",
+                        text = "Match the phone to your user's needs. Simpler is often better — each level is designed for what the user can comfortably handle.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
                     )
@@ -200,38 +200,38 @@ private fun FeatureLevelCard(
 private fun getLevelInfo(level: FeatureLevel): Triple<String, String, List<String>> {
     return when (level) {
         FeatureLevel.MINIMAL -> Triple(
-            "Minimal",
-            "One-touch calling for users with severe cognitive impairment",
+            "Simple",
+            "The clearest possible interface. Perfect for users who need one-touch simplicity with no choices to make.",
             listOf(
-                "2 large contact buttons",
+                "Up to 3 large contact buttons",
                 "Emergency button",
                 "Always-on speakerphone",
-                "Missed call reminders"
+                "Missed call reminders for carers"
             )
         )
         FeatureLevel.BASIC -> Triple(
-            "Basic",
-            "Additional controls for users who can handle toggles",
+            "Comfortable",
+            "A few more options for users who are comfortable making simple choices.",
             listOf(
-                "4 contact buttons",
+                "Up to 4 contact buttons",
                 "Speaker toggle during calls",
-                "Appearance customization",
-                "Missed calls list"
+                "Missed calls list",
+                "Appearance options"
             )
         )
         FeatureLevel.STANDARD -> Triple(
-            "Standard",
-            "List navigation for more independent users",
+            "Capable",
+            "List navigation for users who can browse and select from multiple options.",
             listOf(
-                "12 contacts with scrolling",
+                "Up to 12 contacts with scrolling",
                 "Contact photos",
                 "Call history",
                 "Basic text notifications"
             )
         )
         FeatureLevel.EXTENDED -> Triple(
-            "Extended",
-            "Full phone functionality",
+            "Independent",
+            "Full phone functionality for users who just need larger buttons and clearer design.",
             listOf(
                 "Unlimited contacts",
                 "Text input",

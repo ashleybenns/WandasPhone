@@ -64,6 +64,9 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
     
+    // Coil for image loading
+    implementation(libs.coil.compose)
+    
     debugImplementation(libs.compose.ui.tooling)
 }
 

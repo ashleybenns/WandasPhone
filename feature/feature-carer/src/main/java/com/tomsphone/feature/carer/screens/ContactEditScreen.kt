@@ -2,17 +2,27 @@ package com.tomsphone.feature.carer.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tomsphone.core.config.ButtonColor
 import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
@@ -22,16 +32,18 @@ import com.tomsphone.feature.carer.components.*
  * Contact edit screen.
  * 
  * Edit existing contact or add new one.
+ * Contact type is passed as parameter (determined by which "Add" button was tapped).
+ * 
  * Settings include:
  * - Name
  * - Phone number
- * - Contact type (Carer/Grey List)
- * - Button color
- * - Auto-answer (per-contact, Level 2+)
+ * - Primary contact toggle (Carers only)
+ * - Auto-answer (Carers only, Level 2+)
  */
 @Composable
 fun ContactEditScreen(
     contactId: Long,
+    contactType: ContactType,  // Type is fixed - determined by entry point
     featureLevel: FeatureLevel,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
@@ -42,21 +54,24 @@ fun ContactEditScreen(
     val isNewContact = contactId == 0L
     val existingContact = contacts.find { it.id == contactId }
     
+    // Use existing contact's type if editing, otherwise use passed type
+    val effectiveContactType = existingContact?.contactType ?: contactType
+    
     // Form state
     var name by remember { mutableStateOf(existingContact?.name ?: "") }
     var phoneNumber by remember { mutableStateOf(existingContact?.phoneNumber ?: "") }
-    var contactType by remember { mutableStateOf(existingContact?.contactType ?: ContactType.CARER) }
     var isPrimary by remember { mutableStateOf(existingContact?.isPrimary ?: false) }
     var autoAnswerEnabled by remember { mutableStateOf(existingContact?.autoAnswerEnabled ?: false) }
+    var selectedColor by remember { mutableStateOf(ButtonColor.fromArgb(existingContact?.buttonColor)) }
     
     // Update form when contact loads
     LaunchedEffect(existingContact) {
         existingContact?.let {
             name = it.name
             phoneNumber = it.phoneNumber
-            contactType = it.contactType
             isPrimary = it.isPrimary
             autoAnswerEnabled = it.autoAnswerEnabled
+            selectedColor = ButtonColor.fromArgb(it.buttonColor)
         }
     }
     
@@ -95,78 +110,108 @@ fun ContactEditScreen(
                                 if (!isNewContact && name.isNotBlank()) {
                                     saveContact(
                                         viewModel, existingContact, name, phoneNumber, 
-                                        contactType, isPrimary, autoAnswerEnabled
+                                        effectiveContactType, isPrimary, autoAnswerEnabled, selectedColor
                                     )
                                     saveToastState.show("$name saved")
                                 }
                             },
                             label = { Text("Contact Name") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Words  // Title Case
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                     
                     // Phone Number
+                    val phoneError = remember(phoneNumber) { 
+                        if (phoneNumber.isBlank()) null
+                        else if (!isValidPhoneNumber(phoneNumber)) "Enter a valid UK phone number"
+                        else null
+                    }
+                    
                     SettingCard(title = "Phone Number") {
                         OutlinedTextField(
                             value = phoneNumber,
                             onValueChange = { newPhone ->
-                                phoneNumber = newPhone
-                                if (!isNewContact && phoneNumber.isNotBlank()) {
+                                // Only allow digits, spaces, and common phone chars
+                                val filtered = newPhone.filter { it.isDigit() || it in " +-" }
+                                phoneNumber = filtered
+                                if (!isNewContact && isValidPhoneNumber(filtered)) {
                                     saveContact(
                                         viewModel, existingContact, name, phoneNumber, 
-                                        contactType, isPrimary, autoAnswerEnabled
+                                        effectiveContactType, isPrimary, autoAnswerEnabled, selectedColor
                                     )
                                     saveToastState.show("$name's phone saved")
                                 }
                             },
                             label = { Text("Phone Number") },
+                            placeholder = { Text("07xxx xxxxxx") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone  // Phone keyboard
+                            ),
+                            isError = phoneError != null,
+                            supportingText = phoneError?.let { { Text(it) } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                     
-                    // Contact Type
+                    // Show contact type (read-only info)
                     SettingCard(title = "Contact Type") {
-                        ContactType.entries.forEach { type ->
+                        Text(
+                            text = getContactTypeDisplayName(effectiveContactType),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.wandasColors.onSurface
+                        )
+                        Text(
+                            text = getContactTypeDescription(effectiveContactType),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    
+                    // Button Color (Carers only - they appear on home screen)
+                    if (effectiveContactType == ContactType.CARER) {
+                        SettingCard(title = "Button Color") {
+                            Text(
+                                text = "Choose a color for this contact's button on the home screen",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            
+                            // Color swatches in a row
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
+                                horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                RadioButton(
-                                    selected = contactType == type,
-                                    onClick = {
-                                        contactType = type
-                                        if (!isNewContact) {
-                                            saveContact(
-                                                viewModel, existingContact, name, phoneNumber, 
-                                                contactType, isPrimary, autoAnswerEnabled
-                                            )
-                                            saveToastState.show("Contact type saved")
+                                ButtonColor.entries.forEach { buttonColor ->
+                                    ColorSwatch(
+                                        color = buttonColor,
+                                        isSelected = selectedColor == buttonColor,
+                                        themeDefaultColor = MaterialTheme.wandasColors.primaryButton,
+                                        onClick = {
+                                            selectedColor = buttonColor
+                                            if (!isNewContact) {
+                                                saveContact(
+                                                    viewModel, existingContact, name, phoneNumber,
+                                                    effectiveContactType, isPrimary, autoAnswerEnabled,
+                                                    buttonColor
+                                                )
+                                                saveToastState.show("$name's color: ${buttonColor.displayName}")
+                                            }
                                         }
-                                    }
-                                )
-                                
-                                Spacer(modifier = Modifier.width(8.dp))
-                                
-                                Column {
-                                    Text(
-                                        text = getContactTypeDisplayName(type),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.wandasColors.onSurface
-                                    )
-                                    Text(
-                                        text = getContactTypeDescription(type),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
                                     )
                                 }
                             }
                         }
                     }
                     
-                    // Primary Contact
-                    if (contactType == ContactType.CARER) {
+                    // Primary Contact (Carers only)
+                    if (effectiveContactType == ContactType.CARER) {
                         SettingCard(title = "Primary Contact") {
                             SettingToggle(
                                 title = "Set as Primary",
@@ -185,12 +230,12 @@ fun ContactEditScreen(
                         }
                     }
                     
-                    // Auto-Answer (Level 2+)
+                    // Auto-Answer (Carers only, Level 2+)
                     LevelGatedContent(
                         minLevel = FeatureLevel.BASIC,
                         currentLevel = featureLevel
                     ) {
-                        if (contactType == ContactType.CARER) {
+                        if (effectiveContactType == ContactType.CARER) {
                             SettingCard(title = "Auto-Answer") {
                                 SettingToggle(
                                     title = "Auto-Answer for this contact",
@@ -201,7 +246,7 @@ fun ContactEditScreen(
                                         if (!isNewContact) {
                                             saveContact(
                                                 viewModel, existingContact, name, phoneNumber, 
-                                                contactType, isPrimary, autoAnswerEnabled
+                                                contactType, isPrimary, autoAnswerEnabled, selectedColor
                                             )
                                             saveToastState.show("$name's auto-answer ${if (enabled) "enabled" else "disabled"}")
                                         }
@@ -232,20 +277,22 @@ fun ContactEditScreen(
                     if (isNewContact) {
                         Spacer(modifier = Modifier.height(16.dp))
                         
+                        val canSave = name.isNotBlank() && isValidPhoneNumber(phoneNumber)
+                        
                         Button(
                             onClick = {
-                                if (name.isNotBlank() && phoneNumber.isNotBlank()) {
+                                if (canSave) {
                                     val newContact = Contact(
                                         id = 0,
-                                        name = name,
-                                        phoneNumber = phoneNumber,
+                                        name = name.trim(),
+                                        phoneNumber = phoneNumber.trim(),
                                         photoUri = null,
                                         priority = 0,
                                         isPrimary = isPrimary,
-                                        contactType = contactType,
+                                        contactType = effectiveContactType,
                                         createdAt = System.currentTimeMillis(),
                                         updatedAt = System.currentTimeMillis(),
-                                        buttonColor = null,
+                                        buttonColor = if (selectedColor == ButtonColor.DEFAULT) null else selectedColor.argb,
                                         autoAnswerEnabled = autoAnswerEnabled,
                                         buttonPosition = 0,
                                         isHalfWidth = false
@@ -256,7 +303,7 @@ fun ContactEditScreen(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = name.isNotBlank() && phoneNumber.isNotBlank()
+                            enabled = canSave
                         ) {
                             Text("Save Contact")
                         }
@@ -300,7 +347,8 @@ private fun saveContact(
     phoneNumber: String,
     contactType: ContactType,
     isPrimary: Boolean,
-    autoAnswerEnabled: Boolean
+    autoAnswerEnabled: Boolean,
+    buttonColor: ButtonColor = ButtonColor.DEFAULT
 ) {
     existingContact?.let { contact ->
         viewModel.saveContact(
@@ -310,9 +358,51 @@ private fun saveContact(
                 contactType = contactType,
                 isPrimary = isPrimary,
                 autoAnswerEnabled = autoAnswerEnabled,
+                buttonColor = if (buttonColor == ButtonColor.DEFAULT) null else buttonColor.argb,
                 updatedAt = System.currentTimeMillis()
             )
         )
+    }
+}
+
+/**
+ * Color swatch for button color selection
+ */
+@Composable
+private fun ColorSwatch(
+    color: ButtonColor,
+    isSelected: Boolean,
+    themeDefaultColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit
+) {
+    val swatchColor = if (color == ButtonColor.DEFAULT) {
+        themeDefaultColor
+    } else {
+        Color(color.argb)
+    }
+    
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .background(swatchColor, CircleShape)
+            .then(
+                if (isSelected) {
+                    Modifier.border(3.dp, MaterialTheme.wandasColors.onBackground, CircleShape)
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "Selected",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
     }
 }
 
@@ -326,6 +416,17 @@ private fun getContactTypeDisplayName(type: ContactType): String {
 private fun getContactTypeDescription(type: ContactType): String {
     return when (type) {
         ContactType.CARER -> "Appears on home screen, triggers missed call reminders"
-        ContactType.GREY_LIST -> "Calls allowed but no home button or reminders"
+        ContactType.GREY_LIST -> "Allows incoming calls only. No way to call back and no missed call notification."
     }
+}
+
+/**
+ * Validate UK phone number
+ * Must have at least 10 digits after removing formatting
+ */
+private fun isValidPhoneNumber(phone: String): Boolean {
+    val digitsOnly = phone.filter { it.isDigit() }
+    // UK numbers: 10-11 digits (with or without leading 0)
+    // International: starts with + and at least 10 digits
+    return digitsOnly.length >= 10
 }

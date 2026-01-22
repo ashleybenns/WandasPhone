@@ -28,14 +28,27 @@ import com.tomsphone.feature.carer.components.*
  * - Add new contacts
  * - Set primary contact
  */
+/**
+ * @param onNavigateToContactEdit (contactId, contactType) - contactId 0 for new, type for new contacts
+ */
 @Composable
 fun ContactsScreen(
     featureLevel: FeatureLevel,
-    onNavigateToContactEdit: (Long) -> Unit,
+    onNavigateToContactEdit: (Long, ContactType) -> Unit,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val contacts by viewModel.contacts.collectAsState()
+    
+    // Max carers based on feature level
+    val maxCarers = when (featureLevel) {
+        FeatureLevel.MINIMAL -> 3
+        FeatureLevel.BASIC -> 4
+        FeatureLevel.STANDARD -> 12
+        FeatureLevel.EXTENDED -> Int.MAX_VALUE
+    }
+    val carerCount = contacts.count { it.contactType == ContactType.CARER }
+    val canAddMoreCarers = carerCount < maxCarers
     
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -61,40 +74,75 @@ fun ContactsScreen(
                     .padding(WandasDimensions.SpacingMedium),
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingSmall)
             ) {
-                // Carers section
+                // ========== CARERS SECTION ==========
                 item {
-                    Text(
-                        text = "Carers",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.wandasColors.onSurface,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Carers",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.wandasColors.onSurface
+                        )
+                        
+                        // Show limit
+                        if (maxCarers != Int.MAX_VALUE) {
+                            Text(
+                                text = "$carerCount / $maxCarers",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (canAddMoreCarers) 
+                                    MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                                else 
+                                    MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
                 
                 val carers = contacts.filter { it.contactType == ContactType.CARER }
                 items(carers, key = { it.id }) { contact ->
                     ContactListItem(
                         contact = contact,
-                        onClick = { onNavigateToContactEdit(contact.id) }
+                        onClick = { onNavigateToContactEdit(contact.id, contact.contactType) }
                     )
                 }
                 
-                // Grey List section (Level 2+)
-                if (featureLevel.level >= 2) {
+                // Add Carer button
+                item {
+                    OutlinedButton(
+                        onClick = { onNavigateToContactEdit(0, ContactType.CARER) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = canAddMoreCarers
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (canAddMoreCarers) "Add Carer" else "$maxCarers carers is enough for this mode")
+                    }
+                }
+                
+                // ========== GREY LIST SECTION ==========
+                // Grey list available at all levels - allows calls without home button
+                if (true) {  // Was: featureLevel.level >= 2
                     item {
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
                         
                         Text(
                             text = "Grey List",
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.wandasColors.onSurface,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            color = MaterialTheme.wandasColors.onSurface
                         )
                         
                         Text(
-                            text = "Calls allowed but no missed call reminders",
+                            text = "Allows incoming calls only. No way to call back and no missed call notification.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                     }
                     
@@ -102,30 +150,28 @@ fun ContactsScreen(
                     items(greyList, key = { it.id }) { contact ->
                         ContactListItem(
                             contact = contact,
-                            onClick = { onNavigateToContactEdit(contact.id) }
+                            onClick = { onNavigateToContactEdit(contact.id, contact.contactType) }
                         )
+                    }
+                    
+                    // Add to Grey List button (always enabled)
+                    item {
+                        OutlinedButton(
+                            onClick = { onNavigateToContactEdit(0, ContactType.GREY_LIST) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Add to Grey List")
+                        }
                     }
                 }
                 
-                // Add contact button
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Button(
-                        onClick = { onNavigateToContactEdit(0) },  // 0 = new contact
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        
-                        Spacer(modifier = Modifier.width(8.dp))
-                        
-                        Text("Add Contact")
-                    }
-                    
                     Spacer(modifier = Modifier.height(32.dp))
                 }
             }

@@ -14,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -27,8 +29,8 @@ import com.tomsphone.core.telecom.RingtonePlayer
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
 import com.tomsphone.core.ui.components.InertBorderLayout
+import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
-import com.tomsphone.core.ui.theme.WandasTextStyles
 import com.tomsphone.core.ui.theme.wandasColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -74,17 +76,21 @@ fun IncomingCallScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top: Status text box - SAME as HomeScreen (3 lines, 140dp, full width)
+            // Top: Status text box - SAME as HomeScreen (scaled)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(ScaledDimensions.statusBoxHeight)
                     .padding(horizontal = WandasDimensions.SpacingLarge),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = statusMessage,
-                    style = WandasTextStyles.StatusMessage,
+                    style = TextStyle(
+                        fontSize = ScaledDimensions.statusTextSize,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = ScaledDimensions.statusTextSize * 1.2f
+                    ),
                     color = MaterialTheme.wandasColors.onBackground,
                     textAlign = TextAlign.Center,
                     maxLines = 3
@@ -108,7 +114,7 @@ fun IncomingCallScreen(
                         verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Answer button - GREEN, large (same size as contact buttons)
+                        // Answer button - GREEN, large (same size as contact buttons, scaled)
                         Button(
                             onClick = {
                                 viewModel.answerCall()
@@ -116,7 +122,7 @@ fun IncomingCallScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(WandasDimensions.ContactButtonHeight),
+                                .height(ScaledDimensions.contactButtonHeight),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF4CAF50), // Green
                                 contentColor = Color.White
@@ -129,13 +135,16 @@ fun IncomingCallScreen(
                         ) {
                             Text(
                                 text = "Answer",
-                                style = WandasTextStyles.ButtonLarge,
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.contactNameTextSize,
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = Color.White,
                                 textAlign = TextAlign.Center
                             )
                         }
                         
-                        // Reject button - RED, same size as contact buttons
+                        // Reject button - RED, same size as contact buttons, scaled
                         Button(
                             onClick = {
                                 viewModel.rejectCall()
@@ -143,7 +152,7 @@ fun IncomingCallScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(WandasDimensions.ContactButtonHeight),
+                                .height(ScaledDimensions.contactButtonHeight),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFFD32F2F), // Red
                                 contentColor = Color.White
@@ -156,7 +165,10 @@ fun IncomingCallScreen(
                         ) {
                             Text(
                                 text = "Reject",
-                                style = WandasTextStyles.ButtonLarge,
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.contactNameTextSize,
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = Color.White,
                                 textAlign = TextAlign.Center
                             )
@@ -164,7 +176,7 @@ fun IncomingCallScreen(
                     }
                     
                     // Spacer where Emergency button would be on HomeScreen
-                    Spacer(modifier = Modifier.height(WandasDimensions.EmergencyButtonHeight))
+                    Spacer(modifier = Modifier.height(ScaledDimensions.emergencyButtonHeight))
                 }
             }
         }

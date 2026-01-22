@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
@@ -91,11 +92,22 @@ class SettingsRepositoryImpl @Inject constructor(
     override fun getMaxContacts(): Flow<Int> {
         return getFeatureLevel().map { level ->
             when (level) {
-                FeatureLevel.MINIMAL -> 2
+                FeatureLevel.MINIMAL -> 3  // Up to 3 carers at Level 1
                 FeatureLevel.BASIC -> 4
                 FeatureLevel.STANDARD -> 12
                 FeatureLevel.EXTENDED -> Int.MAX_VALUE
             }
+        }
+    }
+    
+    /**
+     * SECURITY: Auto-answer is only allowed at Level 2+ (BASIC or higher).
+     * This protects vulnerable Level 1 users from privacy/spoofing risks.
+     */
+    override fun isAutoAnswerAllowed(): Flow<Boolean> {
+        return combine(getFeatureLevel(), getSettings()) { level, settings ->
+            // Must be Level 2+ AND have auto-answer enabled
+            level.level >= FeatureLevel.BASIC.level && settings.autoAnswerEnabled
         }
     }
     

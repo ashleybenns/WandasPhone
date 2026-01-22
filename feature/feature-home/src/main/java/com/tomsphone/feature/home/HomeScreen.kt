@@ -5,10 +5,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.HomeButtonConfig
 import com.tomsphone.core.telecom.CallDirection
@@ -40,12 +45,19 @@ import com.tomsphone.core.ui.theme.wandasColors
 @Composable
 fun HomeScreen(
     onNavigateToCarer: () -> Unit,
+    onNavigateToEmergencyConfirm: () -> Unit,
+    batteryLevel: Int = 100,
+    isLowBattery: Boolean = false,
+    isCharging: Boolean = false,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val displayMessage by viewModel.displayMessage.collectAsState()
     val homeButtons by viewModel.homeButtons.collectAsState()
     val showCarerAccess by viewModel.showCarerAccess.collectAsState()
+    val showEmergencyConfirm by viewModel.showEmergencyConfirm.collectAsState()
     val callingContact by viewModel.callingContact.collectAsState()
+    val emergencyTestMode by viewModel.emergencyTestMode.collectAsState()
+    val unknownCallsAllowed by viewModel.unknownCallsAllowed.collectAsState()
     
     // Also observe currentCall directly to prevent standby flash
     val currentCall by viewModel.currentCallForUI.collectAsState()
@@ -95,11 +107,36 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             // Top: Status message box - FULL WIDTH
+            // Battery warning is integrated into the first line
             StatusMessageBox(
                 message = displayMessage,
                 onHiddenTap = { if (!isCallingMode) viewModel.onCarerButtonTap() },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                batteryLevel = batteryLevel,
+                isLowBattery = isLowBattery,
+                isCharging = isCharging
             )
+            
+            // Warning banner when unknown calls are allowed (after emergency call)
+            if (unknownCallsAllowed) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFF1976D2)  // Blue info color
+                ) {
+                    Text(
+                        text = "📞 All callers allowed",
+                        style = TextStyle(
+                            fontSize = ScaledDimensions.scaledSp(14f),
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    )
+                }
+            }
             
             // Rest of screen has inert border for buttons
             InertBorderLayout(
@@ -216,11 +253,14 @@ fun HomeScreen(
                     }
                     
                     // BOTTOM: Emergency button - fixed at bottom, close to inert gutter
+                    // Tap 3 times = emergency, Long press = carer settings
                     if (emergencyButton != null && callingContact == null) {
                         Spacer(modifier = Modifier.height(ScaledDimensions.buttonSpacing))
                         EmergencyButton(
-                            text = emergencyButton.label,
+                            text = if (emergencyTestMode) "${emergencyButton.label} (Test)" else emergencyButton.label,
+                            subtitle = "Press 3 times",
                             onClick = { viewModel.onEmergencyButtonTap() },
+                            onLongPress = { viewModel.onEmergencyButtonLongPress() },
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else if (emergencyButton != null) {
@@ -234,10 +274,16 @@ fun HomeScreen(
         }
     }
     
-    // Carer access dialog
+    // Carer access (via long press on emergency or hidden tap)
     if (showCarerAccess) {
         viewModel.dismissCarerAccess()
         onNavigateToCarer()
+    }
+    
+    // Emergency confirm navigation (after 3 taps)
+    if (showEmergencyConfirm) {
+        viewModel.dismissEmergencyConfirm()
+        onNavigateToEmergencyConfirm()
     }
 }
 

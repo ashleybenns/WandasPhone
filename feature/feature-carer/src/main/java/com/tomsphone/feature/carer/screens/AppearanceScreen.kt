@@ -60,30 +60,14 @@ fun AppearanceScreen(
                         .padding(WandasDimensions.SpacingMedium),
                     verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
                 ) {
-                    // Theme Selection
+                    // Theme Selection - deferred pending user feedback
+                    // Device color inversion (Settings > Accessibility) works with this app
                     SettingCard(title = "Theme") {
-                        ThemeOption.entries.forEach { theme ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = settings.ui.theme == theme,
-                                    onClick = {
-                                        viewModel.setTheme(theme)
-                                        saveToastState.show("Theme saved")
-                                    }
-                                )
-                                
-                                Spacer(modifier = Modifier.width(8.dp))
-                                
-                                Text(
-                                    text = getThemeDisplayName(theme),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.wandasColors.onSurface
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Using High Contrast Light theme.\n\nFor users who need inverted colors, use the device's Accessibility settings (Color Inversion) which works with this app.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.wandasColors.onSurface
+                        )
                     }
                     
                     // User Text Size
@@ -126,14 +110,8 @@ fun AppearanceScreen(
                         }
                     }
                     
-                    // Button Size (placeholder)
-                    SettingCard(title = "Button Size") {
-                        Text(
-                            text = "Button size adjustment will be available in a future update.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
+                    // Button Size - handled automatically by text size setting
+                    // Container heights are calculated from text size
                     
                     Spacer(modifier = Modifier.height(32.dp))
                 }

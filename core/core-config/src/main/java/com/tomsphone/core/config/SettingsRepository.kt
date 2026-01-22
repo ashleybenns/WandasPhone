@@ -45,6 +45,18 @@ interface SettingsRepository {
     fun getMaxContacts(): Flow<Int>
     
     /**
+     * Check if auto-answer is allowed.
+     * 
+     * SECURITY: Auto-answer is only available at Level 2+ (BASIC or higher).
+     * This protects Level 1 users who may not understand the privacy implications.
+     * 
+     * Returns true only if:
+     * - Feature level is BASIC or higher AND
+     * - autoAnswerEnabled is true in settings
+     */
+    fun isAutoAnswerAllowed(): Flow<Boolean>
+    
+    /**
      * Verify carer PIN
      */
     suspend fun verifyPin(hashedPin: String): Boolean

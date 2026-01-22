@@ -96,7 +96,19 @@ class WandasCallScreeningService : CallScreeningService() {
      */
     private suspend fun screenCall(phoneNumber: String): CallScreeningService.CallResponse {
         val settings = settingsRepository.getSettings().first()
-        Log.d(TAG, "Settings: rejectUnknown=${settings.rejectUnknownCalls}")
+        val isEmergencyMode = callManager.isEmergencyMode.value
+        
+        Log.d(TAG, "Settings: rejectUnknown=${settings.rejectUnknownCalls}, emergencyMode=$isEmergencyMode")
+        
+        // EMERGENCY MODE: Allow ALL calls through (EMT callback, other services)
+        if (isEmergencyMode) {
+            Log.d(TAG, ">>> EMERGENCY MODE - allowing call from $phoneNumber")
+            return CallScreeningService.CallResponse.Builder()
+                .setRejectCall(false)
+                .setSkipCallLog(false)
+                .setSkipNotification(false)
+                .build()
+        }
         
         // Find contact
         val normalizedNumber = normalizePhoneNumber(phoneNumber)

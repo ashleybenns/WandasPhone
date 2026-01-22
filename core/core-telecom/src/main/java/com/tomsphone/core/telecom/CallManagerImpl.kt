@@ -45,6 +45,15 @@ class CallManagerImpl @Inject constructor(
     private val _currentCall = MutableStateFlow<CallInfo?>(null)
     override val currentCall: StateFlow<CallInfo?> = _currentCall
     
+    // Emergency mode - when true, unknown calls bypass screening
+    private val _isEmergencyMode = MutableStateFlow(false)
+    override val isEmergencyMode: StateFlow<Boolean> = _isEmergencyMode
+    
+    override fun setEmergencyMode(enabled: Boolean) {
+        Log.d(TAG, "setEmergencyMode: $enabled")
+        _isEmergencyMode.value = enabled
+    }
+    
     override fun placeCall(phoneNumber: String): Result<Unit> {
         return runCatching {
             Log.d(TAG, "placeCall called for $phoneNumber")
@@ -271,6 +280,16 @@ class CallManagerImpl @Inject constructor(
                         Log.e(TAG, "Failed to notify nag manager of call start: ${e.message}")
                     }
                 }
+                // Check if this is the missed caller - if so, dismiss the nag permanently
+                callInfo.phoneNumber?.let { phone ->
+                    scope.launch {
+                        try {
+                            missedCallNagManager.get().dismissIfTalkingToMissedCaller(phone)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to check if talking to missed caller: ${e.message}")
+                        }
+                    }
+                }
             }
             
             // Incoming DISCONNECTED/IDLE → clear both
@@ -301,6 +320,18 @@ class CallManagerImpl @Inject constructor(
                         hasNotifiedCallStart = true
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to notify nag manager of call start: ${e.message}")
+                    }
+                }
+                // When outgoing call becomes ACTIVE, check if this is the missed caller
+                if (state == CallState.ACTIVE) {
+                    callInfo.phoneNumber?.let { phone ->
+                        scope.launch {
+                            try {
+                                missedCallNagManager.get().dismissIfTalkingToMissedCaller(phone)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to check if talking to missed caller: ${e.message}")
+                            }
+                        }
                     }
                 }
                 // Handle outgoing call end

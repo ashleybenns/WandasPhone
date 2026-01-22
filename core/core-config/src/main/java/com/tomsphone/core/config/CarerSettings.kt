@@ -84,11 +84,32 @@ data class CarerSettings(
     val carerPin: String = "",
     // Hidden access: 7 taps on clock (not obvious to user)
     val settingsAccessTapCount: Int = 7,
+    val inactivityTimeoutSeconds: Int = 120,  // Return to home after inactivity
+    
+    // ========== EMERGENCY SETTINGS ==========
     // UK default emergency number
     val emergencyNumber: String = "999",
     // SAFETY: 3 taps required for emergency (prevents accidental calls)
     val emergencyTapCount: Int = 3,
-    val inactivityTimeoutSeconds: Int = 120,  // Return to home after inactivity
+    // SAFETY: Test mode ON by default - prevents accidental real calls during setup
+    val emergencyTestMode: Boolean = true,
+    
+    // ========== USER EMERGENCY INFO ==========
+    // Displayed during emergency call for attending EMTs
+    val userPhotoUri: String? = null,       // Photo for EMT verification
+    val userSurname: String = "",            // Surname for ID verification
+    val userAddress: String = "",            // Where to find the user
+    val userBloodType: String = "",          // A+, B-, O+, etc.
+    val userAllergies: String = "",          // Drug/food allergies
+    val userMedications: String = "",        // Current medications
+    val userMedicalConditions: String = "",  // Relevant conditions (dementia, diabetes, etc.)
+    val userEmergencyNotes: String = "",     // Any other info for EMTs
+    
+    // Emergency contacts - people to notify in an emergency (not 999)
+    val emergencyContact1Name: String = "",
+    val emergencyContact1Phone: String = "",
+    val emergencyContact2Name: String = "",
+    val emergencyContact2Phone: String = "",
     
     // ========== KIOSK MODE ==========
     // SAFE: Kiosk OFF by default (requires device owner setup)
@@ -210,6 +231,35 @@ enum class ThemeOption {
     HIGH_CONTRAST_DARK,    // White on black
     YELLOW_BLACK,          // For visual impairment
     SOFT_CONTRAST          // Gentler colors
+}
+
+/**
+ * Predefined button colors for contact buttons.
+ * 
+ * All colors are high-contrast for white text.
+ * Reserved (not in this enum):
+ * - Black: calling fade animation
+ * - Red: emergency button  
+ * - Green: answer call button
+ */
+enum class ButtonColor(val argb: Long, val displayName: String) {
+    DEFAULT(0L, "Default"),           // Use theme primary
+    BLUE(0xFF1976D2, "Blue"),         // Primary, trustworthy
+    PURPLE(0xFF7B1FA2, "Purple"),     // Distinct, memorable
+    ORANGE(0xFFF57C00, "Orange"),     // Warm, attention-getting
+    TEAL(0xFF00796B, "Teal"),         // Distinct from blue
+    INDIGO(0xFF303F9F, "Indigo"),     // Deep, professional
+    BROWN(0xFF5D4037, "Brown");       // Warm, earthy
+    
+    companion object {
+        /**
+         * Find ButtonColor by ARGB value, or DEFAULT if not found
+         */
+        fun fromArgb(argb: Long?): ButtonColor {
+            if (argb == null || argb == 0L) return DEFAULT
+            return entries.find { it.argb == argb } ?: DEFAULT
+        }
+    }
 }
 
 enum class RingtoneOption {

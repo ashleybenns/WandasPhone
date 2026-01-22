@@ -2,11 +2,15 @@ package com.tomsphone.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -15,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -118,41 +123,70 @@ fun ContactButton(
 /**
  * Emergency button with distinct styling
  * Uses scaled dimensions based on user text size setting
+ * 
+ * @param text Main button text (e.g., "Emergency")
+ * @param subtitle Optional subtitle (e.g., "Press 3 times")
+ * @param onLongPress Optional long-press handler (e.g., for carer settings access)
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EmergencyButton(
     text: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    onLongPress: (() -> Unit)? = null
 ) {
     // Use scaled dimensions
     val buttonHeight = ScaledDimensions.emergencyButtonHeight
     val textSize = ScaledDimensions.buttonTextSize
     
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(buttonHeight),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.wandasColors.emergencyButton,
-            contentColor = MaterialTheme.wandasColors.onEmergencyButton
-        ),
-        shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
-        contentPadding = PaddingValues(
-            horizontal = WandasDimensions.SpacingLarge,
-            vertical = WandasDimensions.SpacingMedium
-        ),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = WandasDimensions.ElevationLarge
-        )
-    ) {
-        Text(
-            text = text,
-            style = TextStyle(
-                fontSize = textSize,
-                fontWeight = FontWeight.Medium
+    Surface(
+        modifier = modifier
+            .height(buttonHeight)
+            .then(
+                if (onLongPress != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongPress
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
             ),
-            textAlign = TextAlign.Center
-        )
+        color = MaterialTheme.wandasColors.emergencyButton,
+        shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
+        shadowElevation = WandasDimensions.ElevationLarge
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = androidx.compose.ui.Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = text,
+                    style = TextStyle(
+                        fontSize = textSize,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.wandasColors.onEmergencyButton,
+                    textAlign = TextAlign.Center
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = TextStyle(
+                            fontSize = textSize * 0.7f,
+                            fontWeight = FontWeight.Normal
+                        ),
+                        color = MaterialTheme.wandasColors.onEmergencyButton,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
     }
 }
 

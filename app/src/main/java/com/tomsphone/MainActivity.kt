@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,6 +32,8 @@ import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.ui.theme.ThemeOption
 import com.tomsphone.core.ui.theme.WandasPhoneTheme
 import com.tomsphone.feature.home.HomeScreen
+import com.tomsphone.feature.phone.EmergencyConfirmScreen
+import com.tomsphone.feature.phone.EmergencyCallScreen
 import com.tomsphone.feature.phone.EndIncomingCallScreen
 import com.tomsphone.feature.phone.EndOutgoingCallScreen
 import com.tomsphone.feature.phone.IncomingCallScreen
@@ -67,6 +70,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var callManager: CallManager
     
+    @Inject
+    lateinit var batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor
+    
     private var lockVolumeButtons = true
     private var pinnedModeEnabled = false
     
@@ -76,12 +82,15 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         
+        // Start battery monitoring
+        batteryMonitor.startMonitoring()
+        
         lifecycleScope.launch {
             applySettings()
         }
         
         setContent {
-            WandasPhoneApp(callManager, settingsRepository)
+            WandasPhoneApp(callManager, settingsRepository, batteryMonitor)
         }
     }
     
@@ -92,6 +101,11 @@ class MainActivity : ComponentActivity() {
         if (pinnedModeEnabled) {
             ensurePinnedMode()
         }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        batteryMonitor.stopMonitoring()
     }
     
     private suspend fun applySettings() {
@@ -163,8 +177,21 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
+        // Use BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE for most cases
+        // Bars will hide again automatically after appearing
         controller.systemBarsBehavior = 
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        
+        // Also set legacy flags for older devices and Samsung
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_FULLSCREEN
+        )
     }
     
     @Deprecated("Deprecated in Java")
@@ -174,7 +201,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun WandasPhoneApp(callManager: CallManager, settingsRepository: SettingsRepository) {
+fun WandasPhoneApp(
+    callManager: CallManager, 
+    settingsRepository: SettingsRepository,
+    batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor
+) {
     val navController = rememberNavController()
     
     // Observe both call flows
@@ -187,6 +218,14 @@ fun WandasPhoneApp(callManager: CallManager, settingsRepository: SettingsReposit
     
     // Track the last outgoing contact name for navigation
     var lastOutgoingContactName by remember { mutableStateOf("Caller") }
+    
+    // Emergency mode from CallManager - shared with CallScreeningService
+    val isEmergencyMode by callManager.isEmergencyMode.collectAsState()
+    
+    // Battery state for low battery warning
+    val batteryLevel by batteryMonitor.batteryLevel.collectAsState()
+    val isLowBattery by batteryMonitor.isLowBattery.collectAsState()
+    val isCharging by batteryMonitor.isCharging.collectAsState()
     
     // Update contact name when we have call info
     LaunchedEffect(currentCall) {
@@ -230,25 +269,36 @@ fun WandasPhoneApp(callManager: CallManager, settingsRepository: SettingsReposit
     }
     
     // CURRENT CALL STATE → appropriate end call screen
-    LaunchedEffect(currentCall) {
+    // Include isEmergencyMode as key so we re-evaluate when it changes
+    LaunchedEffect(currentCall, isEmergencyMode) {
         val call = currentCall
         val currentRoute = navController.currentDestination?.route
         
-        Log.d("WandasPhoneApp", "=== currentCall: state=${call?.state}, direction=${call?.direction}, route=$currentRoute ===")
+        Log.d("WandasPhoneApp", "=== currentCall: state=${call?.state}, direction=${call?.direction}, route=$currentRoute, emergencyMode=$isEmergencyMode ===")
         
         when {
-            // No call or call ended → return to home (if on end call screen)
+            // No call or call ended → return to home (if on end call screen or emergency screen)
+            // BUT for emergency mode, only exit on explicit DISCONNECTED (not null - call may still be connecting)
             call == null || call.state == CallState.IDLE || call.state == CallState.DISCONNECTED -> {
-                if (currentRoute == "endIncoming" || currentRoute?.startsWith("endOutgoing") == true) {
-                    Log.d("WandasPhoneApp", ">>> Call ended - returning to home")
+                // For emergency screen: only exit on DISCONNECTED, not on null (call still connecting)
+                if (currentRoute == "emergencyCall") {
+                    // DON'T auto-navigate away from emergency screen
+                    // Keep medical info visible for EMTs even after call ends
+                    // User can manually exit with "Back to Home"
+                    Log.d("WandasPhoneApp", ">>> Emergency screen: call ended but staying on info screen")
+                } else if (currentRoute == "endIncoming" || currentRoute?.startsWith("endOutgoing") == true) {
+                    Log.d("WandasPhoneApp", ">>> Call ended - returning to home from $currentRoute")
                     navController.popBackStack("home", inclusive = false)
                 }
             }
             
             // OUTGOING call active (DIALING, RINGING, ACTIVE) → yellow screen
+            // BUT skip if in emergency mode (emergency calls stay on emergency info page)
             call.direction == CallDirection.OUTGOING && 
             (call.state == CallState.DIALING || call.state == CallState.RINGING || call.state == CallState.ACTIVE) -> {
-                if (currentRoute != "endOutgoing" && !currentRoute.orEmpty().startsWith("endOutgoing")) {
+                if (isEmergencyMode) {
+                    Log.d("WandasPhoneApp", ">>> Emergency mode active - staying on emergency screen")
+                } else if (currentRoute != "endOutgoing" && !currentRoute.orEmpty().startsWith("endOutgoing")) {
                     val contactName = call.contactName ?: lastOutgoingContactName
                     Log.d("WandasPhoneApp", ">>> Outgoing call - navigating to endOutgoing ($contactName)")
                     navController.navigate("endOutgoing/$contactName") {
@@ -284,6 +334,102 @@ fun WandasPhoneApp(callManager: CallManager, settingsRepository: SettingsReposit
                     HomeScreen(
                         onNavigateToCarer = {
                             navController.navigate("carer")
+                        },
+                        onNavigateToEmergencyConfirm = {
+                            navController.navigate("emergencyConfirm")
+                        },
+                        batteryLevel = batteryLevel,
+                        isLowBattery = isLowBattery,
+                        isCharging = isCharging
+                    )
+                }
+            }
+            
+            // Emergency confirm screen (after 3 taps)
+            composable("emergencyConfirm") {
+                val emergencyNumber = settings?.emergencyNumber ?: "999"
+                val isTestMode = settings?.emergencyTestMode ?: true
+                
+                UserScalingProvider(scale = userTextScale) {
+                    EmergencyConfirmScreen(
+                        emergencyNumber = emergencyNumber,
+                        isTestMode = isTestMode,
+                        onConfirm = {
+                            // Set emergency mode for navigation tracking
+                            callManager.setEmergencyMode(true)
+                            Log.d("WandasPhoneApp", "Emergency mode ENABLED")
+                            
+                            // DISABLE reject unknown calls - allows EMT/services to call back
+                            // This persists until carer re-enables it
+                            kotlinx.coroutines.MainScope().launch {
+                                val currentSettings = settingsRepository.getSettings().first()
+                                if (currentSettings.rejectUnknownCalls) {
+                                    settingsRepository.updateSettings(
+                                        currentSettings.copy(rejectUnknownCalls = false)
+                                    )
+                                    Log.d("WandasPhoneApp", "Disabled reject unknown calls for emergency")
+                                }
+                            }
+                            
+                            // Navigate to emergency info screen BEFORE placing call
+                            navController.navigate("emergencyCall") {
+                                popUpTo("home")
+                            }
+                            
+                            // Place call AFTER navigation (gives UI time to update)
+                            if (isTestMode) {
+                                Log.d("WandasPhoneApp", "Emergency TEST mode - not placing real call")
+                            } else {
+                                Log.d("WandasPhoneApp", "Emergency REAL mode - placing call to $emergencyNumber")
+                                val result = callManager.placeCall(emergencyNumber)
+                                if (result.isSuccess) {
+                                    Log.d("WandasPhoneApp", "Emergency call placed successfully")
+                                } else {
+                                    Log.e("WandasPhoneApp", "Emergency call failed: ${result.exceptionOrNull()?.message}")
+                                }
+                            }
+                        },
+                        onCancel = {
+                            navController.popBackStack("home", inclusive = false)
+                        }
+                    )
+                }
+            }
+            
+            // Emergency call screen (shows user info during call)
+            composable("emergencyCall") {
+                val userName = settings?.userName ?: "User"
+                val isTestMode = settings?.emergencyTestMode ?: true
+                
+                // Check if call is still active
+                val isCallActive = currentCall?.let { call ->
+                    call.state == CallState.DIALING || 
+                    call.state == CallState.RINGING || 
+                    call.state == CallState.ACTIVE ||
+                    call.state == CallState.CONNECTING
+                } ?: false
+                
+                UserScalingProvider(scale = userTextScale) {
+                    EmergencyCallScreen(
+                        userName = userName,
+                        userSurname = settings?.userSurname ?: "",
+                        userPhotoUri = settings?.userPhotoUri,
+                        userAddress = settings?.userAddress ?: "",
+                        userBloodType = settings?.userBloodType ?: "",
+                        userAllergies = settings?.userAllergies ?: "",
+                        userMedications = settings?.userMedications ?: "",
+                        userMedicalConditions = settings?.userMedicalConditions ?: "",
+                        userEmergencyNotes = settings?.userEmergencyNotes ?: "",
+                        emergencyContact1Name = settings?.emergencyContact1Name ?: "",
+                        emergencyContact1Phone = settings?.emergencyContact1Phone ?: "",
+                        emergencyContact2Name = settings?.emergencyContact2Name ?: "",
+                        emergencyContact2Phone = settings?.emergencyContact2Phone ?: "",
+                        isTestMode = isTestMode,
+                        isCallActive = isCallActive,
+                        onEndCall = {
+                            Log.d("WandasPhoneApp", "Emergency screen exit requested")
+                            callManager.setEmergencyMode(false)
+                            navController.popBackStack("home", inclusive = false)
                         }
                     )
                 }

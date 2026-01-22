@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.feature.carer.screens.*
 
 /**
@@ -14,15 +15,17 @@ import com.tomsphone.feature.carer.screens.*
 object CarerRoutes {
     const val MAIN_MENU = "carer_menu"
     const val USER_PROFILE = "carer_user_profile"
+    const val PHOTO_CAPTURE = "carer_photo_capture"
     const val CONTACTS = "carer_contacts"
-    const val CONTACT_EDIT = "carer_contact_edit/{contactId}"
+    const val CONTACT_EDIT = "carer_contact_edit/{contactId}/{contactType}"
     const val CALL_HANDLING = "carer_call_handling"
     const val APPEARANCE = "carer_appearance"
     const val FEATURE_LEVEL = "carer_feature_level"
     const val ALWAYS_ON = "carer_always_on"
     const val FACTORY_RESET = "carer_factory_reset"
     
-    fun contactEdit(contactId: Long) = "carer_contact_edit/$contactId"
+    fun contactEdit(contactId: Long, contactType: ContactType) = 
+        "carer_contact_edit/$contactId/${contactType.name}"
 }
 
 /**
@@ -59,7 +62,20 @@ fun CarerNavigation(
         composable(CarerRoutes.USER_PROFILE) {
             UserProfileScreen(
                 featureLevel = featureLevel,
+                onNavigateToPhotoCapture = { navController.navigate(CarerRoutes.PHOTO_CAPTURE) },
                 onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // Photo Capture
+        composable(CarerRoutes.PHOTO_CAPTURE) {
+            PhotoCaptureScreen(
+                onPhotoCaptured = { photoUri ->
+                    // Photo captured and saved via ViewModel in the screen
+                    android.util.Log.d("CarerNav", "Photo captured: $photoUri, navigating back")
+                    navController.popBackStack()
+                },
+                onCancel = { navController.popBackStack() }
             )
         }
         
@@ -67,8 +83,8 @@ fun CarerNavigation(
         composable(CarerRoutes.CONTACTS) {
             ContactsScreen(
                 featureLevel = featureLevel,
-                onNavigateToContactEdit = { contactId -> 
-                    navController.navigate(CarerRoutes.contactEdit(contactId))
+                onNavigateToContactEdit = { contactId, contactType -> 
+                    navController.navigate(CarerRoutes.contactEdit(contactId, contactType))
                 },
                 onBack = { navController.popBackStack() }
             )
@@ -77,8 +93,15 @@ fun CarerNavigation(
         // Contact Edit
         composable(CarerRoutes.CONTACT_EDIT) { backStackEntry ->
             val contactId = backStackEntry.arguments?.getString("contactId")?.toLongOrNull() ?: 0L
+            val contactTypeName = backStackEntry.arguments?.getString("contactType") ?: "CARER"
+            val contactType = try { 
+                ContactType.valueOf(contactTypeName) 
+            } catch (e: Exception) { 
+                ContactType.CARER 
+            }
             ContactEditScreen(
                 contactId = contactId,
+                contactType = contactType,
                 featureLevel = featureLevel,
                 onBack = { navController.popBackStack() }
             )

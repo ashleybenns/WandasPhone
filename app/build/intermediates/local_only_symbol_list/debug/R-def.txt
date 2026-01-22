@@ -2,3 +2,5 @@ R_DEF: Internal format may change without notice
 local
 string app_name
 style Theme.TomsPhone
+xml backup_rules
+xml full_backup_content

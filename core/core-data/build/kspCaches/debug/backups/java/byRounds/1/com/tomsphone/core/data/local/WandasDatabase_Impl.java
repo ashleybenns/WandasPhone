@@ -37,13 +37,13 @@ public final class WandasDatabase_Impl extends WandasDatabase {
   @Override
   @NonNull
   protected SupportSQLiteOpenHelper createOpenHelper(@NonNull final DatabaseConfiguration config) {
-    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(1) {
+    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(2) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS `contacts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL, `photoUri` TEXT, `priority` INTEGER NOT NULL, `isPrimary` INTEGER NOT NULL, `contactType` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `contacts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL, `photoUri` TEXT, `priority` INTEGER NOT NULL, `isPrimary` INTEGER NOT NULL, `contactType` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `buttonColor` INTEGER, `autoAnswerEnabled` INTEGER NOT NULL, `buttonPosition` INTEGER NOT NULL, `isHalfWidth` INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE IF NOT EXISTS `call_logs` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `contactId` INTEGER, `phoneNumber` TEXT NOT NULL, `contactName` TEXT, `type` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `duration` INTEGER NOT NULL, `isRead` INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a94c35d5eb7c04c9d0a54103bc08d391')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bdc82e51f91171c84a280cdedae18571')");
       }
 
       @Override
@@ -93,7 +93,7 @@ public final class WandasDatabase_Impl extends WandasDatabase {
       @NonNull
       public RoomOpenHelper.ValidationResult onValidateSchema(
           @NonNull final SupportSQLiteDatabase db) {
-        final HashMap<String, TableInfo.Column> _columnsContacts = new HashMap<String, TableInfo.Column>(9);
+        final HashMap<String, TableInfo.Column> _columnsContacts = new HashMap<String, TableInfo.Column>(13);
         _columnsContacts.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsContacts.put("name", new TableInfo.Column("name", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsContacts.put("phoneNumber", new TableInfo.Column("phoneNumber", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
@@ -103,6 +103,10 @@ public final class WandasDatabase_Impl extends WandasDatabase {
         _columnsContacts.put("contactType", new TableInfo.Column("contactType", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsContacts.put("createdAt", new TableInfo.Column("createdAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsContacts.put("updatedAt", new TableInfo.Column("updatedAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsContacts.put("buttonColor", new TableInfo.Column("buttonColor", "INTEGER", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsContacts.put("autoAnswerEnabled", new TableInfo.Column("autoAnswerEnabled", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsContacts.put("buttonPosition", new TableInfo.Column("buttonPosition", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsContacts.put("isHalfWidth", new TableInfo.Column("isHalfWidth", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         final HashSet<TableInfo.ForeignKey> _foreignKeysContacts = new HashSet<TableInfo.ForeignKey>(0);
         final HashSet<TableInfo.Index> _indicesContacts = new HashSet<TableInfo.Index>(0);
         final TableInfo _infoContacts = new TableInfo("contacts", _columnsContacts, _foreignKeysContacts, _indicesContacts);
@@ -132,7 +136,7 @@ public final class WandasDatabase_Impl extends WandasDatabase {
         }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "a94c35d5eb7c04c9d0a54103bc08d391", "fce2acd29780e2c0f8208cc7a167ea10");
+    }, "bdc82e51f91171c84a280cdedae18571", "1df51cabece0027816cb54eb8c518fb4");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;

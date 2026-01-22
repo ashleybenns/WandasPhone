@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -18,8 +20,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
+import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
-import com.tomsphone.core.ui.theme.WandasTextStyles
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -80,17 +82,21 @@ fun EndOutgoingCallScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Status text box - SAME as HomeScreen (top, fixed height)
+            // Status text box - SAME as HomeScreen (top, scaled height)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(ScaledDimensions.statusBoxHeight)
                     .padding(horizontal = WandasDimensions.SpacingLarge),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = statusMessage,
-                    style = WandasTextStyles.StatusMessage,
+                    style = TextStyle(
+                        fontSize = ScaledDimensions.statusTextSize,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = ScaledDimensions.statusTextSize * 1.2f
+                    ),
                     color = Color.Black,
                     textAlign = TextAlign.Center,
                     maxLines = 3
@@ -116,16 +122,20 @@ fun EndOutgoingCallScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        // End call instruction
+                        // End call instruction - scaled text
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(80.dp),
+                                .height(ScaledDimensions.endCallInstructionHeight),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = instructionText,
-                                style = WandasTextStyles.StatusMessage,
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.statusTextSize,
+                                    fontWeight = FontWeight.Medium,
+                                    lineHeight = ScaledDimensions.statusTextSize * 1.2f
+                                ),
                                 color = Color.Black.copy(alpha = 0.7f),
                                 textAlign = TextAlign.Center,
                                 maxLines = 2
@@ -134,10 +144,10 @@ fun EndOutgoingCallScreen(
                         
                         Spacer(modifier = Modifier.height(WandasDimensions.SpacingMedium))
                         
-                        // End call button - round, red
+                        // End call button - round, red, scaled size
                         Button(
                             onClick = { viewModel.onEndCallTap() },
-                            modifier = Modifier.size(WandasDimensions.EndCallButtonSize),
+                            modifier = Modifier.size(ScaledDimensions.endCallButtonSize),
                             shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFFD32F2F),
@@ -146,7 +156,10 @@ fun EndOutgoingCallScreen(
                         ) {
                             Text(
                                 text = "End",
-                                style = WandasTextStyles.ButtonMedium
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.buttonTextSize,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
                         }
                     }
@@ -166,10 +179,10 @@ fun EndOutgoingCallScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            // Speaker button - round, grey/green based on state
+                            // Speaker button - round, grey/green based on state, scaled
                             Button(
                                 onClick = { viewModel.toggleSpeaker() },
-                                modifier = Modifier.size(WandasDimensions.EndCallButtonSize),
+                                modifier = Modifier.size(ScaledDimensions.endCallButtonSize),
                                 shape = CircleShape,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (isSpeakerOn) Color(0xFF4CAF50) else Color(0xFF757575),
@@ -178,7 +191,10 @@ fun EndOutgoingCallScreen(
                             ) {
                                 Text(
                                     text = if (isSpeakerOn) "Speaker\nON" else "Speaker\nOFF",
-                                    style = WandasTextStyles.ButtonSmall,
+                                    style = TextStyle(
+                                        fontSize = ScaledDimensions.scaledSp(18f),
+                                        fontWeight = FontWeight.Medium
+                                    ),
                                     textAlign = TextAlign.Center
                                 )
                             }

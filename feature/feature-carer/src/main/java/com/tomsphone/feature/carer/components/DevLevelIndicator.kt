@@ -33,6 +33,13 @@ fun DevLevelIndicator(
         FeatureLevel.EXTENDED -> Color(0xFF9C27B0) // Purple
     }
     
+    val levelName = when (level) {
+        FeatureLevel.MINIMAL -> "Simple"
+        FeatureLevel.BASIC -> "Comfortable"
+        FeatureLevel.STANDARD -> "Capable"
+        FeatureLevel.EXTENDED -> "Independent"
+    }
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -41,7 +48,7 @@ fun DevLevelIndicator(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "Level ${level.level}: ${level.name}",
+            text = "Mode: $levelName",
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold

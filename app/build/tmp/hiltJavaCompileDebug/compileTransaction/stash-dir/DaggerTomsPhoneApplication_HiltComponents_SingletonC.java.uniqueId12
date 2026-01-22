@@ -18,6 +18,7 @@ import com.tomsphone.core.data.local.dao.CallLogDao;
 import com.tomsphone.core.data.local.dao.ContactDao;
 import com.tomsphone.core.data.repository.CallLogRepository;
 import com.tomsphone.core.data.repository.ContactRepository;
+import com.tomsphone.core.telecom.BatteryMonitor;
 import com.tomsphone.core.telecom.CallManagerImpl;
 import com.tomsphone.core.telecom.MissedCallNagManager;
 import com.tomsphone.core.telecom.MissedCallNagService;
@@ -28,8 +29,9 @@ import com.tomsphone.core.telecom.WandasCallScreeningService_MembersInjector;
 import com.tomsphone.core.telecom.WandasInCallService;
 import com.tomsphone.core.telecom.WandasInCallService_MembersInjector;
 import com.tomsphone.core.tts.AndroidTTSImpl;
-import com.tomsphone.feature.carer.CarerViewModel;
-import com.tomsphone.feature.carer.CarerViewModel_HiltModules_KeyModule_ProvideFactory;
+import com.tomsphone.core.tts.WandasTTS;
+import com.tomsphone.feature.carer.CarerSettingsViewModel;
+import com.tomsphone.feature.carer.CarerSettingsViewModel_HiltModules_KeyModule_ProvideFactory;
 import com.tomsphone.feature.home.HomeViewModel;
 import com.tomsphone.feature.home.HomeViewModel_HiltModules_KeyModule_ProvideFactory;
 import com.tomsphone.feature.phone.EndIncomingCallViewModel;
@@ -399,7 +401,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
     @Override
     public Set<String> getViewModelKeys() {
-      return SetBuilder.<String>newSetBuilder(6).add(CarerViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(EndIncomingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(EndOutgoingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(HomeViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(InCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(IncomingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).build();
+      return SetBuilder.<String>newSetBuilder(6).add(CarerSettingsViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(EndIncomingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(EndOutgoingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(HomeViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(InCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).add(IncomingCallViewModel_HiltModules_KeyModule_ProvideFactory.provide()).build();
     }
 
     @Override
@@ -420,6 +422,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
     private MainActivity injectMainActivity2(MainActivity instance) {
       MainActivity_MembersInjector.injectSettingsRepository(instance, singletonCImpl.settingsRepositoryImplProvider.get());
       MainActivity_MembersInjector.injectCallManager(instance, singletonCImpl.callManagerImplProvider.get());
+      MainActivity_MembersInjector.injectBatteryMonitor(instance, singletonCImpl.batteryMonitorProvider.get());
       return instance;
     }
   }
@@ -431,7 +434,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
     private final ViewModelCImpl viewModelCImpl = this;
 
-    private Provider<CarerViewModel> carerViewModelProvider;
+    private Provider<CarerSettingsViewModel> carerSettingsViewModelProvider;
 
     private Provider<EndIncomingCallViewModel> endIncomingCallViewModelProvider;
 
@@ -456,7 +459,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
     @SuppressWarnings("unchecked")
     private void initialize(final SavedStateHandle savedStateHandleParam,
         final ViewModelLifecycle viewModelLifecycleParam) {
-      this.carerViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
+      this.carerSettingsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
       this.endIncomingCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
       this.endOutgoingCallViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
       this.homeViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
@@ -466,7 +469,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
     @Override
     public Map<String, javax.inject.Provider<ViewModel>> getHiltViewModelMap() {
-      return MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(6).put("com.tomsphone.feature.carer.CarerViewModel", ((Provider) carerViewModelProvider)).put("com.tomsphone.feature.phone.EndIncomingCallViewModel", ((Provider) endIncomingCallViewModelProvider)).put("com.tomsphone.feature.phone.EndOutgoingCallViewModel", ((Provider) endOutgoingCallViewModelProvider)).put("com.tomsphone.feature.home.HomeViewModel", ((Provider) homeViewModelProvider)).put("com.tomsphone.feature.phone.InCallViewModel", ((Provider) inCallViewModelProvider)).put("com.tomsphone.feature.phone.IncomingCallViewModel", ((Provider) incomingCallViewModelProvider)).build();
+      return MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(6).put("com.tomsphone.feature.carer.CarerSettingsViewModel", ((Provider) carerSettingsViewModelProvider)).put("com.tomsphone.feature.phone.EndIncomingCallViewModel", ((Provider) endIncomingCallViewModelProvider)).put("com.tomsphone.feature.phone.EndOutgoingCallViewModel", ((Provider) endOutgoingCallViewModelProvider)).put("com.tomsphone.feature.home.HomeViewModel", ((Provider) homeViewModelProvider)).put("com.tomsphone.feature.phone.InCallViewModel", ((Provider) inCallViewModelProvider)).put("com.tomsphone.feature.phone.IncomingCallViewModel", ((Provider) incomingCallViewModelProvider)).build();
     }
 
     @Override
@@ -495,23 +498,23 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
       @Override
       public T get() {
         switch (id) {
-          case 0: // com.tomsphone.feature.carer.CarerViewModel 
-          return (T) new CarerViewModel(singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get());
+          case 0: // com.tomsphone.feature.carer.CarerSettingsViewModel 
+          return (T) new CarerSettingsViewModel(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule), singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get());
 
           case 1: // com.tomsphone.feature.phone.EndIncomingCallViewModel 
-          return (T) new EndIncomingCallViewModel(singletonCImpl.callManagerImplProvider.get());
+          return (T) new EndIncomingCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get());
 
           case 2: // com.tomsphone.feature.phone.EndOutgoingCallViewModel 
-          return (T) new EndOutgoingCallViewModel(singletonCImpl.callManagerImplProvider.get());
+          return (T) new EndOutgoingCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get());
 
           case 3: // com.tomsphone.feature.home.HomeViewModel 
-          return (T) new HomeViewModel(singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.callManagerImplProvider.get(), singletonCImpl.missedCallNagManagerProvider.get(), singletonCImpl.androidTTSImplProvider.get());
+          return (T) new HomeViewModel(singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.callManagerImplProvider.get(), singletonCImpl.missedCallNagManagerProvider.get(), (WandasTTS) ((Provider) singletonCImpl.androidTTSImplProvider).get());
 
           case 4: // com.tomsphone.feature.phone.InCallViewModel 
-          return (T) new InCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.bindCallLogRepositoryProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.androidTTSImplProvider.get());
+          return (T) new InCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.bindCallLogRepositoryProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get(), (WandasTTS) ((Provider) singletonCImpl.androidTTSImplProvider).get());
 
           case 5: // com.tomsphone.feature.phone.IncomingCallViewModel 
-          return (T) new IncomingCallViewModel(singletonCImpl.callManagerImplProvider.get(), singletonCImpl.androidTTSImplProvider.get(), singletonCImpl.ringtonePlayerProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.missedCallNagManagerProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get());
+          return (T) new IncomingCallViewModel(singletonCImpl.callManagerImplProvider.get(), (WandasTTS) ((Provider) singletonCImpl.androidTTSImplProvider).get(), singletonCImpl.ringtonePlayerProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.missedCallNagManagerProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get());
 
           default: throw new AssertionError(id);
         }
@@ -612,7 +615,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
       WandasCallScreeningService_MembersInjector.injectSettingsRepository(instance, singletonCImpl.settingsRepositoryImplProvider.get());
       WandasCallScreeningService_MembersInjector.injectContactRepository(instance, singletonCImpl.bindContactRepositoryProvider.get());
       WandasCallScreeningService_MembersInjector.injectCallLogRepository(instance, singletonCImpl.bindCallLogRepositoryProvider.get());
-      WandasCallScreeningService_MembersInjector.injectTts(instance, singletonCImpl.androidTTSImplProvider.get());
+      WandasCallScreeningService_MembersInjector.injectTts(instance, (WandasTTS) ((Provider) singletonCImpl.androidTTSImplProvider).get());
       WandasCallScreeningService_MembersInjector.injectCallManager(instance, singletonCImpl.callManagerImplProvider.get());
       WandasCallScreeningService_MembersInjector.injectRingtonePlayer(instance, singletonCImpl.ringtonePlayerProvider.get());
       return instance;
@@ -620,9 +623,10 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
     private WandasInCallService injectWandasInCallService2(WandasInCallService instance) {
       WandasInCallService_MembersInjector.injectCallManager(instance, singletonCImpl.callManagerImplProvider.get());
-      WandasInCallService_MembersInjector.injectTts(instance, singletonCImpl.androidTTSImplProvider.get());
+      WandasInCallService_MembersInjector.injectTts(instance, (WandasTTS) ((Provider) singletonCImpl.androidTTSImplProvider).get());
       WandasInCallService_MembersInjector.injectSettingsRepository(instance, singletonCImpl.settingsRepositoryImplProvider.get());
       WandasInCallService_MembersInjector.injectContactRepository(instance, singletonCImpl.bindContactRepositoryProvider.get());
+      WandasInCallService_MembersInjector.injectMissedCallNagManager(instance, DoubleCheck.lazy(singletonCImpl.missedCallNagManagerProvider));
       return instance;
     }
   }
@@ -654,6 +658,8 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
     private Provider<CallManagerImpl> callManagerImplProvider;
 
+    private Provider<BatteryMonitor> batteryMonitorProvider;
+
     private SingletonCImpl(ApplicationContextModule applicationContextModuleParam) {
       this.applicationContextModule = applicationContextModuleParam;
       initialize(applicationContextModuleParam);
@@ -681,6 +687,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
       this.ringtonePlayerProvider = DoubleCheck.provider(new SwitchingProvider<RingtonePlayer>(singletonCImpl, 8));
       this.missedCallNagManagerProvider = DoubleCheck.provider(new SwitchingProvider<MissedCallNagManager>(singletonCImpl, 3));
       this.callManagerImplProvider = DoubleCheck.provider(new SwitchingProvider<CallManagerImpl>(singletonCImpl, 2));
+      this.batteryMonitorProvider = DoubleCheck.provider(new SwitchingProvider<BatteryMonitor>(singletonCImpl, 9));
     }
 
     @Override
@@ -726,7 +733,7 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
           return (T) new CallManagerImpl(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule), DoubleCheck.lazy(singletonCImpl.missedCallNagManagerProvider));
 
           case 3: // com.tomsphone.core.telecom.MissedCallNagManager 
-          return (T) new MissedCallNagManager(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule), singletonCImpl.bindCallLogRepositoryProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get(), singletonCImpl.androidTTSImplProvider.get(), singletonCImpl.ringtonePlayerProvider.get());
+          return (T) new MissedCallNagManager(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule), singletonCImpl.bindCallLogRepositoryProvider.get(), singletonCImpl.bindContactRepositoryProvider.get(), singletonCImpl.settingsRepositoryImplProvider.get(), (WandasTTS) ((Provider) singletonCImpl.androidTTSImplProvider).get(), singletonCImpl.ringtonePlayerProvider.get());
 
           case 4: // com.tomsphone.core.data.local.LocalCallLogRepository 
           return (T) new LocalCallLogRepository(singletonCImpl.callLogDao());
@@ -742,6 +749,9 @@ public final class DaggerTomsPhoneApplication_HiltComponents_SingletonC {
 
           case 8: // com.tomsphone.core.telecom.RingtonePlayer 
           return (T) new RingtonePlayer(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule));
+
+          case 9: // com.tomsphone.core.telecom.BatteryMonitor 
+          return (T) new BatteryMonitor(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule), DoubleCheck.lazy(((Provider) singletonCImpl.androidTTSImplProvider)));
 
           default: throw new AssertionError(id);
         }

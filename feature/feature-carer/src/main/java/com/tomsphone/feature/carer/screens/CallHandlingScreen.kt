@@ -91,45 +91,50 @@ fun CallHandlingScreen(
                         ) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Level 2: Speaker toggle button available during calls when this is off",
+                                text = "In Comfortable mode: Speaker toggle button is available during calls when this is off",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
                             )
                         }
                     }
                     
-                    // Auto-Answer
-                    SettingCard(title = "Auto-Answer") {
-                        SettingToggle(
-                            title = "Enable Auto-Answer",
-                            description = "Automatically answer calls from carers",
-                            checked = settings.autoAnswerEnabled,
-                            onCheckedChange = { enabled ->
-                                viewModel.setAutoAnswer(enabled, settings.autoAnswerDelaySeconds)
-                                saveToastState.show("Auto-answer ${if (enabled) "enabled" else "disabled"}")
+                    // Auto-Answer - Level 2+ only (security/privacy concerns at Level 1)
+                    LevelGatedContent(
+                        minLevel = FeatureLevel.BASIC,
+                        currentLevel = featureLevel
+                    ) {
+                        SettingCard(title = "Auto-Answer") {
+                            SettingToggle(
+                                title = "Enable Auto-Answer",
+                                description = "Automatically answer calls from carers",
+                                checked = settings.autoAnswerEnabled,
+                                onCheckedChange = { enabled ->
+                                    viewModel.setAutoAnswer(enabled, settings.autoAnswerDelaySeconds)
+                                    saveToastState.show("Auto-answer ${if (enabled) "enabled" else "disabled"}")
+                                }
+                            )
+                            
+                            if (settings.autoAnswerEnabled) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                Text(
+                                    text = "Delay before answering: ${settings.autoAnswerDelaySeconds} seconds",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.wandasColors.onSurface
+                                )
+                                
+                                Slider(
+                                    value = settings.autoAnswerDelaySeconds.toFloat(),
+                                    onValueChange = { delay ->
+                                        viewModel.setAutoAnswer(true, delay.toInt())
+                                    },
+                                    onValueChangeFinished = {
+                                        saveToastState.show("Auto-answer delay saved")
+                                    },
+                                    valueRange = 1f..10f,
+                                    steps = 8
+                                )
                             }
-                        )
-                        
-                        if (settings.autoAnswerEnabled) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            Text(
-                                text = "Delay before answering: ${settings.autoAnswerDelaySeconds} seconds",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.wandasColors.onSurface
-                            )
-                            
-                            Slider(
-                                value = settings.autoAnswerDelaySeconds.toFloat(),
-                                onValueChange = { delay ->
-                                    viewModel.setAutoAnswer(true, delay.toInt())
-                                },
-                                onValueChangeFinished = {
-                                    saveToastState.show("Auto-answer delay saved")
-                                },
-                                valueRange = 1f..10f,
-                                steps = 8
-                            )
                         }
                     }
                     

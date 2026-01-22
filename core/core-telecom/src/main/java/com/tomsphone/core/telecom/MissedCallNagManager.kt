@@ -146,10 +146,13 @@ class MissedCallNagManager @Inject constructor(
     }
     
     /**
-     * Dismiss nag only if calling the most recent missed caller
-     * Returns true if nag was dismissed, false if calling someone else
+     * Dismiss nag if now CONNECTED to the missed caller (call is ACTIVE)
+     * Works for both incoming and outgoing calls - the nag is dismissed
+     * when a conversation happens, regardless of who initiated or who ends it.
+     * 
+     * Returns true if nag was dismissed, false if talking to someone else
      */
-    suspend fun dismissIfCallingMissedCaller(phoneNumber: String): Boolean {
+    suspend fun dismissIfTalkingToMissedCaller(phoneNumber: String): Boolean {
         val mostRecentMissedCall = _activeMissedCalls.value.firstOrNull()
         
         if (mostRecentMissedCall == null) {
@@ -158,16 +161,16 @@ class MissedCallNagManager @Inject constructor(
         }
         
         // Normalize both numbers for comparison
-        val callingNormalized = normalizePhoneNumber(phoneNumber)
+        val talkingToNormalized = normalizePhoneNumber(phoneNumber)
         val missedNormalized = normalizePhoneNumber(mostRecentMissedCall.phoneNumber)
         
-        Log.d(TAG, "Comparing: calling='$callingNormalized' vs missed='$missedNormalized'")
+        Log.d(TAG, "Call ACTIVE - comparing: talkingTo='$talkingToNormalized' vs missed='$missedNormalized'")
         
-        if (callingNormalized == missedNormalized) {
-            Log.d(TAG, "Calling the missed caller (${mostRecentMissedCall.contactName}) - dismissing nag, id=${mostRecentMissedCall.id}")
+        if (talkingToNormalized == missedNormalized) {
+            Log.d(TAG, "Now talking to missed caller (${mostRecentMissedCall.contactName}) - DISMISSING nag permanently, id=${mostRecentMissedCall.id}")
             
-            // Suppress nag restart for 5 seconds to prevent race with Room Flow
-            nagSuppressedUntil = System.currentTimeMillis() + 5000
+            // Suppress nag restart permanently for this call (until next missed call)
+            nagSuppressedUntil = Long.MAX_VALUE
             
             // IMMEDIATELY clear state to prevent race conditions with Room Flow
             _activeMissedCalls.value = emptyList()
@@ -185,11 +188,19 @@ class MissedCallNagManager @Inject constructor(
             
             return true
         } else {
-            Log.d(TAG, "Calling ${phoneNumber}, but missed call is from ${mostRecentMissedCall.contactName} - nag continues")
-            // Still stop audio briefly so user can make the call, but nag will resume
-            stopAllAudio()
+            Log.d(TAG, "Talking to ${phoneNumber}, but missed call is from ${mostRecentMissedCall.contactName} - nag will resume after call")
             return false
         }
+    }
+    
+    /**
+     * @deprecated Use dismissIfTalkingToMissedCaller when call becomes ACTIVE
+     */
+    suspend fun dismissIfCallingMissedCaller(phoneNumber: String): Boolean {
+        // Just stop audio when placing a call - actual dismissal happens when call connects
+        stopAllAudio()
+        Log.d(TAG, "Call placed to $phoneNumber - audio stopped, nag will be dismissed if call connects")
+        return false
     }
     
     /**
@@ -226,13 +237,22 @@ class MissedCallNagManager @Inject constructor(
     
     /**
      * Notify that a call has ended - allows nag to resume if needed
-     * Sets a brief suppression window to allow database to sync
+     * Does NOT reset the suppression if the nag was permanently dismissed (talked to missed caller)
      */
     fun onCallEnded() {
         callInProgress = false
-        // Extend suppression for 3 seconds after call ends to allow database sync
-        nagSuppressedUntil = System.currentTimeMillis() + 3000
-        Log.d(TAG, "Call ended - nag suppressed for 3s to allow DB sync")
+        
+        // If suppression is permanent (Long.MAX_VALUE), don't reduce it
+        // This means we talked to the missed caller and the nag was properly dismissed
+        if (nagSuppressedUntil == Long.MAX_VALUE) {
+            // Reset to a short window now that call is over, DB should be synced
+            nagSuppressedUntil = System.currentTimeMillis() + 1000
+            Log.d(TAG, "Call ended - nag was permanently dismissed, brief suppression to confirm DB sync")
+        } else {
+            // Extend suppression for 3 seconds after call ends to allow database sync
+            nagSuppressedUntil = System.currentTimeMillis() + 3000
+            Log.d(TAG, "Call ended - nag suppressed for 3s to allow DB sync")
+        }
     }
     
     /**

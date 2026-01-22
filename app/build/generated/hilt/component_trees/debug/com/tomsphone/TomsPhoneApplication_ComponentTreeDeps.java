@@ -26,8 +26,8 @@ import hilt_aggregated_deps._com_tomsphone_core_telecom_TelecomModule;
 import hilt_aggregated_deps._com_tomsphone_core_telecom_WandasCallScreeningService_GeneratedInjector;
 import hilt_aggregated_deps._com_tomsphone_core_telecom_WandasInCallService_GeneratedInjector;
 import hilt_aggregated_deps._com_tomsphone_core_tts_TTSModule;
-import hilt_aggregated_deps._com_tomsphone_feature_carer_CarerViewModel_HiltModules_BindsModule;
-import hilt_aggregated_deps._com_tomsphone_feature_carer_CarerViewModel_HiltModules_KeyModule;
+import hilt_aggregated_deps._com_tomsphone_feature_carer_CarerSettingsViewModel_HiltModules_BindsModule;
+import hilt_aggregated_deps._com_tomsphone_feature_carer_CarerSettingsViewModel_HiltModules_KeyModule;
 import hilt_aggregated_deps._com_tomsphone_feature_home_HomeViewModel_HiltModules_BindsModule;
 import hilt_aggregated_deps._com_tomsphone_feature_home_HomeViewModel_HiltModules_KeyModule;
 import hilt_aggregated_deps._com_tomsphone_feature_phone_EndIncomingCallViewModel_HiltModules_BindsModule;
@@ -87,8 +87,8 @@ import hilt_aggregated_deps._dagger_hilt_android_internal_modules_HiltWrapper_Ac
         _com_tomsphone_core_telecom_WandasCallScreeningService_GeneratedInjector.class,
         _com_tomsphone_core_telecom_WandasInCallService_GeneratedInjector.class,
         _com_tomsphone_core_tts_TTSModule.class,
-        _com_tomsphone_feature_carer_CarerViewModel_HiltModules_BindsModule.class,
-        _com_tomsphone_feature_carer_CarerViewModel_HiltModules_KeyModule.class,
+        _com_tomsphone_feature_carer_CarerSettingsViewModel_HiltModules_BindsModule.class,
+        _com_tomsphone_feature_carer_CarerSettingsViewModel_HiltModules_KeyModule.class,
         _com_tomsphone_feature_home_HomeViewModel_HiltModules_BindsModule.class,
         _com_tomsphone_feature_home_HomeViewModel_HiltModules_KeyModule.class,
         _com_tomsphone_feature_phone_EndIncomingCallViewModel_HiltModules_BindsModule.class,

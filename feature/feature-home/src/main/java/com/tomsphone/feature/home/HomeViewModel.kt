@@ -89,6 +89,15 @@ class HomeViewModel @Inject constructor(
             initialValue = CarerSettings()
         )
     
+    // Warning: unknown calls are allowed (after emergency call)
+    val unknownCallsAllowed: StateFlow<Boolean> = settings
+        .map { !it.rejectUnknownCalls }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+    
     /**
      * Home screen buttons - built from contacts + settings
      * 
@@ -207,6 +216,20 @@ class HomeViewModel @Inject constructor(
     private val _carerTapCount = MutableStateFlow(0)
     private val _showCarerAccess = MutableStateFlow(false)
     val showCarerAccess: StateFlow<Boolean> = _showCarerAccess
+    
+    // Emergency button tap counter
+    private val _emergencyTapCount = MutableStateFlow(0)
+    private val _showEmergencyConfirm = MutableStateFlow(false)
+    val showEmergencyConfirm: StateFlow<Boolean> = _showEmergencyConfirm.asStateFlow()
+    
+    // Emergency settings for the confirm/call screens
+    val emergencyNumber: StateFlow<String> = settingsRepository.getSettings()
+        .map { it.emergencyNumber }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "999")
+    
+    val emergencyTestMode: StateFlow<Boolean> = settingsRepository.getSettings()
+        .map { it.emergencyTestMode }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
     init {
         // Announce greeting on app start
@@ -402,9 +425,50 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * Emergency button tapped - DEV MODE: goes to settings
+     * Emergency button tapped - requires multiple taps to activate
+     * After required taps, shows confirm screen
      */
     fun onEmergencyButtonTap() {
+        _emergencyTapCount.value += 1
+        
+        viewModelScope.launch {
+            val settings = settingsRepository.getSettings().first()
+            val requiredTaps = settings.emergencyTapCount
+            
+            Log.d(TAG, "Emergency tap ${_emergencyTapCount.value}/$requiredTaps")
+            
+            if (_emergencyTapCount.value >= requiredTaps) {
+                _showEmergencyConfirm.value = true
+                _emergencyTapCount.value = 0
+            }
+        }
+        
+        // Reset tap count after 3 seconds of no taps
+        viewModelScope.launch {
+            delay(3000)
+            _emergencyTapCount.value = 0
+        }
+    }
+    
+    /**
+     * Dismiss emergency confirm screen
+     */
+    fun dismissEmergencyConfirm() {
+        _showEmergencyConfirm.value = false
+    }
+    
+    /**
+     * Get remaining taps needed for emergency
+     */
+    fun getEmergencyTapsRemaining(): Int {
+        val requiredTaps = 3  // Default, will be overridden by settings
+        return (requiredTaps - _emergencyTapCount.value).coerceAtLeast(0)
+    }
+    
+    /**
+     * Long press on emergency button - goes to carer settings (temporary dev access)
+     */
+    fun onEmergencyButtonLongPress() {
         _showCarerAccess.value = true
     }
 }

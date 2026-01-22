@@ -52,7 +52,7 @@ public final class ContactDao_Impl implements ContactDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `contacts` (`id`,`name`,`phoneNumber`,`photoUri`,`priority`,`isPrimary`,`contactType`,`createdAt`,`updatedAt`) VALUES (nullif(?, 0),?,?,?,?,?,?,?,?)";
+        return "INSERT OR REPLACE INTO `contacts` (`id`,`name`,`phoneNumber`,`photoUri`,`priority`,`isPrimary`,`contactType`,`createdAt`,`updatedAt`,`buttonColor`,`autoAnswerEnabled`,`buttonPosition`,`isHalfWidth`) VALUES (nullif(?, 0),?,?,?,?,?,?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -72,6 +72,16 @@ public final class ContactDao_Impl implements ContactDao {
         statement.bindString(7, entity.getContactType());
         statement.bindLong(8, entity.getCreatedAt());
         statement.bindLong(9, entity.getUpdatedAt());
+        if (entity.getButtonColor() == null) {
+          statement.bindNull(10);
+        } else {
+          statement.bindLong(10, entity.getButtonColor());
+        }
+        final int _tmp_1 = entity.getAutoAnswerEnabled() ? 1 : 0;
+        statement.bindLong(11, _tmp_1);
+        statement.bindLong(12, entity.getButtonPosition());
+        final int _tmp_2 = entity.isHalfWidth() ? 1 : 0;
+        statement.bindLong(13, _tmp_2);
       }
     };
     this.__deletionAdapterOfContactEntity = new EntityDeletionOrUpdateAdapter<ContactEntity>(__db) {
@@ -91,7 +101,7 @@ public final class ContactDao_Impl implements ContactDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "UPDATE OR ABORT `contacts` SET `id` = ?,`name` = ?,`phoneNumber` = ?,`photoUri` = ?,`priority` = ?,`isPrimary` = ?,`contactType` = ?,`createdAt` = ?,`updatedAt` = ? WHERE `id` = ?";
+        return "UPDATE OR ABORT `contacts` SET `id` = ?,`name` = ?,`phoneNumber` = ?,`photoUri` = ?,`priority` = ?,`isPrimary` = ?,`contactType` = ?,`createdAt` = ?,`updatedAt` = ?,`buttonColor` = ?,`autoAnswerEnabled` = ?,`buttonPosition` = ?,`isHalfWidth` = ? WHERE `id` = ?";
       }
 
       @Override
@@ -111,7 +121,17 @@ public final class ContactDao_Impl implements ContactDao {
         statement.bindString(7, entity.getContactType());
         statement.bindLong(8, entity.getCreatedAt());
         statement.bindLong(9, entity.getUpdatedAt());
-        statement.bindLong(10, entity.getId());
+        if (entity.getButtonColor() == null) {
+          statement.bindNull(10);
+        } else {
+          statement.bindLong(10, entity.getButtonColor());
+        }
+        final int _tmp_1 = entity.getAutoAnswerEnabled() ? 1 : 0;
+        statement.bindLong(11, _tmp_1);
+        statement.bindLong(12, entity.getButtonPosition());
+        final int _tmp_2 = entity.isHalfWidth() ? 1 : 0;
+        statement.bindLong(13, _tmp_2);
+        statement.bindLong(14, entity.getId());
       }
     };
     this.__preparedStmtOfDeleteById = new SharedSQLiteStatement(__db) {
@@ -253,6 +273,10 @@ public final class ContactDao_Impl implements ContactDao {
           final int _cursorIndexOfContactType = CursorUtil.getColumnIndexOrThrow(_cursor, "contactType");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
           final int _cursorIndexOfUpdatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "updatedAt");
+          final int _cursorIndexOfButtonColor = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonColor");
+          final int _cursorIndexOfAutoAnswerEnabled = CursorUtil.getColumnIndexOrThrow(_cursor, "autoAnswerEnabled");
+          final int _cursorIndexOfButtonPosition = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonPosition");
+          final int _cursorIndexOfIsHalfWidth = CursorUtil.getColumnIndexOrThrow(_cursor, "isHalfWidth");
           final ContactEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -279,7 +303,23 @@ public final class ContactDao_Impl implements ContactDao {
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
             final long _tmpUpdatedAt;
             _tmpUpdatedAt = _cursor.getLong(_cursorIndexOfUpdatedAt);
-            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt);
+            final Long _tmpButtonColor;
+            if (_cursor.isNull(_cursorIndexOfButtonColor)) {
+              _tmpButtonColor = null;
+            } else {
+              _tmpButtonColor = _cursor.getLong(_cursorIndexOfButtonColor);
+            }
+            final boolean _tmpAutoAnswerEnabled;
+            final int _tmp_1;
+            _tmp_1 = _cursor.getInt(_cursorIndexOfAutoAnswerEnabled);
+            _tmpAutoAnswerEnabled = _tmp_1 != 0;
+            final int _tmpButtonPosition;
+            _tmpButtonPosition = _cursor.getInt(_cursorIndexOfButtonPosition);
+            final boolean _tmpIsHalfWidth;
+            final int _tmp_2;
+            _tmp_2 = _cursor.getInt(_cursorIndexOfIsHalfWidth);
+            _tmpIsHalfWidth = _tmp_2 != 0;
+            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt,_tmpButtonColor,_tmpAutoAnswerEnabled,_tmpButtonPosition,_tmpIsHalfWidth);
           } else {
             _result = null;
           }
@@ -317,6 +357,10 @@ public final class ContactDao_Impl implements ContactDao {
           final int _cursorIndexOfContactType = CursorUtil.getColumnIndexOrThrow(_cursor, "contactType");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
           final int _cursorIndexOfUpdatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "updatedAt");
+          final int _cursorIndexOfButtonColor = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonColor");
+          final int _cursorIndexOfAutoAnswerEnabled = CursorUtil.getColumnIndexOrThrow(_cursor, "autoAnswerEnabled");
+          final int _cursorIndexOfButtonPosition = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonPosition");
+          final int _cursorIndexOfIsHalfWidth = CursorUtil.getColumnIndexOrThrow(_cursor, "isHalfWidth");
           final List<ContactEntity> _result = new ArrayList<ContactEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final ContactEntity _item;
@@ -344,7 +388,23 @@ public final class ContactDao_Impl implements ContactDao {
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
             final long _tmpUpdatedAt;
             _tmpUpdatedAt = _cursor.getLong(_cursorIndexOfUpdatedAt);
-            _item = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt);
+            final Long _tmpButtonColor;
+            if (_cursor.isNull(_cursorIndexOfButtonColor)) {
+              _tmpButtonColor = null;
+            } else {
+              _tmpButtonColor = _cursor.getLong(_cursorIndexOfButtonColor);
+            }
+            final boolean _tmpAutoAnswerEnabled;
+            final int _tmp_1;
+            _tmp_1 = _cursor.getInt(_cursorIndexOfAutoAnswerEnabled);
+            _tmpAutoAnswerEnabled = _tmp_1 != 0;
+            final int _tmpButtonPosition;
+            _tmpButtonPosition = _cursor.getInt(_cursorIndexOfButtonPosition);
+            final boolean _tmpIsHalfWidth;
+            final int _tmp_2;
+            _tmp_2 = _cursor.getInt(_cursorIndexOfIsHalfWidth);
+            _tmpIsHalfWidth = _tmp_2 != 0;
+            _item = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt,_tmpButtonColor,_tmpAutoAnswerEnabled,_tmpButtonPosition,_tmpIsHalfWidth);
             _result.add(_item);
           }
           return _result;
@@ -381,6 +441,10 @@ public final class ContactDao_Impl implements ContactDao {
           final int _cursorIndexOfContactType = CursorUtil.getColumnIndexOrThrow(_cursor, "contactType");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
           final int _cursorIndexOfUpdatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "updatedAt");
+          final int _cursorIndexOfButtonColor = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonColor");
+          final int _cursorIndexOfAutoAnswerEnabled = CursorUtil.getColumnIndexOrThrow(_cursor, "autoAnswerEnabled");
+          final int _cursorIndexOfButtonPosition = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonPosition");
+          final int _cursorIndexOfIsHalfWidth = CursorUtil.getColumnIndexOrThrow(_cursor, "isHalfWidth");
           final ContactEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -407,7 +471,23 @@ public final class ContactDao_Impl implements ContactDao {
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
             final long _tmpUpdatedAt;
             _tmpUpdatedAt = _cursor.getLong(_cursorIndexOfUpdatedAt);
-            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt);
+            final Long _tmpButtonColor;
+            if (_cursor.isNull(_cursorIndexOfButtonColor)) {
+              _tmpButtonColor = null;
+            } else {
+              _tmpButtonColor = _cursor.getLong(_cursorIndexOfButtonColor);
+            }
+            final boolean _tmpAutoAnswerEnabled;
+            final int _tmp_1;
+            _tmp_1 = _cursor.getInt(_cursorIndexOfAutoAnswerEnabled);
+            _tmpAutoAnswerEnabled = _tmp_1 != 0;
+            final int _tmpButtonPosition;
+            _tmpButtonPosition = _cursor.getInt(_cursorIndexOfButtonPosition);
+            final boolean _tmpIsHalfWidth;
+            final int _tmp_2;
+            _tmp_2 = _cursor.getInt(_cursorIndexOfIsHalfWidth);
+            _tmpIsHalfWidth = _tmp_2 != 0;
+            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt,_tmpButtonColor,_tmpAutoAnswerEnabled,_tmpButtonPosition,_tmpIsHalfWidth);
           } else {
             _result = null;
           }
@@ -447,6 +527,10 @@ public final class ContactDao_Impl implements ContactDao {
           final int _cursorIndexOfContactType = CursorUtil.getColumnIndexOrThrow(_cursor, "contactType");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
           final int _cursorIndexOfUpdatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "updatedAt");
+          final int _cursorIndexOfButtonColor = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonColor");
+          final int _cursorIndexOfAutoAnswerEnabled = CursorUtil.getColumnIndexOrThrow(_cursor, "autoAnswerEnabled");
+          final int _cursorIndexOfButtonPosition = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonPosition");
+          final int _cursorIndexOfIsHalfWidth = CursorUtil.getColumnIndexOrThrow(_cursor, "isHalfWidth");
           final ContactEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -473,7 +557,23 @@ public final class ContactDao_Impl implements ContactDao {
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
             final long _tmpUpdatedAt;
             _tmpUpdatedAt = _cursor.getLong(_cursorIndexOfUpdatedAt);
-            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt);
+            final Long _tmpButtonColor;
+            if (_cursor.isNull(_cursorIndexOfButtonColor)) {
+              _tmpButtonColor = null;
+            } else {
+              _tmpButtonColor = _cursor.getLong(_cursorIndexOfButtonColor);
+            }
+            final boolean _tmpAutoAnswerEnabled;
+            final int _tmp_1;
+            _tmp_1 = _cursor.getInt(_cursorIndexOfAutoAnswerEnabled);
+            _tmpAutoAnswerEnabled = _tmp_1 != 0;
+            final int _tmpButtonPosition;
+            _tmpButtonPosition = _cursor.getInt(_cursorIndexOfButtonPosition);
+            final boolean _tmpIsHalfWidth;
+            final int _tmp_2;
+            _tmp_2 = _cursor.getInt(_cursorIndexOfIsHalfWidth);
+            _tmpIsHalfWidth = _tmp_2 != 0;
+            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt,_tmpButtonColor,_tmpAutoAnswerEnabled,_tmpButtonPosition,_tmpIsHalfWidth);
           } else {
             _result = null;
           }
@@ -507,6 +607,10 @@ public final class ContactDao_Impl implements ContactDao {
           final int _cursorIndexOfContactType = CursorUtil.getColumnIndexOrThrow(_cursor, "contactType");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
           final int _cursorIndexOfUpdatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "updatedAt");
+          final int _cursorIndexOfButtonColor = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonColor");
+          final int _cursorIndexOfAutoAnswerEnabled = CursorUtil.getColumnIndexOrThrow(_cursor, "autoAnswerEnabled");
+          final int _cursorIndexOfButtonPosition = CursorUtil.getColumnIndexOrThrow(_cursor, "buttonPosition");
+          final int _cursorIndexOfIsHalfWidth = CursorUtil.getColumnIndexOrThrow(_cursor, "isHalfWidth");
           final ContactEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -533,7 +637,23 @@ public final class ContactDao_Impl implements ContactDao {
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
             final long _tmpUpdatedAt;
             _tmpUpdatedAt = _cursor.getLong(_cursorIndexOfUpdatedAt);
-            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt);
+            final Long _tmpButtonColor;
+            if (_cursor.isNull(_cursorIndexOfButtonColor)) {
+              _tmpButtonColor = null;
+            } else {
+              _tmpButtonColor = _cursor.getLong(_cursorIndexOfButtonColor);
+            }
+            final boolean _tmpAutoAnswerEnabled;
+            final int _tmp_1;
+            _tmp_1 = _cursor.getInt(_cursorIndexOfAutoAnswerEnabled);
+            _tmpAutoAnswerEnabled = _tmp_1 != 0;
+            final int _tmpButtonPosition;
+            _tmpButtonPosition = _cursor.getInt(_cursorIndexOfButtonPosition);
+            final boolean _tmpIsHalfWidth;
+            final int _tmp_2;
+            _tmp_2 = _cursor.getInt(_cursorIndexOfIsHalfWidth);
+            _tmpIsHalfWidth = _tmp_2 != 0;
+            _result = new ContactEntity(_tmpId,_tmpName,_tmpPhoneNumber,_tmpPhotoUri,_tmpPriority,_tmpIsPrimary,_tmpContactType,_tmpCreatedAt,_tmpUpdatedAt,_tmpButtonColor,_tmpAutoAnswerEnabled,_tmpButtonPosition,_tmpIsHalfWidth);
           } else {
             _result = null;
           }
