@@ -49,6 +49,15 @@ sealed class HomeButtonConfig {
     }
     
     /**
+     * Screen Off button - turns off screen, any touch wakes it
+     * Level 2+ feature - helps users who can't find power button
+     * Hidden during calls and missed call nag
+     */
+    data class DisplayOffButton(
+        val label: String = "Screen Off"
+    ) : HomeButtonConfig()
+    
+    /**
      * Emergency button - always at bottom, distinct styling
      */
     data class EmergencyButton(

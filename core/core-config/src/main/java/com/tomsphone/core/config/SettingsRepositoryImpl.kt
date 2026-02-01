@@ -72,7 +72,22 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setFeatureLevel(level: FeatureLevel): Result<Unit> {
         return runCatching {
             dataStore.edit { preferences ->
+                // Update the individual key
                 preferences[FEATURE_LEVEL_KEY] = level.level
+                
+                // Also update the full settings JSON to keep them in sync
+                val settingsJson = preferences[SETTINGS_KEY]
+                val currentSettings = if (settingsJson != null) {
+                    try {
+                        json.decodeFromString<CarerSettings>(settingsJson)
+                    } catch (e: Exception) {
+                        CarerSettings()
+                    }
+                } else {
+                    CarerSettings()
+                }
+                val updatedSettings = currentSettings.copy(featureLevel = level)
+                preferences[SETTINGS_KEY] = json.encodeToString(updatedSettings)
             }
         }
     }
@@ -92,8 +107,8 @@ class SettingsRepositoryImpl @Inject constructor(
     override fun getMaxContacts(): Flow<Int> {
         return getFeatureLevel().map { level ->
             when (level) {
-                FeatureLevel.MINIMAL -> 3  // Up to 3 carers at Level 1
-                FeatureLevel.BASIC -> 4
+                FeatureLevel.MINIMAL -> 4  // Up to 4 carers at Level 1 (4 contact rows)
+                FeatureLevel.BASIC -> 5    // Up to 5 carers at Level 2 (5 contacts + Display Off = 6 rows)
                 FeatureLevel.STANDARD -> 12
                 FeatureLevel.EXTENDED -> Int.MAX_VALUE
             }

@@ -30,6 +30,9 @@ import com.tomsphone.core.ui.theme.wandasColors
  * - Full-width or half-width layouts
  * - Scales with user text size setting
  * 
+ * LAYOUT: Button fills its parent container (use weight(1f) on parent for equal distribution).
+ * Text size is from ScaledDimensions which adapts to screen size and button count.
+ * 
  * Used for contact buttons, menu buttons, etc.
  */
 @Composable
@@ -42,13 +45,13 @@ fun ConfigurableButton(
     warningText: String? = null,
     enabled: Boolean = true
 ) {
-    // Use scaled dimensions
-    val buttonHeight = ScaledDimensions.contactButtonHeight
+    // Text size adapts to screen height and button count
     val textSize = ScaledDimensions.contactNameTextSize
     
     Button(
         onClick = onClick,
-        modifier = modifier.height(buttonHeight),
+        // Fill parent container - parent uses weight(1f) for equal distribution
+        modifier = modifier.fillMaxHeight(),
         colors = ButtonDefaults.buttonColors(
             containerColor = backgroundColor,
             contentColor = textColor,
@@ -57,10 +60,10 @@ fun ConfigurableButton(
         ),
         shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
         contentPadding = PaddingValues(
-            start = WandasDimensions.SpacingLarge,
-            end = WandasDimensions.SpacingLarge,
-            top = if (warningText != null) WandasDimensions.SpacingSmall else WandasDimensions.SpacingLarge,
-            bottom = if (warningText != null) WandasDimensions.SpacingSmall else WandasDimensions.SpacingLarge
+            start = WandasDimensions.SpacingMedium,
+            end = WandasDimensions.SpacingMedium,
+            top = WandasDimensions.SpacingSmall,
+            bottom = WandasDimensions.SpacingSmall
         ),
         enabled = enabled,
         elevation = ButtonDefaults.buttonElevation(

@@ -32,7 +32,7 @@ import javax.inject.Inject
  * - Level 2+ (BASIC+): Toggle available, default from settings
  */
 @AndroidEntryPoint
-class WandasInCallService : InCallService() {
+class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge {
     
     private companion object {
         const val TAG = "WandasInCallService"
@@ -62,6 +62,8 @@ class WandasInCallService : InCallService() {
     private var wasIncomingCall = false  // Track if this was an incoming call
     private var lastIncomingPhoneNumber: String? = null  // For missed call nag
     private var lastIncomingContactName: String? = null
+    private var isRegisteredWithCallManager = false
+    private var currentContactName: String? = null  // Preserve contact name across state updates
     
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
@@ -77,6 +79,14 @@ class WandasInCallService : InCallService() {
     
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+        
+        // Register with CallManager for audio controls
+        if (!isRegisteredWithCallManager) {
+            callManager.registerInCallService(this)
+            isRegisteredWithCallManager = true
+            Log.d(TAG, "Registered with CallManager")
+        }
+        
         val isIncoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING
         val phoneNumber = call.details.handle?.schemeSpecificPart ?: "Unknown"
         
@@ -154,6 +164,7 @@ class WandasInCallService : InCallService() {
         wasIncomingCall = isIncoming
         lastIncomingPhoneNumber = if (isIncoming) phoneNumber else null
         lastIncomingContactName = null  // Will be set during contact lookup
+        currentContactName = null  // Reset for new call - will be set when contact is looked up
         
         // Enable speakerphone when call is added
         serviceScope.launch {
@@ -197,6 +208,7 @@ class WandasInCallService : InCallService() {
         wasIncomingCall = false
         lastIncomingPhoneNumber = null
         lastIncomingContactName = null
+        currentContactName = null
     }
     
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
@@ -212,7 +224,8 @@ class WandasInCallService : InCallService() {
      * Enable speakerphone based on feature level and settings
      * 
      * Level 1: Always speaker (no choice)
-     * Level 2+: Use carer's default setting
+     * Level 2+ with speaker button: Use speakerDefaultOn setting
+     * Level 2+ without speaker button: Use speakerphoneAlwaysOn setting
      */
     private suspend fun enableSpeakerBasedOnSettings() {
         val settings = settingsRepository.getSettings().first()
@@ -224,26 +237,33 @@ class WandasInCallService : InCallService() {
                 true
             }
             else -> {
-                // Level 2+: Use carer's default setting
-                // TODO Level 2: Add carer setting "Default speaker on/off" to CarerScreen
-                // TODO Level 2: User can toggle during call via InCallScreen button
-                Log.d(TAG, "Level 2+: Using default speaker setting: ${settings.speakerphoneAlwaysOn}")
-                settings.speakerphoneAlwaysOn
+                // Level 2+: Check if speaker button is enabled
+                if (settings.showSpeakerButton) {
+                    // Speaker button visible - use speakerDefaultOn setting
+                    Log.d(TAG, "Level 2+ with speaker button: Using speakerDefaultOn=${settings.speakerDefaultOn}")
+                    settings.speakerDefaultOn
+                } else {
+                    // No speaker button - use legacy speakerphoneAlwaysOn
+                    Log.d(TAG, "Level 2+ no speaker button: Using speakerphoneAlwaysOn=${settings.speakerphoneAlwaysOn}")
+                    settings.speakerphoneAlwaysOn
+                }
             }
         }
         
-        if (shouldEnableSpeaker) {
-            setSpeaker(true)
-        }
+        // Always explicitly set the speaker state (on OR off)
+        // Use silent version - don't announce default state at call start
+        setSpeakerSilent(shouldEnableSpeaker)
+        Log.d(TAG, "Speaker set to default: $shouldEnableSpeaker")
         
         // Set volume based on settings
         setCallVolume(settings.speakerVolume)
     }
     
     /**
-     * Set speakerphone state
+     * Set speaker state without TTS announcement
+     * Used for initial call setup where we don't want to announce the default
      */
-    fun setSpeaker(enabled: Boolean) {
+    private fun setSpeakerSilent(enabled: Boolean) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val route = if (enabled) {
@@ -253,62 +273,12 @@ class WandasInCallService : InCallService() {
                 }
                 setAudioRoute(route)
                 isSpeakerOn = enabled
-                Log.d(TAG, "Speakerphone set to: $enabled")
+                Log.d(TAG, "Speakerphone set silently to: $enabled")
                 updateCallInfo()
-                
-                // Announce change (only if user toggled it at Level 2+)
-                serviceScope.launch {
-                    val settings = settingsRepository.getSettings().first()
-                    if (settings.featureLevel != FeatureLevel.MINIMAL) {
-                        if (enabled) {
-                            tts.speak(TTSScripts.speakerOn())
-                        } else {
-                            tts.speak(TTSScripts.speakerOff())
-                        }
-                    }
-                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error setting speakerphone: ${e.message}")
         }
-    }
-    
-    /**
-     * Toggle speakerphone (for Level 2+ UI)
-     * 
-     * TODO Level 2: Add speaker toggle button to InCallScreen UI
-     * TODO Level 2: Only show toggle when featureLevel >= BASIC
-     */
-    fun toggleSpeaker() {
-        setSpeaker(!isSpeakerOn)
-    }
-    
-    /**
-     * Set mute state
-     */
-    fun setMute(muted: Boolean) {
-        try {
-            val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-            audioManager.isMicrophoneMute = muted
-            isMuted = muted
-            Log.d(TAG, "Mute set to: $muted")
-            updateCallInfo()
-            
-            if (muted) {
-                tts.speak(TTSScripts.muted())
-            } else {
-                tts.speak(TTSScripts.unmuted())
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting mute: ${e.message}")
-        }
-    }
-    
-    /**
-     * Toggle mute
-     */
-    fun toggleMute() {
-        setMute(!isMuted)
     }
     
     /**
@@ -393,6 +363,8 @@ class WandasInCallService : InCallService() {
             }
             
             if (contactName != null) {
+                // Store contact name for use in updateCallInfo() when speaker/mute changes
+                currentContactName = contactName
                 val updatedCallInfo = immediateCallInfo.copy(contactName = contactName)
                 callManager.updateCallState(updatedCallInfo)
                 Log.d(TAG, "Call state (with contact): $wandasState, contact: $contactName")
@@ -460,7 +432,7 @@ class WandasInCallService : InCallService() {
             val callInfo = CallInfo(
                 callId = call.details.handle.toString(),
                 phoneNumber = phoneNumber,
-                contactName = null,
+                contactName = currentContactName,  // Preserve contact name across speaker/mute changes
                 contactId = null,
                 state = state,
                 direction = direction,
@@ -474,7 +446,71 @@ class WandasInCallService : InCallService() {
     
     override fun onDestroy() {
         super.onDestroy()
+        // Unregister from CallManager
+        if (isRegisteredWithCallManager) {
+            callManager.unregisterInCallService()
+            isRegisteredWithCallManager = false
+            Log.d(TAG, "Unregistered from CallManager")
+        }
         serviceScope.cancel()
         Log.d(TAG, "Service destroyed")
+    }
+    
+    // ========== InCallServiceBridge Implementation ==========
+    
+    override fun toggleSpeaker() {
+        setSpeaker(!isSpeakerOn)
+    }
+    
+    override fun setSpeaker(enabled: Boolean) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val route = if (enabled) {
+                    CallAudioState.ROUTE_SPEAKER
+                } else {
+                    CallAudioState.ROUTE_EARPIECE
+                }
+                setAudioRoute(route)
+                isSpeakerOn = enabled
+                Log.d(TAG, "Speakerphone set to: $enabled")
+                updateCallInfo()
+                
+                // Announce change (only if user toggled it at Level 2+)
+                serviceScope.launch {
+                    val settings = settingsRepository.getSettings().first()
+                    if (settings.featureLevel != FeatureLevel.MINIMAL) {
+                        if (enabled) {
+                            tts.speak(TTSScripts.speakerOn())
+                        } else {
+                            tts.speak(TTSScripts.speakerOff())
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting speakerphone: ${e.message}")
+        }
+    }
+    
+    override fun toggleMute() {
+        setMute(!isMuted)
+    }
+    
+    override fun setMute(muted: Boolean) {
+        try {
+            val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+            audioManager.isMicrophoneMute = muted
+            isMuted = muted
+            Log.d(TAG, "Mute set to: $muted")
+            updateCallInfo()
+            
+            if (muted) {
+                tts.speak(TTSScripts.muted())
+            } else {
+                tts.speak(TTSScripts.unmuted())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting mute: ${e.message}")
+        }
     }
 }

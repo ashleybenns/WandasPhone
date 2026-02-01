@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
@@ -37,10 +36,11 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
  */
 @Composable
 fun FactoryResetScreen(
-    featureLevel: FeatureLevel,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
+    val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     var showConfirmDialog by remember { mutableStateOf(false) }
     var isResetting by remember { mutableStateOf(false) }
     val context = LocalContext.current

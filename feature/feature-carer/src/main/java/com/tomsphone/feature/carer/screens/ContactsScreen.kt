@@ -33,17 +33,18 @@ import com.tomsphone.feature.carer.components.*
  */
 @Composable
 fun ContactsScreen(
-    featureLevel: FeatureLevel,
     onNavigateToContactEdit: (Long, ContactType) -> Unit,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
+    val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     val contacts by viewModel.contacts.collectAsState()
     
     // Max carers based on feature level
     val maxCarers = when (featureLevel) {
-        FeatureLevel.MINIMAL -> 3
-        FeatureLevel.BASIC -> 4
+        FeatureLevel.MINIMAL -> 4  // Up to 4 carers at Level 1 (4 contact rows)
+        FeatureLevel.BASIC -> 5    // Up to 5 carers at Level 2 (5 contacts + Screen Off = 6 rows)
         FeatureLevel.STANDARD -> 12
         FeatureLevel.EXTENDED -> Int.MAX_VALUE
     }

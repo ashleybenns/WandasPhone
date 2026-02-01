@@ -2,10 +2,16 @@ package com.tomsphone.feature.phone
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -175,29 +181,50 @@ fun EndOutgoingCallScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (showSpeakerToggle) {
+                        val speakerConfirmPending by viewModel.speakerConfirmPending.collectAsState()
+                        
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { viewModel.onSpeakerTap() }
                         ) {
-                            // Speaker button - round, grey/green based on state, scaled
-                            Button(
-                                onClick = { viewModel.toggleSpeaker() },
-                                modifier = Modifier.size(ScaledDimensions.endCallButtonSize),
-                                shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isSpeakerOn) Color(0xFF4CAF50) else Color(0xFF757575),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Text(
-                                    text = if (isSpeakerOn) "Speaker\nON" else "Speaker\nOFF",
-                                    style = TextStyle(
-                                        fontSize = ScaledDimensions.scaledSp(18f),
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
+                            // Speaker icon - large, touchable
+                            Icon(
+                                imageVector = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                contentDescription = if (isSpeakerOn) "Speaker on" else "Speaker off",
+                                modifier = Modifier.size(ScaledDimensions.endCallButtonSize * 0.7f),
+                                tint = Color.Black
+                            )
+                            
+                            Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
+                            
+                            // State text below icon (same style as End button)
+                            Text(
+                                text = if (isSpeakerOn) "Speaker on," else "Speaker off,",
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.buttonTextSize,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = Color.Black,
+                                textAlign = TextAlign.Center
+                            )
+                            
+                            Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
+                            
+                            // Instruction text below
+                            Text(
+                                text = if (speakerConfirmPending) "Tap again" else "press twice",
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.statusTextSize,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                color = if (speakerConfirmPending) Color.Red else Color.Black.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                     // If showSpeakerToggle is false, the Box is empty but still takes space
@@ -221,9 +248,9 @@ class EndOutgoingCallViewModel @Inject constructor(
         .map { it?.state ?: CallState.IDLE }
         .stateIn(viewModelScope, SharingStarted.Eagerly, CallState.IDLE)
     
-    // Speaker toggle visibility - based on feature level (Level 2+)
+    // Speaker toggle visibility - based on new showSpeakerButton setting (Level 2+)
     val showSpeakerToggle: StateFlow<Boolean> = settingsRepository.getSettings()
-        .map { it.featureLevel.level >= 2 && !it.speakerphoneAlwaysOn }
+        .map { it.featureLevel.level >= 2 && it.showSpeakerButton }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     
     // Speaker state
@@ -231,12 +258,45 @@ class EndOutgoingCallViewModel @Inject constructor(
         .map { it?.isSpeakerOn ?: true }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
+    // End call double-tap
     private val _tapCount = MutableStateFlow(0)
     private var resetJob: Job? = null
     
     val confirmPending: StateFlow<Boolean> = _tapCount
         .map { it == 1 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    
+    // Speaker double-tap
+    private val _speakerTapCount = MutableStateFlow(0)
+    private var speakerResetJob: Job? = null
+    
+    val speakerConfirmPending: StateFlow<Boolean> = _speakerTapCount
+        .map { it == 1 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    
+    init {
+        // Reset speaker to default when call ends
+        viewModelScope.launch {
+            callState.collect { state ->
+                if (state == CallState.DISCONNECTED || state == CallState.IDLE) {
+                    Log.d(TAG, "Call ended - resetting speaker to default")
+                    resetSpeakerToDefault()
+                }
+            }
+        }
+    }
+    
+    private fun resetSpeakerToDefault() {
+        viewModelScope.launch {
+            val settings = settingsRepository.getSettings().first()
+            val shouldBeOn = settings.speakerDefaultOn
+            val currentlyOn = callManager.currentCall.value?.isSpeakerOn ?: true
+            if (currentlyOn != shouldBeOn) {
+                callManager.setSpeaker(shouldBeOn)
+                Log.d(TAG, "Speaker reset to default: $shouldBeOn")
+            }
+        }
+    }
     
     fun onEndCallTap() {
         _tapCount.value++
@@ -257,8 +317,28 @@ class EndOutgoingCallViewModel @Inject constructor(
         }
     }
     
+    fun onSpeakerTap() {
+        _speakerTapCount.value++
+        
+        if (_speakerTapCount.value >= 2) {
+            Log.d(TAG, "Speaker double tap confirmed - toggling")
+            callManager.toggleSpeaker()
+            _speakerTapCount.value = 0
+            speakerResetJob?.cancel()
+        } else {
+            Log.d(TAG, "Speaker first tap - waiting for confirmation")
+            speakerResetJob?.cancel()
+            speakerResetJob = viewModelScope.launch {
+                delay(3000)
+                _speakerTapCount.value = 0
+                Log.d(TAG, "Speaker tap reset after timeout")
+            }
+        }
+    }
+    
+    @Deprecated("Use onSpeakerTap for double-tap protection")
     fun toggleSpeaker() {
-        Log.d(TAG, "Toggling speaker")
+        Log.d(TAG, "Toggling speaker (legacy)")
         callManager.toggleSpeaker()
     }
 }

@@ -27,11 +27,11 @@ import com.tomsphone.feature.carer.components.*
  */
 @Composable
 fun CallHandlingScreen(
-    featureLevel: FeatureLevel,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     
     Surface(
@@ -85,16 +85,44 @@ fun CallHandlingScreen(
                             }
                         )
                         
-                        LevelGatedContent(
-                            minLevel = FeatureLevel.BASIC,
-                            currentLevel = featureLevel
-                        ) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    
+                    // Speaker Toggle Button - Level 2+ only
+                    LevelGatedContent(
+                        minLevel = FeatureLevel.BASIC,
+                        currentLevel = featureLevel
+                    ) {
+                        SettingCard(title = "Speaker Button") {
                             Text(
-                                text = "In Comfortable mode: Speaker toggle button is available during calls when this is off",
+                                text = "Show a button during calls to toggle speaker on/off. Double-tap required to prevent accidents. Speaker returns to default after each call.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(bottom = 8.dp)
                             )
+                            
+                            SettingToggle(
+                                title = "Show Speaker Button",
+                                description = "Display speaker toggle on call screens",
+                                checked = settings.showSpeakerButton,
+                                onCheckedChange = { enabled ->
+                                    viewModel.setShowSpeakerButton(enabled)
+                                    saveToastState.show("Speaker button ${if (enabled) "enabled" else "disabled"}")
+                                }
+                            )
+                            
+                            if (settings.showSpeakerButton) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                SettingToggle(
+                                    title = "Speaker On by Default",
+                                    description = "Start each call with speaker on",
+                                    checked = settings.speakerDefaultOn,
+                                    onCheckedChange = { enabled ->
+                                        viewModel.setSpeakerDefaultOn(enabled)
+                                        saveToastState.show("Default speaker ${if (enabled) "on" else "off"}")
+                                    }
+                                )
+                            }
                         }
                     }
                     

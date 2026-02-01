@@ -6,12 +6,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.tomsphone.core.config.FeatureLevel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
+import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
 import com.tomsphone.feature.carer.components.CarerMenuButton
 import com.tomsphone.feature.carer.components.DevLevelIndicator
@@ -24,7 +27,6 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
  */
 @Composable
 fun CarerMainMenuScreen(
-    featureLevel: FeatureLevel,
     onNavigateToUserProfile: () -> Unit,
     onNavigateToContacts: () -> Unit,
     onNavigateToCallHandling: () -> Unit,
@@ -33,8 +35,12 @@ fun CarerMainMenuScreen(
     onNavigateToAlwaysOn: () -> Unit,
     onNavigateToFactoryReset: () -> Unit,
     onExitApp: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
+    val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
+    
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.wandasColors.background

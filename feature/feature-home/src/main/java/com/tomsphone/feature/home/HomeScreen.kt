@@ -2,6 +2,8 @@ package com.tomsphone.feature.home
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -20,6 +22,7 @@ import com.tomsphone.core.telecom.CallDirection
 import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.ui.components.CallingStateButton
 import com.tomsphone.core.ui.components.ConfigurableButton
+import com.tomsphone.core.ui.components.DisplayOffButton
 import com.tomsphone.core.ui.components.EmergencyButton
 import com.tomsphone.core.ui.components.HalfWidthButtonRow
 import com.tomsphone.core.ui.components.InertBorderLayout
@@ -58,6 +61,9 @@ fun HomeScreen(
     val callingContact by viewModel.callingContact.collectAsState()
     val emergencyTestMode by viewModel.emergencyTestMode.collectAsState()
     val unknownCallsAllowed by viewModel.unknownCallsAllowed.collectAsState()
+    val displayOffButtonEnabled by viewModel.displayOffButtonEnabled.collectAsState()
+    val displayOffButtonActive by viewModel.displayOffButtonActive.collectAsState()
+    val isDisplayOff by viewModel.isDisplayOff.collectAsState()
     
     // Also observe currentCall directly to prevent standby flash
     val currentCall by viewModel.currentCallForUI.collectAsState()
@@ -106,37 +112,81 @@ fun HomeScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top: Status message box - FULL WIDTH
-            // Battery warning is integrated into the first line
+            // TOP GUTTER: Warning strip for carer alerts (battery, all callers)
+            // Small, unobtrusive, doesn't affect button layout
+            val hasWarnings = isLowBattery || (isCharging && batteryLevel < 100) || unknownCallsAllowed
+            if (hasWarnings) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Battery warning (red) or charging (green)
+                    if (isLowBattery) {
+                        Surface(
+                            color = Color(0xFFD32F2F),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "🔋 $batteryLevel%",
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.scaledSp(12f),
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (isCharging && batteryLevel < 100) {
+                        Surface(
+                            color = Color(0xFF4CAF50),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "🔌 $batteryLevel%",
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.scaledSp(12f),
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    
+                    // Spacer between warnings
+                    if ((isLowBattery || (isCharging && batteryLevel < 100)) && unknownCallsAllowed) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    
+                    // All callers allowed warning (blue)
+                    if (unknownCallsAllowed) {
+                        Surface(
+                            color = Color(0xFF1976D2),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "📞 All callers",
+                                style = TextStyle(
+                                    fontSize = ScaledDimensions.scaledSp(12f),
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Status message box - always shows full 3 lines for user info
             StatusMessageBox(
                 message = displayMessage,
                 onHiddenTap = { if (!isCallingMode) viewModel.onCarerButtonTap() },
-                modifier = Modifier.fillMaxWidth(),
-                batteryLevel = batteryLevel,
-                isLowBattery = isLowBattery,
-                isCharging = isCharging
+                modifier = Modifier.fillMaxWidth()
             )
-            
-            // Warning banner when unknown calls are allowed (after emergency call)
-            if (unknownCallsAllowed) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF1976D2)  // Blue info color
-                ) {
-                    Text(
-                        text = "📞 All callers allowed",
-                        style = TextStyle(
-                            fontSize = ScaledDimensions.scaledSp(14f),
-                            fontWeight = FontWeight.Medium
-                        ),
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                    )
-                }
-            }
             
             // Rest of screen has inert border for buttons
             InertBorderLayout(
@@ -151,102 +201,206 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(ScaledDimensions.edgePadding),
+                        .padding(horizontal = ScaledDimensions.edgePadding)
+                        .padding(top = 4.dp, bottom = ScaledDimensions.edgePadding),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // MIDDLE: Contact/Menu buttons - fill available space with even distribution
+                    // MIDDLE: Contact/Menu/Utility buttons - each row gets equal weight
+                    // Count total button rows for weight distribution
+                    val fullWidthContacts = contactButtons.filter { !it.isHalfWidth }
+                    val halfWidthContacts = contactButtons.filter { it.isHalfWidth }
+                    val halfWidthContactRows = (halfWidthContacts.size + 1) / 2
+                    val menuButtonRows = (menuButtons.size + 1) / 2
+                    val displayOffRows = if (displayOffButtonEnabled) 1 else 0
+                    val totalRows = fullWidthContacts.size + halfWidthContactRows + menuButtonRows + displayOffRows
+                    
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.SpaceEvenly
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (callingContact != null) {
-                            // CALLING ANIMATION: Show black button for calling contact
-                            contactButtons.forEach { button ->
+                            // CALLING ANIMATION: Buttons fade to black in place
+                            // Must use same row structure as normal mode so nothing moves
+                            
+                            // Contact button rows (same structure as normal mode)
+                            fullWidthContacts.forEach { button ->
                                 val isThisContactCalling = callingContact?.id == button.contactId
-                                
-                                if (isThisContactCalling) {
-                                    CallingStateButton(
-                                        contactName = button.name,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                } else {
-                                    Spacer(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(ScaledDimensions.contactButtonHeight)
-                                    )
-                                }
-                            }
-                        } else {
-                            // NORMAL MODE: Render contact buttons
-                            
-                            // Full-width contact buttons
-                            contactButtons.filter { !it.isHalfWidth }.forEach { button ->
-                                RenderContactButton(
-                                    button = button,
-                                    onClick = { viewModel.onContactButtonTap(button) }
-                                )
-                            }
-                            
-                            // Half-width contact buttons (paired)
-                            val halfWidthContacts = contactButtons.filter { it.isHalfWidth }
-                            halfWidthContacts.chunked(2).forEach { pair ->
-                                if (pair.size == 2) {
-                                    HalfWidthButtonRow(
-                                        leftButton = { modifier ->
-                                            RenderContactButton(
-                                                button = pair[0],
-                                                onClick = { viewModel.onContactButtonTap(pair[0]) },
-                                                modifier = modifier
-                                            )
-                                        },
-                                        rightButton = { modifier ->
-                                            RenderContactButton(
-                                                button = pair[1],
-                                                onClick = { viewModel.onContactButtonTap(pair[1]) },
-                                                modifier = modifier
-                                            )
-                                        }
-                                    )
-                                } else {
-                                    RenderContactButton(
-                                        button = pair[0],
-                                        onClick = { viewModel.onContactButtonTap(pair[0]) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
-                            
-                            // Menu buttons (Level 2+)
-                            menuButtons.chunked(2).forEach { pair ->
-                                if (pair.size == 2 && pair[0].isHalfWidth && pair[1].isHalfWidth) {
-                                    HalfWidthButtonRow(
-                                        leftButton = { modifier ->
-                                            RenderMenuButton(
-                                                button = pair[0],
-                                                onClick = { viewModel.onMenuButtonTap(pair[0]) },
-                                                modifier = modifier
-                                            )
-                                        },
-                                        rightButton = { modifier ->
-                                            RenderMenuButton(
-                                                button = pair[1],
-                                                onClick = { viewModel.onMenuButtonTap(pair[1]) },
-                                                modifier = modifier
-                                            )
-                                        }
-                                    )
-                                } else {
-                                    pair.forEach { button ->
-                                        RenderMenuButton(
-                                            button = button,
-                                            onClick = { viewModel.onMenuButtonTap(button) },
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isThisContactCalling) {
+                                        CallingStateButton(
+                                            contactName = button.name,
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
+                                    // Other buttons: empty space preserves layout
+                                }
+                            }
+                            
+                            // Half-width contact button rows (preserve structure)
+                            halfWidthContacts.chunked(2).forEach { pair ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Check if either button in pair is calling
+                                    val callingButton = pair.find { it.contactId == callingContact?.id }
+                                    if (callingButton != null) {
+                                        CallingStateButton(
+                                            contactName = callingButton.name,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // Menu button rows (preserve structure)
+                            menuButtons.chunked(2).forEach { _ ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Empty - menu buttons hidden during call
+                                }
+                            }
+                            
+                            // Display Off button row (preserve structure)
+                            if (displayOffButtonEnabled) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Empty - Display Off hidden during call
+                                }
+                            }
+                        } else {
+                            // NORMAL MODE: Render contact buttons with equal weight per row
+                            
+                            // Full-width contact buttons - each gets equal weight
+                            fullWidthContacts.forEach { button ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    RenderContactButton(
+                                        button = button,
+                                        onClick = { viewModel.onContactButtonTap(button) }
+                                    )
+                                }
+                            }
+                            
+                            // Half-width contact buttons (paired) - each pair gets equal weight
+                            halfWidthContacts.chunked(2).forEach { pair ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (pair.size == 2) {
+                                        HalfWidthButtonRow(
+                                            leftButton = { modifier ->
+                                                RenderContactButton(
+                                                    button = pair[0],
+                                                    onClick = { viewModel.onContactButtonTap(pair[0]) },
+                                                    modifier = modifier
+                                                )
+                                            },
+                                            rightButton = { modifier ->
+                                                RenderContactButton(
+                                                    button = pair[1],
+                                                    onClick = { viewModel.onContactButtonTap(pair[1]) },
+                                                    modifier = modifier
+                                                )
+                                            }
+                                        )
+                                    } else {
+                                        RenderContactButton(
+                                            button = pair[0],
+                                            onClick = { viewModel.onContactButtonTap(pair[0]) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // Menu buttons (Level 2+) - each row gets equal weight
+                            menuButtons.chunked(2).forEach { pair ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (pair.size == 2 && pair[0].isHalfWidth && pair[1].isHalfWidth) {
+                                        HalfWidthButtonRow(
+                                            leftButton = { modifier ->
+                                                RenderMenuButton(
+                                                    button = pair[0],
+                                                    onClick = { viewModel.onMenuButtonTap(pair[0]) },
+                                                    modifier = modifier
+                                                )
+                                            },
+                                            rightButton = { modifier ->
+                                                RenderMenuButton(
+                                                    button = pair[1],
+                                                    onClick = { viewModel.onMenuButtonTap(pair[1]) },
+                                                    modifier = modifier
+                                                )
+                                            }
+                                        )
+                                    } else {
+                                        Column {
+                                            pair.forEach { button ->
+                                                RenderMenuButton(
+                                                    button = button,
+                                                    onClick = { viewModel.onMenuButtonTap(button) },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Display Off button (Level 2+) - always takes space when enabled
+                            // Invisible during call/nag but reserves layout space
+                            if (displayOffButtonEnabled) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Only show and enable when active (not during nag)
+                                    if (displayOffButtonActive) {
+                                        DisplayOffButton(
+                                            onClick = { viewModel.onDisplayOffTap() }
+                                        )
+                                    }
+                                    // Otherwise: empty box reserves space
                                 }
                             }
                         }
@@ -284,6 +438,24 @@ fun HomeScreen(
     if (showEmergencyConfirm) {
         viewModel.dismissEmergencyConfirm()
         onNavigateToEmergencyConfirm()
+    }
+    
+    // Display Off overlay - black screen, any touch wakes it
+    if (isDisplayOff) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    viewModel.wakeDisplay()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // Completely black - no text to avoid burn-in
+        }
     }
 }
 

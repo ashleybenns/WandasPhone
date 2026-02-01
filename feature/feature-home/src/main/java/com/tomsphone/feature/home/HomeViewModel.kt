@@ -70,10 +70,10 @@ class HomeViewModel @Inject constructor(
             initialValue = 2
         )
     
-    // Contacts to display
+    // Contacts to display (only CARER contacts that can be called)
     val contacts: StateFlow<List<Contact>> = maxContacts
         .flatMapLatest { max ->
-            contactRepository.getContacts(max)
+            contactRepository.getCarerContacts(max)
         }
         .stateIn(
             scope = viewModelScope,
@@ -97,6 +97,10 @@ class HomeViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
         )
+    
+    // Display off state - screen should be dimmed
+    private val _isDisplayOff = MutableStateFlow(false)
+    val isDisplayOff: StateFlow<Boolean> = _isDisplayOff.asStateFlow()
     
     /**
      * Home screen buttons - built from contacts + settings
@@ -133,10 +137,17 @@ class HomeViewModel @Inject constructor(
         val buttons = mutableListOf<HomeButtonConfig>()
         
         // 1. Contact buttons - only CARER contacts that can call out
+        // Use feature level max directly (homeMaxButtons is deprecated)
+        val maxByLevel = when (settings.featureLevel) {
+            FeatureLevel.MINIMAL -> 4
+            FeatureLevel.BASIC -> 5  // 5 contacts + Display Off = 6 rows
+            FeatureLevel.STANDARD -> 12
+            FeatureLevel.EXTENDED -> Int.MAX_VALUE
+        }
         val callableContacts = contacts
             .filter { it.canCallOut }
             .sortedBy { it.buttonPosition }
-            .take(settings.homeMaxButtons)
+            .take(maxByLevel)
         
         callableContacts.forEach { contact ->
             buttons.add(
@@ -174,6 +185,11 @@ class HomeViewModel @Inject constructor(
                     )
                 )
             }
+            
+            // Display Off button (Level 2+, if enabled)
+            if (settings.showDisplayOffButton) {
+                buttons.add(HomeButtonConfig.DisplayOffButton())
+            }
         }
         
         // 3. Emergency button (always last, if enabled)
@@ -203,6 +219,26 @@ class HomeViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = "Tom's phone"
     )
+    
+    // Display Off button enabled (Level 2+, setting on) - controls space reservation
+    // Button always takes space when enabled, so other buttons don't move
+    val displayOffButtonEnabled: StateFlow<Boolean> = settings
+        .map { it.featureLevel.level >= 2 && it.showDisplayOffButton }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+    
+    // Display Off button active (not during missed call nag) - controls visibility/clickability
+    // Note: Also hidden during calling animation via callingContact != null check in UI
+    val displayOffButtonActive: StateFlow<Boolean> = _missedCallStatus
+        .map { missedNag -> missedNag == null }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
     
     // Calling animation state - when active, shows the black button for 1 second
     private val _callingContact = MutableStateFlow<Contact?>(null)
@@ -447,6 +483,25 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             delay(3000)
             _emergencyTapCount.value = 0
+        }
+    }
+    
+    /**
+     * Display Off button tapped - dim the screen
+     * Any touch will wake the screen again
+     */
+    fun onDisplayOffTap() {
+        Log.d(TAG, "Display Off tapped")
+        _isDisplayOff.value = true
+    }
+    
+    /**
+     * Wake up the display (called on any screen touch when display is off)
+     */
+    fun wakeDisplay() {
+        if (_isDisplayOff.value) {
+            Log.d(TAG, "Display waking up")
+            _isDisplayOff.value = false
         }
     }
     

@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.tomsphone.core.config.SettingsRepository
+import com.tomsphone.core.config.homeButtonRowCount
 import com.tomsphone.core.telecom.CallDirection
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
@@ -126,11 +127,16 @@ class MainActivity : ComponentActivity() {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
             
-            if (settings.pinnedModeEnabled) {
+            // Only pin if enabled AND carer has set up the app (PIN exists)
+            // This prevents pinning on first launch before carer can configure
+            val isConfigured = settings.carerPin.isNotEmpty()
+            if (settings.pinnedModeEnabled && isConfigured) {
                 startPinnedMode()
+            } else if (settings.pinnedModeEnabled && !isConfigured) {
+                Log.d(TAG, "Pinned mode enabled but app not configured yet - skipping pin")
             }
             
-            Log.d(TAG, "Settings applied: pinned=$pinnedModeEnabled, volumeLock=$lockVolumeButtons")
+            Log.d(TAG, "Settings applied: pinned=$pinnedModeEnabled, configured=$isConfigured, volumeLock=$lockVolumeButtons")
         } catch (e: Exception) {
             Log.e(TAG, "Error applying settings: ${e.message}")
         }
@@ -357,7 +363,28 @@ fun WandasPhoneApp(
             // These scale text/buttons based on carer-configured userTextSize
             
             composable("home") {
-                UserScalingProvider(scale = userTextScale) {
+                // Calculate button row count from actual settings
+                // This uses feature level max + display off + menu buttons
+                val currentSettings = settings
+                val contactRows = when (currentSettings?.featureLevel?.level ?: 1) {
+                    1 -> 4  // MINIMAL: 4 contacts
+                    2 -> 5  // BASIC: 5 contacts
+                    else -> 6  // STANDARD+: more contacts, but cap layout at 6
+                }.coerceAtMost(6)  // Never calculate for more than 6 rows
+                val displayOffRow = if (currentSettings?.featureLevel?.level ?: 1 >= 2 && 
+                                        currentSettings?.showDisplayOffButton == true) 1 else 0
+                val menuRows = if (currentSettings?.featureLevel?.level ?: 1 >= 2) {
+                    var count = 0
+                    if (currentSettings?.homeShowMissedCallsButton == true) count++
+                    if (currentSettings?.homeShowContactsListButton == true) count++
+                    (count + 1) / 2  // Pair into rows
+                } else 0
+                val buttonRowCount = (contactRows + displayOffRow + menuRows).coerceIn(2, 6)
+                
+                UserScalingProvider(
+                    buttonRowCount = buttonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)  // User can reduce from max
+                ) {
                     HomeScreen(
                         onNavigateToCarer = {
                             navController.navigate("carer")

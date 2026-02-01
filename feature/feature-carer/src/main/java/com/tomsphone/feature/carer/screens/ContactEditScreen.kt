@@ -44,10 +44,11 @@ import com.tomsphone.feature.carer.components.*
 fun ContactEditScreen(
     contactId: Long,
     contactType: ContactType,  // Type is fixed - determined by entry point
-    featureLevel: FeatureLevel,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
+    val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     val contacts by viewModel.contacts.collectAsState()
     val saveToastState = rememberSaveToastState()
     

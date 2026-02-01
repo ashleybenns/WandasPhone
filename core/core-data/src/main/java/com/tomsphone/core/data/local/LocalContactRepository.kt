@@ -29,6 +29,12 @@ class LocalContactRepository @Inject constructor(
         }
     }
     
+    override fun getCarerContacts(limit: Int): Flow<List<Contact>> {
+        return contactDao.getCarerContacts(limit).map { list ->
+            list.map { it.toContact() }
+        }
+    }
+    
     override fun getContactById(id: Long): Flow<Contact?> {
         return contactDao.getContactByIdFlow(id).map { it?.toContact() }
     }

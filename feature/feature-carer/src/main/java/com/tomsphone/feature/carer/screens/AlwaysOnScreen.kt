@@ -9,7 +9,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
@@ -22,11 +21,11 @@ import com.tomsphone.feature.carer.components.*
  */
 @Composable
 fun AlwaysOnScreen(
-    featureLevel: FeatureLevel,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     
     Surface(

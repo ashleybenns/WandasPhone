@@ -14,6 +14,12 @@ interface ContactRepository {
     
     fun getContacts(limit: Int): Flow<List<Contact>>
     
+    /**
+     * Get only CARER contacts (those that can be called by user)
+     * Ordered by buttonPosition for home screen display
+     */
+    fun getCarerContacts(limit: Int): Flow<List<Contact>>
+    
     fun getContactById(id: Long): Flow<Contact?>
     
     fun getContactByPhone(phoneNumber: String): Flow<Contact?>

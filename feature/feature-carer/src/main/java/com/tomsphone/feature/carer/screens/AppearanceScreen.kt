@@ -27,11 +27,11 @@ import com.tomsphone.feature.carer.components.*
  */
 @Composable
 fun AppearanceScreen(
-    featureLevel: FeatureLevel,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     
     Surface(
@@ -73,7 +73,7 @@ fun AppearanceScreen(
                     // User Text Size
                     SettingCard(title = "User Text Size") {
                         Text(
-                            text = "Controls text and button size on user screens (Home, Call). Carer screens stay at normal size.",
+                            text = "Text size adapts to screen and button count. Use Maximum for short names, reduce for longer names that need to wrap.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -94,24 +94,45 @@ fun AppearanceScreen(
                                 
                                 Spacer(modifier = Modifier.width(8.dp))
                                 
-                                Column {
-                                    Text(
-                                        text = textSize.displayName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.wandasColors.onSurface
-                                    )
-                                    Text(
-                                        text = "${(textSize.scale * 100).toInt()}% scale",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
-                                    )
-                                }
+                                Text(
+                                    text = textSize.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.wandasColors.onSurface
+                                )
                             }
                         }
                     }
                     
                     // Button Size - handled automatically by text size setting
                     // Container heights are calculated from text size
+                    
+                    // Screen Off Button (Level 2+)
+                    LevelGatedContent(
+                        minLevel = FeatureLevel.BASIC,
+                        currentLevel = featureLevel
+                    ) {
+                        SettingCard(title = "Screen Off Button") {
+                            Text(
+                                text = "Shows a button to turn off the screen. Useful for bedside use when the user can't find the power button. Any touch wakes the screen.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            
+                            SettingToggle(
+                                title = "Show Screen Off Button",
+                                description = "Appears below contact buttons",
+                                checked = settings.showDisplayOffButton,
+                                onCheckedChange = { enabled ->
+                                    viewModel.setShowDisplayOffButton(enabled)
+                                    saveToastState.show(
+                                        if (enabled) "Screen Off button enabled"
+                                        else "Screen Off button disabled"
+                                    )
+                                }
+                            )
+                        }
+                    }
                     
                     Spacer(modifier = Modifier.height(32.dp))
                 }

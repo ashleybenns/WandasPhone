@@ -36,12 +36,15 @@ data class CarerSettings(
     
     // ========== HOME SCREEN LAYOUT ==========
     // Each setting is discrete for individual remote sync and paywall gating
-    val homeMaxButtons: Int = 4,                    // 1-6 contact buttons on home screen
+    val homeMaxButtons: Int = 6,                    // 1-6 contact buttons on home screen
     val homeShowEmergencyButton: Boolean = true,    // SAFE: Emergency always visible
     val homeShowMissedCallsButton: Boolean = false, // Level 2+: Show missed calls list button
     val homeShowContactsListButton: Boolean = false,// Level 2+: Show contacts list button
     val homeMissedCallsButtonColor: Long? = null,   // ARGB, null = theme default
     val homeContactsListButtonColor: Long? = null,  // ARGB, null = theme default
+    // Actual number of contacts configured (updated when contacts change)
+    // Used for screen-first layout scaling
+    val homeContactCount: Int = 2,                  // Number of contact buttons on home screen
     
     // ========== CALL HANDLING ==========
     // SECURITY CRITICAL: Auto-answer MUST default to false
@@ -53,6 +56,10 @@ data class CarerSettings(
     // ACCESSIBILITY: Speakerphone on by default for ease of use
     val speakerphoneAlwaysOn: Boolean = true,
     val speakerVolume: Int = 80,  // 0-100 percent
+    // LEVEL 2: Speaker toggle button on call screens
+    // Allows user to switch speaker on/off during calls (double-tap to prevent accidents)
+    val showSpeakerButton: Boolean = false,  // Level 2+: Show speaker toggle button
+    val speakerDefaultOn: Boolean = true,    // Default speaker state at call start
     // SAFETY: Reject unknown calls by default (scam protection)
     val rejectUnknownCalls: Boolean = true,
     
@@ -70,6 +77,9 @@ data class CarerSettings(
     // ========== UI APPEARANCE ==========
     // Default: High contrast for accessibility
     val ui: UIConfig = UIConfig(),
+    // LEVEL 2: Display Off button - helps users who can't find power button
+    // Hidden during calls and missed call nag
+    val showDisplayOffButton: Boolean = false,
     
     // ========== AUDIO & TTS ==========
     // ACCESSIBILITY: TTS on by default for audio-first experience
@@ -186,7 +196,7 @@ data class UIConfig(
     // ===== USER TEXT SIZE =====
     // Controls text/button scaling on USER-facing screens (Home, Call screens)
     // Carer settings screens always use normal size for readability
-    val userTextSize: UserTextSize = UserTextSize.NORMAL,
+    val userTextSize: UserTextSize = UserTextSize.MAXIMUM,
     
     // ===== IN-CALL SCREEN =====
     val showCallDuration: Boolean = true,
@@ -279,19 +289,23 @@ enum class NagSound {
 /**
  * User-facing text size presets
  * 
- * Controls scaling of text AND containers on user screens.
+ * These are REDUCTION factors applied to the calculated optimal scale.
+ * The optimal scale is determined by screen height and number of buttons.
+ * 
+ * - 1.0 = Maximum (use full calculated scale for single-line names)
+ * - Lower values = smaller text (allows longer names or 2-line wrapping)
+ * 
  * Carer settings screens are NOT affected (always normal size).
  */
 enum class UserTextSize(
     val scale: Float,
     val displayName: String
 ) {
-    COMPACT(0.8f, "Compact (80%)"),        // For crowded screens with many buttons
-    SMALL(0.9f, "Small (90%)"),            // Slightly reduced
-    NORMAL(1.0f, "Normal (100%)"),         // Default - comfortable size
-    MEDIUM(1.05f, "Medium (105%)"),        // Slightly larger
-    LARGE(1.1f, "Large (110%)"),           // Max width for S22
-    EXTRA_LARGE(1.15f, "Extra Large (115%)")  // May overflow on smaller screens
+    COMPACT(0.75f, "Compact"),         // Much smaller - fits long 2-line names
+    SMALLER(0.85f, "Smaller"),         // Reduced - good for 2-line names
+    MEDIUM(0.92f, "Medium"),           // Slightly reduced
+    LARGE(0.96f, "Large"),             // Near maximum
+    MAXIMUM(1.0f, "Maximum")           // Full calculated scale - best for short names
 }
 
 /**
@@ -323,3 +337,34 @@ enum class MissedCallNagInterval(
         displayName = "Every 10 minutes"
     )
 }
+
+/**
+ * Calculate the number of button rows on home screen (excluding emergency button).
+ * 
+ * Used by adaptive scaling to calculate optimal text size.
+ * Emergency button is rendered separately and always present.
+ * 
+ * Includes:
+ * - Contact buttons (homeContactCount)
+ * - Display Off button (if enabled at Level 2+)
+ * - Menu buttons paired into rows (if enabled at Level 2+)
+ */
+val CarerSettings.homeButtonRowCount: Int
+    get() {
+        var rows = homeContactCount.coerceAtLeast(1)  // At least 1 contact row
+        
+        // Display Off button (Level 2+)
+        if (featureLevel.level >= 2 && showDisplayOffButton) {
+            rows += 1
+        }
+        
+        // Menu buttons (Level 2+) - paired into rows
+        if (featureLevel.level >= 2) {
+            var menuButtons = 0
+            if (homeShowMissedCallsButton) menuButtons++
+            if (homeShowContactsListButton) menuButtons++
+            rows += (menuButtons + 1) / 2  // Round up for pairing
+        }
+        
+        return rows
+    }

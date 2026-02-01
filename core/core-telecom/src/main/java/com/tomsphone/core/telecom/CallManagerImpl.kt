@@ -36,6 +36,36 @@ class CallManagerImpl @Inject constructor(
     private val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     
+    // Bridge to InCallService for audio controls
+    // InCallService registers itself when active, clears when destroyed
+    private var inCallServiceBridge: InCallServiceBridge? = null
+    
+    /**
+     * Interface for InCallService to implement for audio controls
+     */
+    interface InCallServiceBridge {
+        fun toggleSpeaker()
+        fun setSpeaker(enabled: Boolean)
+        fun toggleMute()
+        fun setMute(muted: Boolean)
+    }
+    
+    /**
+     * Called by InCallService when it becomes active
+     */
+    fun registerInCallService(bridge: InCallServiceBridge) {
+        Log.d(TAG, "InCallService registered")
+        inCallServiceBridge = bridge
+    }
+    
+    /**
+     * Called by InCallService when it's destroyed
+     */
+    fun unregisterInCallService() {
+        Log.d(TAG, "InCallService unregistered")
+        inCallServiceBridge = null
+    }
+    
     // SEPARATE FLOWS for clean UI handling:
     // - _incomingRingingCall: For incoming RINGING calls (IncomingCallScreen observes)
     // - _currentCall: For outgoing calls and ACTIVE incoming calls (HomeScreen observes)
@@ -171,23 +201,51 @@ class CallManagerImpl @Inject constructor(
     }
     
     override fun toggleSpeaker(): Result<Unit> {
-        // Implemented in InCallService
-        return Result.success(Unit)
+        return runCatching {
+            val bridge = inCallServiceBridge
+            if (bridge != null) {
+                bridge.toggleSpeaker()
+                Log.d(TAG, "toggleSpeaker called via bridge")
+            } else {
+                Log.w(TAG, "toggleSpeaker called but no InCallService active")
+            }
+        }
     }
     
     override fun setSpeaker(enabled: Boolean): Result<Unit> {
-        // Implemented in InCallService
-        return Result.success(Unit)
+        return runCatching {
+            val bridge = inCallServiceBridge
+            if (bridge != null) {
+                bridge.setSpeaker(enabled)
+                Log.d(TAG, "setSpeaker($enabled) called via bridge")
+            } else {
+                Log.w(TAG, "setSpeaker called but no InCallService active")
+            }
+        }
     }
     
     override fun toggleMute(): Result<Unit> {
-        // Implemented in InCallService
-        return Result.success(Unit)
+        return runCatching {
+            val bridge = inCallServiceBridge
+            if (bridge != null) {
+                bridge.toggleMute()
+                Log.d(TAG, "toggleMute called via bridge")
+            } else {
+                Log.w(TAG, "toggleMute called but no InCallService active")
+            }
+        }
     }
     
     override fun setMute(muted: Boolean): Result<Unit> {
-        // Implemented in InCallService
-        return Result.success(Unit)
+        return runCatching {
+            val bridge = inCallServiceBridge
+            if (bridge != null) {
+                bridge.setMute(muted)
+                Log.d(TAG, "setMute($muted) called via bridge")
+            } else {
+                Log.w(TAG, "setMute called but no InCallService active")
+            }
+        }
     }
     
     override fun setVolume(level: Int): Result<Unit> {

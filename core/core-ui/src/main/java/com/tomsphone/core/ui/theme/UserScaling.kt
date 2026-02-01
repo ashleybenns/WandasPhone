@@ -3,16 +3,22 @@ package com.tomsphone.core.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.min
 
 /**
  * User-facing screen scaling system
  * 
  * Scales text and container dimensions based on carer-configured text scale.
  * This is SEPARATE from Android's system font scaling.
+ * 
+ * IMPORTANT: Scale is automatically capped to ensure MIN_ROWS (6) always fit.
+ * This prevents larger text from pushing buttons off screen on shorter devices.
  * 
  * Usage:
  * 1. Wrap user-facing screens with UserScalingProvider
@@ -30,16 +36,113 @@ val LocalUserScale = compositionLocalOf { 1.0f }
 /**
  * Provider that sets up user scaling for a screen
  * 
- * @param scale The scaling factor (1.0 = normal, 1.25 = large, 1.5 = extra large, etc.)
+ * Calculates optimal scale based on:
+ * - Available screen height
+ * - Number of button rows to display
+ * - Status box and emergency button (always present)
+ * 
+ * Scale is capped to ensure 12 characters fit per line (readability).
+ * Carer can reduce from max via userScaleReduction (1.0 = max, 0.8 = 80% of max).
+ * 
+ * @param buttonRowCount Number of button rows (contact + menu + screen off)
+ * @param userScaleReduction Carer's reduction factor (1.0 = use max, lower = smaller text)
+ */
+@Composable
+fun UserScalingProvider(
+    buttonRowCount: Int,
+    userScaleReduction: Float = 1.0f,
+    content: @Composable () -> Unit
+) {
+    // Calculate optimal scale for this button count
+    val optimalScale = calculateOptimalScale(buttonRowCount)
+    
+    // Apply carer's reduction preference
+    val effectiveScale = optimalScale * userScaleReduction.coerceIn(0.5f, 1.0f)
+    
+    CompositionLocalProvider(LocalUserScale provides effectiveScale) {
+        content()
+    }
+}
+
+/**
+ * Legacy provider for screens that don't have button counts (call screens, etc.)
+ * Uses fixed scale with basic capping.
  */
 @Composable
 fun UserScalingProvider(
     scale: Float,
     content: @Composable () -> Unit
 ) {
-    CompositionLocalProvider(LocalUserScale provides scale) {
+    // For non-home screens, use a reasonable fixed scale
+    val cappedScale = scale.coerceIn(0.7f, 1.5f)
+    
+    CompositionLocalProvider(LocalUserScale provides cappedScale) {
         content()
     }
+}
+
+/**
+ * Calculate optimal scale based on screen height and button count
+ * 
+ * This is a SCREEN-FIRST approach:
+ * 1. Calculate available height after fixed elements
+ * 2. Divide by weighted line equivalents (accounting for different text sizes)
+ * 3. Convert to scale factor based on contact name text (32sp)
+ * 4. Cap at max for readability
+ * 
+ * Text sizes (base):
+ * - Status: 28sp (3 lines)
+ * - Contact name: 32sp (2 lines per button)
+ * - Emergency button: 24sp (2 lines)
+ */
+@Composable
+fun calculateOptimalScale(buttonRowCount: Int): Float {
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp.toFloat()
+    
+    // Fixed elements (dp) - these don't scale
+    val topGutterDp = 40f           // Warning strip area
+    val edgePaddingDp = 24f         // Top + bottom padding
+    val minRowSpacingDp = 4f * (buttonRowCount + 2)  // Spacing between all rows
+    
+    // Available for content (status + buttons + emergency)
+    val availableHeight = screenHeightDp - topGutterDp - edgePaddingDp - minRowSpacingDp
+    
+    // Weighted line equivalents - normalized to 32sp (contact name size)
+    // This correctly accounts for different text sizes
+    val statusWeight = 28f / 32f    // Status uses 28sp
+    val buttonWeight = 32f / 32f    // Contact name uses 32sp (reference)
+    val emergencyWeight = 24f / 32f // Emergency uses 24sp
+    
+    val statusLineEquiv = 3f * statusWeight      // 3 lines × 0.875 = 2.625
+    val buttonLineEquiv = 2f * buttonRowCount.coerceAtLeast(1) * buttonWeight  // 2 lines each
+    val emergencyLineEquiv = 2f * emergencyWeight // 2 lines × 0.75 = 1.5
+    
+    val totalLineEquivalents = statusLineEquiv + buttonLineEquiv + emergencyLineEquiv
+    
+    // Height per "32sp equivalent line" (in dp)
+    val heightPerLine = availableHeight / totalLineEquivalents
+    
+    // Convert to scale factor
+    // Base: 32sp text with minimal line spacing for single-line fit
+    // Using 1.1 instead of 1.3 allows larger text for single-line names
+    // Carer can reduce if they need 2-line names
+    val baseLineHeight = 32f * 1.1f
+    val calculatedScale = heightPerLine / baseLineHeight
+    
+    // Max scale based on button count (no artificial caps - let screen size decide)
+    // These are safety caps for very tall screens
+    val maxScale = when {
+        buttonRowCount >= 6 -> 1.5f   // 6+ buttons: reasonable single-line size
+        buttonRowCount >= 4 -> 2.0f   // 4-5 buttons: can go bigger
+        buttonRowCount >= 2 -> 2.8f   // 2-3 buttons: much bigger text possible
+        else -> 3.5f                  // 1 button: very large
+    }
+    
+    // Minimum for readability
+    val minScale = 0.7f
+    
+    return calculatedScale.coerceIn(minScale, maxScale)
 }
 
 /**
@@ -117,10 +220,15 @@ object ScaledDimensions {
         @Composable get() = heightForLines(2, BUTTON_TEXT_BASE_SP)
     
     /**
-     * End call button size - square, fits 2 lines
+     * End call button size - circular, needs extra width for short words like "End"
+     * Uses larger multiplier to ensure text fits horizontally in circle
      */
     val endCallButtonSize: Dp
-        @Composable get() = heightForLines(2, BUTTON_TEXT_BASE_SP)
+        @Composable get() {
+            val scale = LocalUserScale.current
+            // Base size 120dp, scales with user setting
+            return (120f * scale).dp
+        }
     
     /**
      * End call instruction height - fits 2 lines of instruction text

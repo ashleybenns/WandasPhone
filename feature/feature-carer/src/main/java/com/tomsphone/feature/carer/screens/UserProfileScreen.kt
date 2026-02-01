@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
@@ -34,12 +33,12 @@ import java.io.File
  */
 @Composable
 fun UserProfileScreen(
-    featureLevel: FeatureLevel,
     onNavigateToPhotoCapture: () -> Unit,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     val context = LocalContext.current
     

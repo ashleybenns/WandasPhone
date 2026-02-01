@@ -5,7 +5,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.feature.carer.screens.*
 
@@ -32,12 +31,12 @@ object CarerRoutes {
  * Carer settings navigation host.
  * 
  * All carer settings screens are nested here with proper back navigation.
+ * Each screen reads the feature level directly from the ViewModel for reactivity.
  */
 @Composable
 fun CarerNavigation(
     onExitCarerSettings: () -> Unit,
     onExitApp: () -> Unit,
-    featureLevel: FeatureLevel,
     navController: NavHostController = rememberNavController()
 ) {
     NavHost(
@@ -47,7 +46,6 @@ fun CarerNavigation(
         // Main Menu
         composable(CarerRoutes.MAIN_MENU) {
             CarerMainMenuScreen(
-                featureLevel = featureLevel,
                 onNavigateToUserProfile = { navController.navigate(CarerRoutes.USER_PROFILE) },
                 onNavigateToContacts = { navController.navigate(CarerRoutes.CONTACTS) },
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
@@ -63,7 +61,6 @@ fun CarerNavigation(
         // User Profile
         composable(CarerRoutes.USER_PROFILE) {
             UserProfileScreen(
-                featureLevel = featureLevel,
                 onNavigateToPhotoCapture = { navController.navigate(CarerRoutes.PHOTO_CAPTURE) },
                 onBack = { navController.popBackStack() }
             )
@@ -84,7 +81,6 @@ fun CarerNavigation(
         // Contacts List
         composable(CarerRoutes.CONTACTS) {
             ContactsScreen(
-                featureLevel = featureLevel,
                 onNavigateToContactEdit = { contactId, contactType -> 
                     navController.navigate(CarerRoutes.contactEdit(contactId, contactType))
                 },
@@ -104,7 +100,6 @@ fun CarerNavigation(
             ContactEditScreen(
                 contactId = contactId,
                 contactType = contactType,
-                featureLevel = featureLevel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -112,7 +107,6 @@ fun CarerNavigation(
         // Call Handling
         composable(CarerRoutes.CALL_HANDLING) {
             CallHandlingScreen(
-                featureLevel = featureLevel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -120,7 +114,6 @@ fun CarerNavigation(
         // Appearance
         composable(CarerRoutes.APPEARANCE) {
             AppearanceScreen(
-                featureLevel = featureLevel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -128,7 +121,6 @@ fun CarerNavigation(
         // Feature Level
         composable(CarerRoutes.FEATURE_LEVEL) {
             FeatureLevelScreen(
-                featureLevel = featureLevel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -136,7 +128,6 @@ fun CarerNavigation(
         // Always On Mode
         composable(CarerRoutes.ALWAYS_ON) {
             AlwaysOnScreen(
-                featureLevel = featureLevel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -144,7 +135,6 @@ fun CarerNavigation(
         // Factory Reset
         composable(CarerRoutes.FACTORY_RESET) {
             FactoryResetScreen(
-                featureLevel = featureLevel,
                 onBack = { navController.popBackStack() }
             )
         }

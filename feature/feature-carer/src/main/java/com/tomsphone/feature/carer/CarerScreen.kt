@@ -44,8 +44,7 @@ fun CarerScreen(
     if (isPinVerified) {
         CarerNavigation(
             onExitCarerSettings = onNavigateBack,
-            onExitApp = onExitApp,
-            featureLevel = settings.featureLevel
+            onExitApp = onExitApp
         )
     }
 }

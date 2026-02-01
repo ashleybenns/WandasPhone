@@ -28,11 +28,11 @@ import com.tomsphone.feature.carer.components.*
  */
 @Composable
 fun FeatureLevelScreen(
-    featureLevel: FeatureLevel,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
+    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     
     Surface(
@@ -203,7 +203,7 @@ private fun getLevelInfo(level: FeatureLevel): Triple<String, String, List<Strin
             "Simple",
             "The clearest possible interface. Perfect for users who need one-touch simplicity with no choices to make.",
             listOf(
-                "Up to 3 large contact buttons",
+                "Up to 4 large contact buttons",
                 "Emergency button",
                 "Always-on speakerphone",
                 "Missed call reminders for carers"
@@ -213,9 +213,8 @@ private fun getLevelInfo(level: FeatureLevel): Triple<String, String, List<Strin
             "Comfortable",
             "A few more options for users who are comfortable making simple choices.",
             listOf(
-                "Up to 4 contact buttons",
+                "Up to 5 contact buttons + Screen Off",
                 "Speaker toggle during calls",
-                "Missed calls list",
                 "Appearance options"
             )
         )

@@ -97,7 +97,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setTheme(theme: ThemeOption) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(
                 current.copy(ui = current.ui.copy(theme = theme))
             )
@@ -109,10 +109,18 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserTextSize(textSize: com.tomsphone.core.config.UserTextSize) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(
                 current.copy(ui = current.ui.copy(userTextSize = textSize))
             )
+        }
+    }
+    
+    fun setShowDisplayOffButton(enabled: Boolean) {
+        viewModelScope.launch {
+            // Read fresh from repository to avoid race conditions with other updates
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(showDisplayOffButton = enabled))
         }
     }
     
@@ -121,7 +129,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserName(name: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userName = name))
         }
     }
@@ -131,7 +139,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setAutoAnswer(enabled: Boolean, delaySeconds: Int = 3) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(
                 current.copy(
                     autoAnswerEnabled = enabled,
@@ -179,7 +187,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setPinnedMode(enabled: Boolean) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(pinnedModeEnabled = enabled))
         }
     }
@@ -189,7 +197,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setScreenAlwaysOn(enabled: Boolean) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(screenAlwaysOn = enabled))
         }
     }
@@ -199,7 +207,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setLockVolumeButtons(enabled: Boolean) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(lockVolumeButtons = enabled))
         }
     }
@@ -211,7 +219,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setRejectUnknownCalls(enabled: Boolean) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(rejectUnknownCalls = enabled))
         }
     }
@@ -221,8 +229,22 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setSpeakerphoneAlwaysOn(enabled: Boolean) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(speakerphoneAlwaysOn = enabled))
+        }
+    }
+    
+    fun setShowSpeakerButton(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(showSpeakerButton = enabled))
+        }
+    }
+    
+    fun setSpeakerDefaultOn(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(speakerDefaultOn = enabled))
         }
     }
     
@@ -231,7 +253,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setMissedCallNagEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(missedCallNagEnabled = enabled))
         }
     }
@@ -241,7 +263,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setMissedCallNagInterval(interval: com.tomsphone.core.config.MissedCallNagInterval) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(missedCallNagInterval = interval))
         }
     }
@@ -253,7 +275,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setEmergencyNumber(number: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(emergencyNumber = number))
         }
     }
@@ -263,7 +285,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setEmergencyTestMode(enabled: Boolean) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(emergencyTestMode = enabled))
         }
     }
@@ -273,7 +295,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserAddress(address: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userAddress = address))
         }
     }
@@ -283,7 +305,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserBloodType(bloodType: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userBloodType = bloodType))
         }
     }
@@ -293,7 +315,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserAllergies(allergies: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userAllergies = allergies))
         }
     }
@@ -303,7 +325,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserMedications(medications: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userMedications = medications))
         }
     }
@@ -313,7 +335,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserMedicalConditions(conditions: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userMedicalConditions = conditions))
         }
     }
@@ -323,7 +345,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserEmergencyNotes(notes: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userEmergencyNotes = notes))
         }
     }
@@ -333,7 +355,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserSurname(surname: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userSurname = surname))
         }
     }
@@ -343,7 +365,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setEmergencyContact1Name(name: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(emergencyContact1Name = name))
         }
     }
@@ -353,7 +375,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setEmergencyContact1Phone(phone: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(emergencyContact1Phone = phone))
         }
     }
@@ -363,7 +385,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setEmergencyContact2Name(name: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(emergencyContact2Name = name))
         }
     }
@@ -373,7 +395,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setEmergencyContact2Phone(phone: String) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(emergencyContact2Phone = phone))
         }
     }
@@ -383,7 +405,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setUserPhotoUri(uri: String?) {
         viewModelScope.launch {
-            val current = settings.first()
+            val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(userPhotoUri = uri))
         }
     }

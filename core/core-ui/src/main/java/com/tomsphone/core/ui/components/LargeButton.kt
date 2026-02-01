@@ -10,15 +10,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -309,6 +314,58 @@ fun EndCallButton(
                 text = "End",
                 style = WandasTextStyles.ButtonMedium,
                 color = Color.White,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/**
+ * Screen Off button - turns screen off, any touch wakes it
+ * Level 2+ feature for users who can't find the power button
+ * 
+ * Design: Outlined button with text inside, sized to text width
+ * - Visually distinct from filled circular call buttons
+ * - Smaller/less prominent to reduce accidental taps
+ * - No icon, text-only for readability
+ * 
+ * LAYOUT: Fills parent container height (use weight(1f) on parent for equal distribution)
+ * Hidden during calls and missed call nag
+ */
+@Composable
+fun DisplayOffButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val textSize = ScaledDimensions.buttonTextSize
+    val borderColor = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f)
+    
+    // Container fills parent, centers the outlined button
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .fillMaxHeight(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Outlined button - sized to text width, proportional height
+        OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier
+                .wrapContentWidth()
+                .fillMaxHeight(0.6f),  // Take 60% of row height for proportional look
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(2.dp, borderColor),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.wandasColors.onBackground
+            ),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = "Screen Off",
+                style = TextStyle(
+                    fontSize = textSize,
+                    fontWeight = FontWeight.Medium
+                ),
                 textAlign = TextAlign.Center
             )
         }
