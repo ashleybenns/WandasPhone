@@ -82,8 +82,9 @@ data class CarerSettings(
     val showDisplayOffButton: Boolean = false,
     
     // ========== AUDIO & TTS ==========
-    // ACCESSIBILITY: TTS on by default for audio-first experience
-    val ttsEnabled: Boolean = true,
+    // TTS announcements: greeting, calling, call connected/ended, speaker, mute, battery
+    // Separate from missed call nag (which has its own settings) and ringtones
+    val ttsAnnouncementsEnabled: Boolean = true,
     val ttsSpeed: Float = 1.0f,  // 0.5 - 2.0
     val ttsVolume: Int = 100,    // Full volume for hearing
     val ringtone: RingtoneOption = RingtoneOption.OLD_TWOBELL,

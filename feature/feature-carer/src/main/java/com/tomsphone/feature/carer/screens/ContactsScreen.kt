@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -103,10 +105,17 @@ fun ContactsScreen(
                 }
                 
                 val carers = contacts.filter { it.contactType == ContactType.CARER }
+                    .sortedBy { it.buttonPosition }
                 items(carers, key = { it.id }) { contact ->
+                    val index = carers.indexOf(contact)
                     ContactListItem(
                         contact = contact,
-                        onClick = { onNavigateToContactEdit(contact.id, contact.contactType) }
+                        onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
+                        showReorderButtons = true,
+                        isFirst = index == 0,
+                        isLast = index == carers.size - 1,
+                        onMoveUp = { viewModel.moveContactUp(contact, carers) },
+                        onMoveDown = { viewModel.moveContactDown(contact, carers) }
                     )
                 }
                 
@@ -183,7 +192,12 @@ fun ContactsScreen(
 @Composable
 private fun ContactListItem(
     contact: Contact,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    showReorderButtons: Boolean = false,
+    isFirst: Boolean = false,
+    isLast: Boolean = false,
+    onMoveUp: () -> Unit = {},
+    onMoveDown: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -198,6 +212,43 @@ private fun ContactListItem(
                 .padding(WandasDimensions.SpacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Reorder buttons (left side)
+            if (showReorderButtons) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    IconButton(
+                        onClick = onMoveUp,
+                        enabled = !isFirst,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Move up",
+                            tint = if (isFirst) 
+                                MaterialTheme.wandasColors.onSurface.copy(alpha = 0.2f)
+                            else 
+                                MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    IconButton(
+                        onClick = onMoveDown,
+                        enabled = !isLast,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Move down",
+                            tint = if (isLast) 
+                                MaterialTheme.wandasColors.onSurface.copy(alpha = 0.2f)
+                            else 
+                                MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+            
             // Avatar placeholder
             Surface(
                 modifier = Modifier.size(48.dp),

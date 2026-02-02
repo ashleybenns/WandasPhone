@@ -201,41 +201,46 @@ private fun getLevelInfo(level: FeatureLevel): Triple<String, String, List<Strin
     return when (level) {
         FeatureLevel.MINIMAL -> Triple(
             "Simple",
-            "The clearest possible interface. Perfect for users who need one-touch simplicity with no choices to make.",
+            "The clearest possible interface. One-touch calling with no choices to make.",
             listOf(
-                "Up to 4 large contact buttons",
-                "Emergency button",
+                "Up to 4 carer contact buttons",
+                "Emergency button (always visible)",
                 "Always-on speakerphone",
-                "Missed call reminders for carers"
+                "Missed call reminders",
+                "Voice announcements (optional)",
+                "Drag-to-reorder contacts"
             )
         )
         FeatureLevel.BASIC -> Triple(
             "Comfortable",
-            "A few more options for users who are comfortable making simple choices.",
+            "Two-touch navigation for users comfortable with simple list screens.",
             listOf(
-                "Up to 5 contact buttons + Screen Off",
+                "Up to 5 carer contact buttons",
+                "Missed Calls list button",
+                "Contacts list button",
+                "Screen Off button",
                 "Speaker toggle during calls",
                 "Appearance options"
             )
         )
         FeatureLevel.STANDARD -> Triple(
             "Capable",
-            "List navigation for users who can browse and select from multiple options.",
+            "Menu navigation for users who can browse multiple options.",
             listOf(
-                "Up to 12 contacts with scrolling",
+                "Up to 5 carer contacts",
+                "Menu buttons (coming soon)",
                 "Contact photos",
-                "Call history",
-                "Basic text notifications"
+                "Additional customization"
             )
         )
         FeatureLevel.EXTENDED -> Triple(
             "Independent",
-            "Full phone functionality for users who just need larger buttons and clearer design.",
+            "Full functionality for users who need larger buttons and clearer design.",
             listOf(
-                "Unlimited contacts",
-                "Text input",
-                "Voicemail access",
-                "Full notification support"
+                "Up to 6 carer contacts",
+                "All buttons and features",
+                "Full customization",
+                "Future: voicemail, notifications"
             )
         )
     }

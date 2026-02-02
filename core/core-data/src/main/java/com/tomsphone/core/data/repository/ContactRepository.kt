@@ -33,5 +33,11 @@ interface ContactRepository {
     suspend fun setPrimaryContact(id: Long): Result<Unit>
     
     suspend fun getContactCount(): Int
+    
+    /**
+     * Update button positions for a list of contacts
+     * Used for drag-to-reorder functionality
+     */
+    suspend fun updateButtonPositions(contactPositions: List<Pair<Long, Int>>): Result<Unit>
 }
 

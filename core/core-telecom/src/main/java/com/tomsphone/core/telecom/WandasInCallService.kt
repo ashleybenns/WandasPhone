@@ -65,6 +65,19 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     private var isRegisteredWithCallManager = false
     private var currentContactName: String? = null  // Preserve contact name across state updates
     
+    /**
+     * Speak TTS if announcements are enabled.
+     * Checks setting synchronously - may block briefly on first call.
+     */
+    private fun speakIfEnabled(message: String) {
+        serviceScope.launch {
+            val settings = settingsRepository.getSettings().first()
+            if (settings.ttsAnnouncementsEnabled) {
+                tts.speak(message)
+            }
+        }
+    }
+    
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             super.onStateChanged(call, state)
@@ -193,7 +206,7 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         // Handle call end based on type
         if (wasCallActive) {
             // Call was connected - announce "call ended"
-            tts.speak(TTSScripts.callEnded())
+            speakIfEnabled(TTSScripts.callEnded())
         } else if (wasIncomingCall && lastIncomingPhoneNumber != null) {
             // Incoming call was NOT answered → trigger missed call nag
             Log.d(TAG, "Unanswered incoming call from ${lastIncomingContactName ?: lastIncomingPhoneNumber} - triggering nag")
@@ -372,12 +385,11 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         }
         
         // When call becomes active, ensure speaker is set correctly
+        // No "answered" announcement needed - carer is talking or voicemail is playing
         if (wandasState == CallState.ACTIVE) {
             wasCallActive = true
             serviceScope.launch {
                 enableSpeakerBasedOnSettings()
-                val contactName = findContactByPhone(phoneNumber)
-                tts.speak(TTSScripts.callConnected(contactName ?: phoneNumber))
             }
         }
     }
@@ -475,10 +487,10 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                 Log.d(TAG, "Speakerphone set to: $enabled")
                 updateCallInfo()
                 
-                // Announce change (only if user toggled it at Level 2+)
+                // Announce change (only if user toggled it at Level 2+ and TTS enabled)
                 serviceScope.launch {
                     val settings = settingsRepository.getSettings().first()
-                    if (settings.featureLevel != FeatureLevel.MINIMAL) {
+                    if (settings.featureLevel != FeatureLevel.MINIMAL && settings.ttsAnnouncementsEnabled) {
                         if (enabled) {
                             tts.speak(TTSScripts.speakerOn())
                         } else {
@@ -504,11 +516,8 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
             Log.d(TAG, "Mute set to: $muted")
             updateCallInfo()
             
-            if (muted) {
-                tts.speak(TTSScripts.muted())
-            } else {
-                tts.speak(TTSScripts.unmuted())
-            }
+            // Announce mute state if TTS enabled
+            speakIfEnabled(if (muted) TTSScripts.muted() else TTSScripts.unmuted())
         } catch (e: Exception) {
             Log.e(TAG, "Error setting mute: ${e.message}")
         }

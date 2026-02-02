@@ -16,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import com.tomsphone.core.ui.theme.UserScalingProvider
@@ -42,6 +43,12 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+// #region agent log helper
+private fun debugLog(location: String, hypothesisId: String, message: String, data: Map<String, Any?> = emptyMap()) {
+    Log.d("DEBUG_NAV", "[$hypothesisId] $location: $message | $data")
+}
+// #endregion
 
 /**
  * Main Activity - single-activity architecture
@@ -363,6 +370,9 @@ fun WandasPhoneApp(
             // These scale text/buttons based on carer-configured userTextSize
             
             composable("home") {
+                // #region agent log
+                LaunchedEffect(Unit) { debugLog("MainActivity.kt:378", "H2", "home composable entered", mapOf("settingsNull" to (settings == null))) }
+                // #endregion
                 // Calculate button row count from actual settings
                 // This uses feature level max + display off + menu buttons
                 val currentSettings = settings
@@ -392,9 +402,57 @@ fun WandasPhoneApp(
                         onNavigateToEmergencyConfirm = {
                             navController.navigate("emergencyConfirm")
                         },
+                        onNavigateToMissedCalls = {
+                            navController.navigate("missedCalls")
+                        },
+                        onNavigateToContactsList = {
+                            navController.navigate("contactsList")
+                        },
                         batteryLevel = batteryLevel,
                         isLowBattery = isLowBattery,
                         isCharging = isCharging
+                    )
+                }
+            }
+            
+            // Missed Calls List (Level 2+)
+            composable("missedCalls") {
+                // #region agent log
+                LaunchedEffect(Unit) { debugLog("MainActivity.kt:410", "H1", "missedCalls composable entered", mapOf("backStackSize" to navController.currentBackStack.value.size)) }
+                // #endregion
+                val scope = rememberCoroutineScope()
+                UserScalingProvider(scale = userTextScale) {
+                    com.tomsphone.feature.home.MissedCallsListScreen(
+                        onBack = {
+                            // #region agent log
+                            debugLog("MainActivity.kt:414", "H1", "missedCalls onBack called", mapOf("canPopBack" to navController.previousBackStackEntry?.destination?.route))
+                            // #endregion
+                            navController.popBackStack()
+                        },
+                        onCallContact = { name, phoneNumber ->
+                            // Navigate back to home and place call
+                            navController.popBackStack()
+                            scope.launch {
+                                callManager.placeCall(phoneNumber)
+                            }
+                        }
+                    )
+                }
+            }
+            
+            // Contacts List (Level 2+)
+            composable("contactsList") {
+                val scope = rememberCoroutineScope()
+                UserScalingProvider(scale = userTextScale) {
+                    com.tomsphone.feature.home.ContactsListScreen(
+                        onBack = { navController.popBackStack() },
+                        onCallContact = { name, phoneNumber ->
+                            // Navigate back to home and place call
+                            navController.popBackStack()
+                            scope.launch {
+                                callManager.placeCall(phoneNumber)
+                            }
+                        }
                     )
                 }
             }

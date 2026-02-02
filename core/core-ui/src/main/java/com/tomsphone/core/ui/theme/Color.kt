@@ -189,6 +189,47 @@ val YellowBlackColors = WandasColorScheme(
     onMissedCall = Color.Black
 )
 
+/**
+ * Pastel color palette for accessibility
+ * 
+ * Light, readable colors with black text for users who find
+ * bold colors too harsh. Can be used for:
+ * - List buttons (Missed Calls, Contacts)
+ * - Future: Pastel mode for call buttons
+ */
+object PastelColors {
+    // Blues
+    val lightBlue = Color(0xFFE3F2FD)      // Very light blue - good for "Missed Calls"
+    val skyBlue = Color(0xFFBBDEFB)        // Slightly stronger blue
+    
+    // Yellows
+    val lightYellow = Color(0xFFFFF9C4)    // Very light yellow - good for "Contacts"
+    val cream = Color(0xFFFFF8E1)          // Warm cream
+    
+    // Greens
+    val lightGreen = Color(0xFFE8F5E9)     // Very light green
+    val mint = Color(0xFFC8E6C9)           // Mint green
+    
+    // Pinks/Reds
+    val lightPink = Color(0xFFFCE4EC)      // Very light pink
+    val blush = Color(0xFFF8BBD9)          // Soft pink
+    
+    // Purples
+    val lavender = Color(0xFFF3E5F5)       // Light lavender
+    val lilac = Color(0xFFE1BEE7)          // Soft lilac
+    
+    // Oranges
+    val peach = Color(0xFFFFF3E0)          // Light peach
+    val apricot = Color(0xFFFFE0B2)        // Soft apricot
+    
+    // Grays
+    val lightGray = Color(0xFFF5F5F5)      // Very light gray
+    val silver = Color(0xFFEEEEEE)         // Silver
+    
+    // Text color for pastel backgrounds (always black for readability)
+    val onPastel = Color.Black
+}
+
 /** Theme 4: Soft High Contrast (Reduced Glare) */
 val SoftContrastColors = WandasColorScheme(
     background = Color(0xFFFFF8E1),         // Cream

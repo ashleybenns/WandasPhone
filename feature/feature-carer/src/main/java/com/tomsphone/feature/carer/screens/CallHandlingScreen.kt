@@ -87,6 +87,29 @@ fun CallHandlingScreen(
                         
                     }
                     
+                    // Voice Announcements (Level 1)
+                    SettingCard(title = "Voice Announcements") {
+                        Text(
+                            text = "Spoken feedback for actions like calling, speaker toggle, and battery alerts. Separate from ringtone and missed call reminders.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        SettingToggle(
+                            title = "Enable Announcements",
+                            description = "Greeting, calling, call ended, speaker, mute, battery",
+                            checked = settings.ttsAnnouncementsEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setTtsAnnouncementsEnabled(enabled)
+                                saveToastState.show(
+                                    if (enabled) "Voice announcements enabled"
+                                    else "Voice announcements disabled"
+                                )
+                            }
+                        )
+                    }
+                    
                     // Speaker Toggle Button - Level 2+ only
                     LevelGatedContent(
                         minLevel = FeatureLevel.BASIC,

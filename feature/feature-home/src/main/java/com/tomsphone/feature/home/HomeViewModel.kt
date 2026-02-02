@@ -70,6 +70,15 @@ class HomeViewModel @Inject constructor(
             initialValue = 2
         )
     
+    // TTS announcements enabled (separate from missed call nag)
+    private val ttsAnnouncementsEnabled: StateFlow<Boolean> = settingsRepository.getSettings()
+        .map { it.ttsAnnouncementsEnabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+    
     // Contacts to display (only CARER contacts that can be called)
     val contacts: StateFlow<List<Contact>> = maxContacts
         .flatMapLatest { max ->
@@ -137,12 +146,12 @@ class HomeViewModel @Inject constructor(
         val buttons = mutableListOf<HomeButtonConfig>()
         
         // 1. Contact buttons - only CARER contacts that can call out
-        // Use feature level max directly (homeMaxButtons is deprecated)
+        // Level determines max contacts (list buttons take remaining space)
         val maxByLevel = when (settings.featureLevel) {
-            FeatureLevel.MINIMAL -> 4
-            FeatureLevel.BASIC -> 5  // 5 contacts + Display Off = 6 rows
-            FeatureLevel.STANDARD -> 12
-            FeatureLevel.EXTENDED -> Int.MAX_VALUE
+            FeatureLevel.MINIMAL -> 4  // L1: 4 carers only
+            FeatureLevel.BASIC -> 5    // L2: 5 carers + list buttons + Screen Off
+            FeatureLevel.STANDARD -> 5 // L3: Same carers + menu buttons
+            FeatureLevel.EXTENDED -> 6 // L4: Full 6 carers + all buttons
         }
         val callableContacts = contacts
             .filter { it.canCallOut }
@@ -162,7 +171,7 @@ class HomeViewModel @Inject constructor(
             )
         }
         
-        // 2. Menu buttons (Level 2+)
+        // 2. List buttons (Level 2+) - full-width, below carers
         if (settings.featureLevel.level >= 2) {
             if (settings.homeShowMissedCallsButton) {
                 buttons.add(
@@ -170,7 +179,7 @@ class HomeViewModel @Inject constructor(
                         id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
                         label = "Missed Calls",
                         color = settings.homeMissedCallsButtonColor,
-                        isHalfWidth = true  // Menu buttons are typically half-width
+                        isHalfWidth = false  // List buttons are full-width
                     )
                 )
             }
@@ -181,7 +190,7 @@ class HomeViewModel @Inject constructor(
                         id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
                         label = "Contacts",
                         color = settings.homeContactsListButtonColor,
-                        isHalfWidth = true
+                        isHalfWidth = false  // List buttons are full-width
                     )
                 )
             }
@@ -258,6 +267,13 @@ class HomeViewModel @Inject constructor(
     private val _showEmergencyConfirm = MutableStateFlow(false)
     val showEmergencyConfirm: StateFlow<Boolean> = _showEmergencyConfirm.asStateFlow()
     
+    // List screen navigation (Level 2+)
+    private val _showMissedCallsList = MutableStateFlow(false)
+    val showMissedCallsList: StateFlow<Boolean> = _showMissedCallsList.asStateFlow()
+    
+    private val _showContactsList = MutableStateFlow(false)
+    val showContactsList: StateFlow<Boolean> = _showContactsList.asStateFlow()
+    
     // Emergency settings for the confirm/call screens
     val emergencyNumber: StateFlow<String> = settingsRepository.getSettings()
         .map { it.emergencyNumber }
@@ -268,10 +284,12 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
     init {
-        // Announce greeting on app start
+        // Announce greeting on app start (if TTS enabled)
         viewModelScope.launch {
-            userName.first().let { name ->
-                tts.speak(TTSScripts.greeting(name))
+            if (ttsAnnouncementsEnabled.value) {
+                userName.first().let { name ->
+                    tts.speak(TTSScripts.greeting(name))
+                }
             }
         }
         
@@ -362,13 +380,16 @@ class HomeViewModel @Inject constructor(
         missedCallNagManager.onCallStarted()
         
         viewModelScope.launch {
-            // Use speakNow to interrupt any ongoing TTS
-            tts.speakNow(TTSScripts.calling(contact.name))
+            // Announce "Calling [name]" and wait for it to complete before placing call
+            // This prevents the call audio from interrupting the announcement
+            if (ttsAnnouncementsEnabled.value) {
+                tts.speakAndWait(TTSScripts.calling(contact.name))
+            } else {
+                // If TTS disabled, still show animation briefly
+                delay(500)
+            }
             
-            // Show the calling animation for 1 second
-            delay(1000)
-            
-            Log.d(TAG, "Animation complete, placing call")
+            Log.d(TAG, "Announcement complete, placing call")
             
             // Place the call - MainActivity will handle navigation
             val result = callManager.placeCall(contact.phoneNumber)
@@ -378,7 +399,9 @@ class HomeViewModel @Inject constructor(
                 _callingContact.value = null
                 setTemporaryCallingStatus("Couldn't place call")
                 missedCallNagManager.onCallEnded()  // Allow nag to resume
-                tts.speakNow("Sorry, I couldn't place that call.")
+                if (ttsAnnouncementsEnabled.value) {
+                    tts.speakNow("Sorry, I couldn't place that call.")
+                }
             }
             // On success, the call state collector clears _callingContact
             // and MainActivity navigates to EndOutgoingCallScreen
@@ -420,17 +443,22 @@ class HomeViewModel @Inject constructor(
     fun onMenuButtonTap(button: HomeButtonConfig.MenuButton) {
         Log.d(TAG, "onMenuButtonTap: ${button.id}")
         
-        // TODO: Navigate to appropriate list screen
         when (button.id) {
             HomeButtonConfig.MenuButton.ID_MISSED_CALLS -> {
-                // Navigate to missed calls list
-                Log.d(TAG, "TODO: Navigate to missed calls list")
+                _showMissedCallsList.value = true
             }
             HomeButtonConfig.MenuButton.ID_CONTACTS_LIST -> {
-                // Navigate to contacts list
-                Log.d(TAG, "TODO: Navigate to contacts list")
+                _showContactsList.value = true
             }
         }
+    }
+    
+    fun dismissMissedCallsList() {
+        _showMissedCallsList.value = false
+    }
+    
+    fun dismissContactsList() {
+        _showContactsList.value = false
     }
     
     /**

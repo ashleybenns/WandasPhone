@@ -107,21 +107,48 @@ fun AppearanceScreen(
                     // Container heights are calculated from text size
                     
                     // Screen Off Button (Level 2+)
+                    // List Buttons (Level 2+)
                     LevelGatedContent(
                         minLevel = FeatureLevel.BASIC,
                         currentLevel = featureLevel
                     ) {
-                        SettingCard(title = "Screen Off Button") {
+                        SettingCard(title = "Home Screen Buttons") {
                             Text(
-                                text = "Shows a button to turn off the screen. Useful for bedside use when the user can't find the power button. Any touch wakes the screen.",
+                                text = "Add buttons for quick access to lists. Each button uses one row on the home screen.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                             
                             SettingToggle(
-                                title = "Show Screen Off Button",
-                                description = "Appears below contact buttons",
+                                title = "Missed Calls Button",
+                                description = "Shows list of missed calls to return",
+                                checked = settings.homeShowMissedCallsButton,
+                                onCheckedChange = { enabled ->
+                                    viewModel.setShowMissedCallsButton(enabled)
+                                    saveToastState.show(
+                                        if (enabled) "Missed Calls button enabled"
+                                        else "Missed Calls button disabled"
+                                    )
+                                }
+                            )
+                            
+                            SettingToggle(
+                                title = "Contacts Button",
+                                description = "Shows list of all carers to call",
+                                checked = settings.homeShowContactsListButton,
+                                onCheckedChange = { enabled ->
+                                    viewModel.setShowContactsListButton(enabled)
+                                    saveToastState.show(
+                                        if (enabled) "Contacts button enabled"
+                                        else "Contacts button disabled"
+                                    )
+                                }
+                            )
+                            
+                            SettingToggle(
+                                title = "Screen Off Button",
+                                description = "Turn off display, any touch wakes",
                                 checked = settings.showDisplayOffButton,
                                 onCheckedChange = { enabled ->
                                     viewModel.setShowDisplayOffButton(enabled)

@@ -89,5 +89,13 @@ class LocalContactRepository @Inject constructor(
     override suspend fun getContactCount(): Int {
         return contactDao.getContactCount()
     }
+    
+    override suspend fun updateButtonPositions(contactPositions: List<Pair<Long, Int>>): Result<Unit> {
+        return runCatching {
+            contactPositions.forEach { (contactId, position) ->
+                contactDao.updateButtonPosition(contactId, position)
+            }
+        }
+    }
 }
 

@@ -26,10 +26,17 @@ import com.tomsphone.core.ui.components.DisplayOffButton
 import com.tomsphone.core.ui.components.EmergencyButton
 import com.tomsphone.core.ui.components.HalfWidthButtonRow
 import com.tomsphone.core.ui.components.InertBorderLayout
+import com.tomsphone.core.ui.components.ListButton
 import com.tomsphone.core.ui.components.StatusMessageBox
+import com.tomsphone.core.ui.theme.PastelColors
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
+// #region agent log helper
+private fun debugLog(location: String, hypothesisId: String, message: String, data: Map<String, Any?> = emptyMap()) {
+    Log.d("DEBUG_NAV", "[$hypothesisId] $location: $message | $data")
+}
+// #endregion
 
 /**
  * Home Screen - Data-driven button rendering
@@ -49,6 +56,8 @@ import com.tomsphone.core.ui.theme.wandasColors
 fun HomeScreen(
     onNavigateToCarer: () -> Unit,
     onNavigateToEmergencyConfirm: () -> Unit,
+    onNavigateToMissedCalls: () -> Unit = {},
+    onNavigateToContactsList: () -> Unit = {},
     batteryLevel: Int = 100,
     isLowBattery: Boolean = false,
     isCharging: Boolean = false,
@@ -58,6 +67,15 @@ fun HomeScreen(
     val homeButtons by viewModel.homeButtons.collectAsState()
     val showCarerAccess by viewModel.showCarerAccess.collectAsState()
     val showEmergencyConfirm by viewModel.showEmergencyConfirm.collectAsState()
+    val showMissedCallsList by viewModel.showMissedCallsList.collectAsState()
+    val showContactsList by viewModel.showContactsList.collectAsState()
+    
+    // #region agent log
+    LaunchedEffect(Unit) { debugLog("HomeScreen.kt:72", "H2", "HomeScreen composed", mapOf("buttonCount" to homeButtons.size)) }
+    DisposableEffect(Unit) {
+        onDispose { debugLog("HomeScreen.kt:74", "H3", "HomeScreen disposed", emptyMap()) }
+    }
+    // #endregion
     val callingContact by viewModel.callingContact.collectAsState()
     val emergencyTestMode by viewModel.emergencyTestMode.collectAsState()
     val unknownCallsAllowed by viewModel.unknownCallsAllowed.collectAsState()
@@ -210,7 +228,9 @@ fun HomeScreen(
                     val fullWidthContacts = contactButtons.filter { !it.isHalfWidth }
                     val halfWidthContacts = contactButtons.filter { it.isHalfWidth }
                     val halfWidthContactRows = (halfWidthContacts.size + 1) / 2
-                    val menuButtonRows = (menuButtons.size + 1) / 2
+                    val fullWidthMenus = menuButtons.filter { !it.isHalfWidth }
+                    val halfWidthMenus = menuButtons.filter { it.isHalfWidth }
+                    val menuButtonRows = fullWidthMenus.size + (halfWidthMenus.size + 1) / 2
                     val displayOffRows = if (displayOffButtonEnabled) 1 else 0
                     val totalRows = fullWidthContacts.size + halfWidthContactRows + menuButtonRows + displayOffRows
                     
@@ -264,8 +284,25 @@ fun HomeScreen(
                                 }
                             }
                             
-                            // Menu button rows (preserve structure)
-                            menuButtons.chunked(2).forEach { _ ->
+                            // Menu button rows (preserve structure for layout consistency)
+                            // Full-width menu buttons - each needs a row
+                            val callingFullWidthMenus = menuButtons.filter { !it.isHalfWidth }
+                            val callingHalfWidthMenus = menuButtons.filter { it.isHalfWidth }
+                            
+                            callingFullWidthMenus.forEach { _ ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Empty - menu buttons hidden during call
+                                }
+                            }
+                            
+                            // Half-width menu buttons - paired rows
+                            callingHalfWidthMenus.chunked(2).forEach { _ ->
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -344,8 +381,12 @@ fun HomeScreen(
                                 }
                             }
                             
-                            // Menu buttons (Level 2+) - each row gets equal weight
-                            menuButtons.chunked(2).forEach { pair ->
+                            // Menu buttons (Level 2+) - separate full-width and half-width
+                            val fullWidthMenuButtons = menuButtons.filter { !it.isHalfWidth }
+                            val halfWidthMenuButtons = menuButtons.filter { it.isHalfWidth }
+                            
+                            // Full-width menu buttons - each gets its own row
+                            fullWidthMenuButtons.forEach { button ->
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -353,7 +394,24 @@ fun HomeScreen(
                                         .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (pair.size == 2 && pair[0].isHalfWidth && pair[1].isHalfWidth) {
+                                    RenderMenuButton(
+                                        button = button,
+                                        onClick = { viewModel.onMenuButtonTap(button) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                            
+                            // Half-width menu buttons - paired in rows
+                            halfWidthMenuButtons.chunked(2).forEach { pair ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (pair.size == 2) {
                                         HalfWidthButtonRow(
                                             leftButton = { modifier ->
                                                 RenderMenuButton(
@@ -371,15 +429,11 @@ fun HomeScreen(
                                             }
                                         )
                                     } else {
-                                        Column {
-                                            pair.forEach { button ->
-                                                RenderMenuButton(
-                                                    button = button,
-                                                    onClick = { viewModel.onMenuButtonTap(button) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
-                                        }
+                                        RenderMenuButton(
+                                            button = pair[0],
+                                            onClick = { viewModel.onMenuButtonTap(pair[0]) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
                                     }
                                 }
                             }
@@ -440,6 +494,17 @@ fun HomeScreen(
         onNavigateToEmergencyConfirm()
     }
     
+    // List screen navigation (Level 2+)
+    if (showMissedCallsList) {
+        viewModel.dismissMissedCallsList()
+        onNavigateToMissedCalls()
+    }
+    
+    if (showContactsList) {
+        viewModel.dismissContactsList()
+        onNavigateToContactsList()
+    }
+    
     // Display Off overlay - black screen, any touch wakes it
     if (isDisplayOff) {
         Box(
@@ -480,7 +545,12 @@ private fun RenderContactButton(
 }
 
 /**
- * Render a menu button from HomeButtonConfig
+ * Render a menu/list button from HomeButtonConfig
+ * 
+ * Uses ListButton with pastel colors:
+ * - Missed Calls: Light blue
+ * - Contacts: Light yellow
+ * - Other: Light gray (fallback)
  */
 @Composable
 private fun RenderMenuButton(
@@ -488,12 +558,17 @@ private fun RenderMenuButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ConfigurableButton(
+    // Select pastel color based on button type
+    val fillColor = when (button.id) {
+        HomeButtonConfig.MenuButton.ID_MISSED_CALLS -> PastelColors.lightBlue
+        HomeButtonConfig.MenuButton.ID_CONTACTS_LIST -> PastelColors.lightYellow
+        else -> PastelColors.lightGray  // Fallback for future button types
+    }
+    
+    ListButton(
         label = button.label,
+        fillColor = fillColor,
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        backgroundColor = button.color?.let { Color(it) } 
-            ?: MaterialTheme.wandasColors.secondaryButton,
-        textColor = MaterialTheme.wandasColors.onSecondaryButton
+        modifier = modifier
     )
 }

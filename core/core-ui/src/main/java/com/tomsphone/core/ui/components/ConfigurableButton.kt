@@ -59,54 +59,55 @@ fun ConfigurableButton(
             disabledContentColor = textColor.copy(alpha = 0.5f)
         ),
         shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
-        contentPadding = PaddingValues(
-            start = WandasDimensions.SpacingMedium,
-            end = WandasDimensions.SpacingMedium,
-            top = WandasDimensions.SpacingSmall,
-            bottom = WandasDimensions.SpacingSmall
-        ),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),  // Minimal padding
         enabled = enabled,
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = WandasDimensions.ElevationMedium
         )
     ) {
-        if (warningText != null) {
-            // Two-line layout: main label + warning at bottom
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxHeight()
-            ) {
-                // Main label
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center  // True center alignment
+        ) {
+            if (warningText != null) {
+                // Two-line layout: main label + warning at bottom
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // Main label
+                    Text(
+                        text = label,
+                        style = TextStyle(
+                            fontSize = textSize,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = textSize  // Tight line height
+                        ),
+                        color = textColor,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    // Warning badge
+                    WarningBadge(
+                        text = warningText,
+                        modifier = Modifier.padding(horizontal = WandasDimensions.SpacingSmall)
+                    )
+                }
+            } else {
+                // Single label, centered
                 Text(
                     text = label,
                     style = TextStyle(
                         fontSize = textSize,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = textSize  // Tight line height
                     ),
                     color = textColor,
                     textAlign = TextAlign.Center
                 )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                // Warning badge
-                WarningBadge(
-                    text = warningText,
-                    modifier = Modifier.padding(horizontal = WandasDimensions.SpacingSmall)
-                )
             }
-        } else {
-            // Single label, centered
-            Text(
-                text = label,
-                style = TextStyle(
-                    fontSize = textSize,
-                    fontWeight = FontWeight.SemiBold
-                ),
-                color = textColor,
-                textAlign = TextAlign.Center
-            )
         }
     }
 }

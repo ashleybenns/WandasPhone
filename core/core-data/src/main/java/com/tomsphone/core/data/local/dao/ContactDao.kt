@@ -42,5 +42,8 @@ interface ContactDao {
     
     @Query("SELECT COUNT(*) FROM contacts")
     suspend fun getContactCount(): Int
+    
+    @Query("UPDATE contacts SET buttonPosition = :position WHERE id = :contactId")
+    suspend fun updateButtonPosition(contactId: Long, position: Int)
 }
 

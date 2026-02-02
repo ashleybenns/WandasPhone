@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tomsphone.core.ui.theme.ScaledDimensions
+import com.tomsphone.core.ui.theme.PastelColors
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.WandasTextStyles
 import com.tomsphone.core.ui.theme.wandasColors
@@ -324,10 +325,11 @@ fun EndCallButton(
  * Screen Off button - turns screen off, any touch wakes it
  * Level 2+ feature for users who can't find the power button
  * 
- * Design: Outlined button with text inside, sized to text width
- * - Visually distinct from filled circular call buttons
- * - Smaller/less prominent to reduce accidental taps
- * - No icon, text-only for readability
+ * Matches list button styling but with transparent fill:
+ * - Outlined with transparent background
+ * - Square corners (4dp radius)
+ * - Black border and text
+ * - Same text size and width as list buttons (12 chars)
  * 
  * LAYOUT: Fills parent container height (use weight(1f) on parent for equal distribution)
  * Hidden during calls and missed call nag
@@ -338,36 +340,121 @@ fun DisplayOffButton(
     modifier: Modifier = Modifier
 ) {
     val textSize = ScaledDimensions.buttonTextSize
-    val borderColor = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f)
+    val borderColor = Color.Black
     
-    // Container fills parent, centers the outlined button
+    // Calculate width for 12 characters (same as list buttons)
+    val charWidth = textSize.value * 0.6f
+    val buttonWidth = (charWidth * 12 + 40).dp
+    
+    // Container fills parent, centers the button
     Box(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight(),
         contentAlignment = Alignment.Center
     ) {
-        // Outlined button - sized to text width, proportional height
-        OutlinedButton(
+        Button(
             onClick = onClick,
             modifier = Modifier
-                .wrapContentWidth()
-                .fillMaxHeight(0.6f),  // Take 60% of row height for proportional look
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(2.dp, borderColor),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.wandasColors.onBackground
+                .width(buttonWidth)
+                .fillMaxHeight(0.85f),  // Take most of row height
+            shape = RoundedCornerShape(4.dp),  // Square-ish corners (matches list buttons)
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent,
+                contentColor = Color.Black
             ),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
-        ) {
-            Text(
-                text = "Screen Off",
-                style = TextStyle(
-                    fontSize = textSize,
-                    fontWeight = FontWeight.Medium
-                ),
-                textAlign = TextAlign.Center
+            border = BorderStroke(2.dp, borderColor),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 0.dp
             )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Screen Off",
+                    style = TextStyle(
+                        fontSize = textSize,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = textSize
+                    ),
+                    color = Color.Black,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+/**
+ * List Button - for navigation to list screens (Missed Calls, Contacts)
+ * 
+ * Distinct from call buttons:
+ * - Outlined with pastel fill
+ * - Square corners (4dp radius)
+ * - Black border and text
+ * - Same text size as call buttons for readability
+ * - Fixed width for 12 characters (consistent sizing)
+ * 
+ * @param label Button text (max 12 chars recommended)
+ * @param fillColor Pastel background color (use PastelColors.lightBlue, etc.)
+ * @param onClick Action when tapped
+ */
+@Composable
+fun ListButton(
+    label: String,
+    fillColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val textSize = ScaledDimensions.buttonTextSize
+    val borderColor = Color.Black
+    
+    // Calculate width for 12 characters (approx 0.6 * fontSize per char + padding)
+    // Using sp value directly for width calculation
+    val charWidth = textSize.value * 0.6f  // Approximate character width
+    val buttonWidth = (charWidth * 12 + 40).dp  // 12 chars + horizontal padding
+    
+    // Container fills parent, centers the button
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .fillMaxHeight(),
+        contentAlignment = Alignment.Center
+    ) {
+        Button(
+            onClick = onClick,
+            modifier = Modifier
+                .width(buttonWidth)
+                .fillMaxHeight(0.85f),  // Take most of row height
+            shape = RoundedCornerShape(4.dp),  // Square-ish corners
+            colors = ButtonDefaults.buttonColors(
+                containerColor = fillColor,
+                contentColor = PastelColors.onPastel
+            ),
+            border = BorderStroke(2.dp, borderColor),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),  // Minimal padding
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 0.dp  // Flat look
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center  // True center alignment
+            ) {
+                Text(
+                    text = label,
+                    style = TextStyle(
+                        fontSize = textSize,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = textSize  // Tight line height
+                    ),
+                    color = Color.Black,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

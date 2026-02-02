@@ -6,12 +6,18 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
+import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.tts.WandasTTS
 import com.tomsphone.core.tts.TTSScripts
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,8 +34,10 @@ private const val TAG = "BatteryMonitor"
 @Singleton
 class BatteryMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val tts: dagger.Lazy<WandasTTS>
+    private val tts: dagger.Lazy<WandasTTS>,
+    private val settingsRepository: SettingsRepository
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     companion object {
         const val LOW_BATTERY_THRESHOLD = 20
         const val CRITICAL_BATTERY_THRESHOLD = 10
@@ -169,10 +177,15 @@ class BatteryMonitor @Inject constructor(
     
     private fun announceLowBattery(level: Int, critical: Boolean) {
         Log.d(TAG, "Announcing ${if (critical) "critical" else "low"} battery: $level%")
-        try {
-            tts.get().speak(TTSScripts.batteryLow(level))
-        } catch (e: Exception) {
-            Log.e(TAG, "TTS error: ${e.message}")
+        scope.launch {
+            try {
+                val settings = settingsRepository.getSettings().first()
+                if (settings.ttsAnnouncementsEnabled) {
+                    tts.get().speak(TTSScripts.batteryLow(level))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "TTS error: ${e.message}")
+            }
         }
     }
     
@@ -181,10 +194,15 @@ class BatteryMonitor @Inject constructor(
         hasAnnouncedCharging = true
         
         Log.d(TAG, "Announcing charging")
-        try {
-            tts.get().speak(TTSScripts.batteryCharging())
-        } catch (e: Exception) {
-            Log.e(TAG, "TTS error: ${e.message}")
+        scope.launch {
+            try {
+                val settings = settingsRepository.getSettings().first()
+                if (settings.ttsAnnouncementsEnabled) {
+                    tts.get().speak(TTSScripts.batteryCharging())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "TTS error: ${e.message}")
+            }
         }
     }
 }

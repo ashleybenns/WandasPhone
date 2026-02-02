@@ -7,6 +7,7 @@ import com.tomsphone.core.config.CarerSettings
 import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
+import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.config.ThemeOption
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -124,6 +125,20 @@ class CarerSettingsViewModel @Inject constructor(
         }
     }
     
+    fun setShowMissedCallsButton(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(homeShowMissedCallsButton = enabled))
+        }
+    }
+    
+    fun setShowContactsListButton(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(homeShowContactsListButton = enabled))
+        }
+    }
+    
     /**
      * Update user name
      */
@@ -151,11 +166,20 @@ class CarerSettingsViewModel @Inject constructor(
     
     /**
      * Add or update contact
+     * For new CARER contacts, assigns next available buttonPosition
      */
     fun saveContact(contact: Contact) {
         viewModelScope.launch {
             if (contact.id == 0L) {
-                contactRepository.addContact(contact)
+                // For new contacts, assign next buttonPosition if it's a CARER
+                val contactToSave = if (contact.contactType == ContactType.CARER) {
+                    val currentCarers = contacts.first().filter { it.contactType == ContactType.CARER }
+                    val maxPosition = currentCarers.maxOfOrNull { it.buttonPosition } ?: -1
+                    contact.copy(buttonPosition = maxPosition + 1)
+                } else {
+                    contact
+                }
+                contactRepository.addContact(contactToSave)
             } else {
                 contactRepository.updateContact(contact)
             }
@@ -164,9 +188,15 @@ class CarerSettingsViewModel @Inject constructor(
     
     /**
      * Delete contact
+     * Also clears primaryContactId if this was the primary contact
      */
     fun deleteContact(id: Long) {
         viewModelScope.launch {
+            // Check if this is the primary contact and clear it
+            val settings = settingsRepository.getSettings().first()
+            if (settings.primaryContactId == id) {
+                settingsRepository.updateSettings(settings.copy(primaryContactId = null))
+            }
             contactRepository.removeContact(id)
         }
     }
@@ -177,6 +207,46 @@ class CarerSettingsViewModel @Inject constructor(
     fun setPrimaryContact(id: Long) {
         viewModelScope.launch {
             contactRepository.setPrimaryContact(id)
+        }
+    }
+    
+    /**
+     * Move a contact up in the list (decrease buttonPosition)
+     */
+    fun moveContactUp(contact: Contact, allCarers: List<Contact>) {
+        val sortedCarers = allCarers.sortedBy { it.buttonPosition }
+        val currentIndex = sortedCarers.indexOfFirst { it.id == contact.id }
+        if (currentIndex <= 0) return // Already at top
+        
+        viewModelScope.launch {
+            // Swap positions using index values (guarantees unique positions)
+            val aboveContact = sortedCarers[currentIndex - 1]
+            contactRepository.updateButtonPositions(
+                listOf(
+                    contact.id to (currentIndex - 1),
+                    aboveContact.id to currentIndex
+                )
+            )
+        }
+    }
+    
+    /**
+     * Move a contact down in the list (increase buttonPosition)
+     */
+    fun moveContactDown(contact: Contact, allCarers: List<Contact>) {
+        val sortedCarers = allCarers.sortedBy { it.buttonPosition }
+        val currentIndex = sortedCarers.indexOfFirst { it.id == contact.id }
+        if (currentIndex < 0 || currentIndex >= sortedCarers.size - 1) return // Already at bottom
+        
+        viewModelScope.launch {
+            // Swap positions using index values (guarantees unique positions)
+            val belowContact = sortedCarers[currentIndex + 1]
+            contactRepository.updateButtonPositions(
+                listOf(
+                    contact.id to (currentIndex + 1),
+                    belowContact.id to currentIndex
+                )
+            )
         }
     }
     
@@ -245,6 +315,17 @@ class CarerSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(speakerDefaultOn = enabled))
+        }
+    }
+    
+    /**
+     * Toggle TTS announcements (greeting, calling, speaker, mute, battery)
+     * Separate from missed call nag and ringtone
+     */
+    fun setTtsAnnouncementsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(ttsAnnouncementsEnabled = enabled))
         }
     }
     

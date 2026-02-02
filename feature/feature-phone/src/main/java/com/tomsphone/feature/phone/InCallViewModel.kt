@@ -53,6 +53,15 @@ class InCallViewModel @Inject constructor(
             initialValue = FeatureLevel.MINIMAL
         )
     
+    // TTS announcements enabled
+    private val ttsAnnouncementsEnabled: StateFlow<Boolean> = settingsRepository.getSettings()
+        .map { it.ttsAnnouncementsEnabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+    
     // Contact name for current call
     val contactName: StateFlow<String?> = currentCall
         .flatMapLatest { call ->
@@ -80,10 +89,10 @@ class InCallViewModel @Inject constructor(
                     }
                     CallState.ACTIVE -> {
                         // Auto-enable speaker if configured
+                        // No TTS announcement - carer is talking or voicemail is playing
                         val settings = settingsRepository.getSettings().first()
                         if (settings.speakerVolume > 0) {
                             callManager.setSpeaker(true)
-                            tts.speak(TTSScripts.speakerOn())
                         }
                     }
                     else -> {
@@ -99,7 +108,9 @@ class InCallViewModel @Inject constructor(
      */
     fun onEndCall() {
         viewModelScope.launch {
-            tts.speak(TTSScripts.callEnded())
+            if (ttsAnnouncementsEnabled.value) {
+                tts.speak(TTSScripts.callEnded())
+            }
             callManager.endCall()
         }
     }
@@ -110,7 +121,7 @@ class InCallViewModel @Inject constructor(
     fun onToggleSpeaker() {
         viewModelScope.launch {
             val result = callManager.toggleSpeaker()
-            if (result.isSuccess) {
+            if (result.isSuccess && ttsAnnouncementsEnabled.value) {
                 val call = currentCall.value
                 val enabled = call?.isSpeakerOn == false
                 tts.speak(if (enabled) TTSScripts.speakerOn() else TTSScripts.speakerOff())
@@ -124,7 +135,7 @@ class InCallViewModel @Inject constructor(
     fun onToggleMute() {
         viewModelScope.launch {
             val result = callManager.toggleMute()
-            if (result.isSuccess) {
+            if (result.isSuccess && ttsAnnouncementsEnabled.value) {
                 val call = currentCall.value
                 val muted = call?.isMuted == false
                 tts.speak(if (muted) TTSScripts.muted() else TTSScripts.unmuted())
