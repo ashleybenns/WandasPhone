@@ -22,10 +22,16 @@ interface CallLogDao {
     @Query("UPDATE call_logs SET isRead = 1 WHERE id = :id")
     suspend fun markAsRead(id: Long)
     
+    @Query("UPDATE call_logs SET isRead = 1 WHERE phoneNumber = :phoneNumber AND type = 'MISSED'")
+    suspend fun markMissedCallsFromNumberAsRead(phoneNumber: String)
+    
     @Query("UPDATE call_logs SET isRead = 1 WHERE type = 'MISSED'")
     suspend fun markAllMissedAsRead()
     
     @Query("DELETE FROM call_logs WHERE timestamp < :timestamp")
     suspend fun deleteOlderThan(timestamp: Long)
+    
+    @Query("DELETE FROM call_logs WHERE type = 'MISSED' AND timestamp < :timestamp")
+    suspend fun deleteMissedCallsOlderThan(timestamp: Long)
 }
 

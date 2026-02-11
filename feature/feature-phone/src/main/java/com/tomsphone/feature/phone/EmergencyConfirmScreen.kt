@@ -1,11 +1,14 @@
 package com.tomsphone.feature.phone
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,12 +21,46 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.tomsphone.core.config.ButtonActivationPreset
+import com.tomsphone.core.config.SettingsRepository
+import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.*
 import java.io.File
+import javax.inject.Inject
+
+/**
+ * ViewModel for EmergencyConfirmScreen - provides touch response settings
+ */
+@HiltViewModel
+class EmergencyConfirmViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository
+) : ViewModel() {
+    
+    val buttonActivation: StateFlow<ButtonActivationPreset> = settingsRepository.getSettings()
+        .map { it.buttonActivation }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ButtonActivationPreset.ON_RELEASE)
+    
+    val touchDebounceMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.touchDebounceMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 150)
+    
+    val accumulatedTapThresholdMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapThresholdMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 500)
+    
+    val accumulatedTapTimeoutMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapTimeoutMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3000)
+}
 
 /**
  * Emergency confirm screen - shown after 3 taps on emergency button.
@@ -39,11 +76,18 @@ fun EmergencyConfirmScreen(
     emergencyNumber: String,
     isTestMode: Boolean,
     onConfirm: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    viewModel: EmergencyConfirmViewModel = hiltViewModel()
 ) {
     val emergencyRed = Color(0xFFD32F2F)
     val buttonSize = 180.dp
     val textSize = ScaledDimensions.statusTextSize
+    
+    // Touch response settings
+    val buttonActivation by viewModel.buttonActivation.collectAsState()
+    val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
+    val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
+    val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -79,16 +123,26 @@ fun EmergencyConfirmScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
                 
-                // Cancel button
-                TextButton(
-                    onClick = onCancel,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = Color.White.copy(alpha = 0.8f)
-                    )
+                // Cancel button - uses activation gesture for consistency
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                Surface(
+                    modifier = Modifier
+                        .indication(cancelInteractionSource, rememberRipple(bounded = false))
+                        .activationGesture(
+                            preset = buttonActivation,
+                            debounceMs = touchDebounceMs,
+                            accumulatedThresholdMs = accumulatedThresholdMs,
+                            accumulatedTimeoutMs = accumulatedTimeoutMs,
+                            onActivate = onCancel,
+                            interactionSource = cancelInteractionSource
+                        )
+                        .padding(8.dp),
+                    color = Color.Transparent
                 ) {
                     Text(
                         text = "← Cancel",
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -124,23 +178,36 @@ fun EmergencyConfirmScreen(
                 Spacer(modifier = Modifier.height(32.dp))
                 
                 // Round confirm button (centered, different position from home buttons)
-                Button(
-                    onClick = onConfirm,
-                    modifier = Modifier.size(buttonSize),
+                // Uses activation gesture for consistent touch response
+                val confirmInteractionSource = remember { MutableInteractionSource() }
+                Surface(
+                    modifier = Modifier
+                        .size(buttonSize)
+                        .clip(CircleShape)
+                        .indication(confirmInteractionSource, rememberRipple())
+                        .activationGesture(
+                            preset = buttonActivation,
+                            debounceMs = touchDebounceMs,
+                            accumulatedThresholdMs = accumulatedThresholdMs,
+                            accumulatedTimeoutMs = accumulatedTimeoutMs,
+                            onActivate = onConfirm,
+                            interactionSource = confirmInteractionSource
+                        ),
                     shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = emergencyRed
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 8.dp
-                    )
+                    color = Color.White,
+                    shadowElevation = 8.dp
                 ) {
-                    Text(
-                        text = if (isTestMode) "TEST" else "CALL",
-                        fontSize = ScaledDimensions.buttonTextSize,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isTestMode) "TEST" else "CALL",
+                            fontSize = ScaledDimensions.buttonTextSize,
+                            fontWeight = FontWeight.Bold,
+                            color = emergencyRed
+                        )
+                    }
                 }
             }
             

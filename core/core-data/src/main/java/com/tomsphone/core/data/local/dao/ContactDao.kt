@@ -16,6 +16,9 @@ interface ContactDao {
     @Query("SELECT * FROM contacts WHERE contactType = 'CARER' ORDER BY buttonPosition ASC, priority ASC, name ASC LIMIT :limit")
     fun getCarerContacts(limit: Int): Flow<List<ContactEntity>>
     
+    @Query("SELECT * FROM contacts WHERE contactType = 'GREY_LIST' ORDER BY name ASC LIMIT :limit")
+    fun getGreyListContacts(limit: Int): Flow<List<ContactEntity>>
+    
     @Query("SELECT * FROM contacts WHERE phoneNumber = :phoneNumber LIMIT 1")
     fun getContactByPhone(phoneNumber: String): Flow<ContactEntity?>
     

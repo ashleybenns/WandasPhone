@@ -1,21 +1,30 @@
 package com.tomsphone.core.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tomsphone.core.config.ButtonActivationPreset
+import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.WandasTextStyles
@@ -35,6 +44,12 @@ import com.tomsphone.core.ui.theme.wandasColors
  * 
  * Used for contact buttons, menu buttons, etc.
  */
+/**
+ * Configurable button with custom activation gesture support.
+ * 
+ * @param activationPreset How the button responds to touch (ON_RELEASE, ON_PRESS, DOUBLE_TAP)
+ * @param debounceMs Minimum touch duration to filter accidental brushes
+ */
 @Composable
 fun ConfigurableButton(
     label: String,
@@ -43,36 +58,68 @@ fun ConfigurableButton(
     backgroundColor: Color = MaterialTheme.wandasColors.primaryButton,
     textColor: Color = MaterialTheme.wandasColors.onPrimaryButton,
     warningText: String? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    textAlignment: ListTextAlignment = ListTextAlignment.CENTER,
+    activationPreset: ButtonActivationPreset = ButtonActivationPreset.ON_RELEASE,
+    debounceMs: Int = 150,
+    accumulatedThresholdMs: Int = 500,
+    accumulatedTimeoutMs: Int = 3000
 ) {
     // Text size adapts to screen height and button count
     val textSize = ScaledDimensions.contactNameTextSize
     
-    Button(
-        onClick = onClick,
-        // Fill parent container - parent uses weight(1f) for equal distribution
-        modifier = modifier.fillMaxHeight(),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = backgroundColor,
-            contentColor = textColor,
-            disabledContainerColor = backgroundColor.copy(alpha = 0.5f),
-            disabledContentColor = textColor.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),  // Minimal padding
-        enabled = enabled,
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = WandasDimensions.ElevationMedium
-        )
+    // Convert setting to Compose alignment
+    val boxAlignment = when (textAlignment) {
+        ListTextAlignment.LEFT -> Alignment.CenterStart
+        ListTextAlignment.CENTER -> Alignment.Center
+    }
+    val textAlign = when (textAlignment) {
+        ListTextAlignment.LEFT -> TextAlign.Start
+        ListTextAlignment.CENTER -> TextAlign.Center
+    }
+    
+    // Interaction source for ripple effect
+    val interactionSource = remember { MutableInteractionSource() }
+    
+    val actualBackgroundColor = if (enabled) backgroundColor else backgroundColor.copy(alpha = 0.5f)
+    val actualTextColor = if (enabled) textColor else textColor.copy(alpha = 0.5f)
+    
+    Surface(
+        modifier = modifier
+            .fillMaxHeight()
+            .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+            .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+            .indication(interactionSource, rememberRipple())
+            .then(
+                if (enabled) {
+                    Modifier.activationGesture(
+                        preset = activationPreset,
+                        debounceMs = debounceMs,
+                        accumulatedThresholdMs = accumulatedThresholdMs,
+                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                        onActivate = onClick,
+                        interactionSource = interactionSource
+                    )
+                } else {
+                    Modifier
+                }
+            ),
+        color = actualBackgroundColor,
+        shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center  // True center alignment
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentAlignment = boxAlignment
         ) {
             if (warningText != null) {
                 // Two-line layout: main label + warning at bottom
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = when (textAlignment) {
+                        ListTextAlignment.LEFT -> Alignment.Start
+                        ListTextAlignment.CENTER -> Alignment.CenterHorizontally
+                    },
                     verticalArrangement = Arrangement.Center
                 ) {
                     // Main label
@@ -83,8 +130,8 @@ fun ConfigurableButton(
                             fontWeight = FontWeight.SemiBold,
                             lineHeight = textSize  // Tight line height
                         ),
-                        color = textColor,
-                        textAlign = TextAlign.Center
+                        color = actualTextColor,
+                        textAlign = textAlign
                     )
                     
                     Spacer(modifier = Modifier.height(4.dp))
@@ -96,7 +143,7 @@ fun ConfigurableButton(
                     )
                 }
             } else {
-                // Single label, centered
+                // Single label
                 Text(
                     text = label,
                     style = TextStyle(
@@ -104,8 +151,8 @@ fun ConfigurableButton(
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = textSize  // Tight line height
                     ),
-                    color = textColor,
-                    textAlign = TextAlign.Center
+                    color = actualTextColor,
+                    textAlign = textAlign
                 )
             }
         }

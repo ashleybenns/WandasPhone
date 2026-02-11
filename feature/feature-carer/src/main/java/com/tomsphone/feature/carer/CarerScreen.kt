@@ -6,6 +6,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -55,6 +57,12 @@ private fun PinDialog(
     onDismiss: () -> Unit
 ) {
     var pin by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    
+    // Auto-focus the text field when dialog appears
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
     
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -89,7 +97,8 @@ private fun PinDialog(
                     singleLine = true,
                     textStyle = MaterialTheme.typography.headlineLarge.copy(
                         textAlign = TextAlign.Center
-                    )
+                    ),
+                    modifier = Modifier.focusRequester(focusRequester)
                 )
                 
                 Row(

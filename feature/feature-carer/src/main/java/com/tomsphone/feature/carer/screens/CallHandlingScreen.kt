@@ -2,11 +2,14 @@ package com.tomsphone.feature.carer.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.FeatureLevel
@@ -155,9 +158,37 @@ fun CallHandlingScreen(
                         currentLevel = featureLevel
                     ) {
                         SettingCard(title = "Auto-Answer") {
+                            // Privacy warning
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color(0xFFFFF3E0), // Light orange/warning
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = "⚠️ Privacy Notice",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFE65100) // Dark orange
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Auto-Answer allows carers to call and listen without the user pressing Answer. " +
+                                               "The user will hear a ringtone and announcement when a call is answered automatically. " +
+                                               "This feature requires the user's informed consent.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF5D4037) // Brown text
+                                    )
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
                             SettingToggle(
                                 title = "Enable Auto-Answer",
-                                description = "Automatically answer calls from carers",
+                                description = "Automatically answer calls from enabled carers",
                                 checked = settings.autoAnswerEnabled,
                                 onCheckedChange = { enabled ->
                                     viewModel.setAutoAnswer(enabled, settings.autoAnswerDelaySeconds)
@@ -184,6 +215,14 @@ fun CallHandlingScreen(
                                     },
                                     valueRange = 1f..10f,
                                     steps = 8
+                                )
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                Text(
+                                    text = "Configure which contacts have auto-answer in their contact settings.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
                                 )
                             }
                         }

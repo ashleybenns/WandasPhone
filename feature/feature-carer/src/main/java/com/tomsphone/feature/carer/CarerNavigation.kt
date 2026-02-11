@@ -18,6 +18,7 @@ object CarerRoutes {
     const val CONTACTS = "carer_contacts"
     const val CONTACT_EDIT = "carer_contact_edit/{contactId}/{contactType}"
     const val CALL_HANDLING = "carer_call_handling"
+    const val TOUCH_RESPONSE = "carer_touch_response"
     const val APPEARANCE = "carer_appearance"
     const val FEATURE_LEVEL = "carer_feature_level"
     const val ALWAYS_ON = "carer_always_on"
@@ -49,6 +50,7 @@ fun CarerNavigation(
                 onNavigateToUserProfile = { navController.navigate(CarerRoutes.USER_PROFILE) },
                 onNavigateToContacts = { navController.navigate(CarerRoutes.CONTACTS) },
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
+                onNavigateToTouchResponse = { navController.navigate(CarerRoutes.TOUCH_RESPONSE) },
                 onNavigateToAppearance = { navController.navigate(CarerRoutes.APPEARANCE) },
                 onNavigateToFeatureLevel = { navController.navigate(CarerRoutes.FEATURE_LEVEL) },
                 onNavigateToAlwaysOn = { navController.navigate(CarerRoutes.ALWAYS_ON) },
@@ -107,6 +109,13 @@ fun CarerNavigation(
         // Call Handling
         composable(CarerRoutes.CALL_HANDLING) {
             CallHandlingScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // Touch Response
+        composable(CarerRoutes.TOUCH_RESPONSE) {
+            TouchResponseScreen(
                 onBack = { navController.popBackStack() }
             )
         }

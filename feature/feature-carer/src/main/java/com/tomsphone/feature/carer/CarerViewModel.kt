@@ -139,6 +139,48 @@ class CarerSettingsViewModel @Inject constructor(
         }
     }
     
+    fun setContactsListShowGreyListOnly(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(homeContactsListShowGreyListOnly = enabled))
+        }
+    }
+    
+    fun setListTextAlignment(alignment: com.tomsphone.core.config.ListTextAlignment) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(listTextAlignment = alignment))
+        }
+    }
+    
+    fun setButtonActivation(preset: com.tomsphone.core.config.ButtonActivationPreset) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(buttonActivation = preset))
+        }
+    }
+    
+    fun setTouchDebounceMs(debounceMs: Int) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(touchDebounceMs = debounceMs))
+        }
+    }
+    
+    fun setAccumulatedTapThresholdMs(thresholdMs: Int) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(accumulatedTapThresholdMs = thresholdMs))
+        }
+    }
+    
+    fun setAccumulatedTapTimeoutMs(timeoutMs: Int) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(accumulatedTapTimeoutMs = timeoutMs))
+        }
+    }
+    
     /**
      * Update user name
      */
@@ -166,19 +208,15 @@ class CarerSettingsViewModel @Inject constructor(
     
     /**
      * Add or update contact
-     * For new CARER contacts, assigns next available buttonPosition
+     * For new contacts, assigns next available buttonPosition within their type
      */
     fun saveContact(contact: Contact) {
         viewModelScope.launch {
             if (contact.id == 0L) {
-                // For new contacts, assign next buttonPosition if it's a CARER
-                val contactToSave = if (contact.contactType == ContactType.CARER) {
-                    val currentCarers = contacts.first().filter { it.contactType == ContactType.CARER }
-                    val maxPosition = currentCarers.maxOfOrNull { it.buttonPosition } ?: -1
-                    contact.copy(buttonPosition = maxPosition + 1)
-                } else {
-                    contact
-                }
+                // For new contacts, assign next buttonPosition within their contact type
+                val contactsOfSameType = contacts.first().filter { it.contactType == contact.contactType }
+                val maxPosition = contactsOfSameType.maxOfOrNull { it.buttonPosition } ?: -1
+                val contactToSave = contact.copy(buttonPosition = maxPosition + 1)
                 contactRepository.addContact(contactToSave)
             } else {
                 contactRepository.updateContact(contact)

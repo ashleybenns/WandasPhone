@@ -20,6 +20,12 @@ interface ContactRepository {
      */
     fun getCarerContacts(limit: Int): Flow<List<Contact>>
     
+    /**
+     * Get only GREY_LIST contacts (answer-only, not on home screen)
+     * Ordered alphabetically by name
+     */
+    fun getGreyListContacts(limit: Int): Flow<List<Contact>>
+    
     fun getContactById(id: Long): Flow<Contact?>
     
     fun getContactByPhone(phoneNumber: String): Flow<Contact?>

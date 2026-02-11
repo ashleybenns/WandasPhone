@@ -2,16 +2,18 @@ package com.tomsphone.feature.phone
 
 import android.media.AudioManager
 import android.util.Log
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -21,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.telecom.CallManager
@@ -29,6 +32,7 @@ import com.tomsphone.core.telecom.RingtonePlayer
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
 import com.tomsphone.core.ui.components.InertBorderLayout
+import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
@@ -52,6 +56,12 @@ fun IncomingCallScreen(
 ) {
     val callerName by viewModel.callerName.collectAsState()
     val phoneNumber by viewModel.phoneNumber.collectAsState()
+    
+    // Touch response settings
+    val buttonActivation by viewModel.buttonActivation.collectAsState()
+    val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
+    val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
+    val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     
     // Status message - one line, matching HomeScreen format
     val displayName = callerName ?: "Unknown Caller"
@@ -115,63 +125,83 @@ fun IncomingCallScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Answer button - GREEN, large (same size as contact buttons, scaled)
-                        Button(
-                            onClick = {
-                                viewModel.answerCall()
-                                onCallAnswered()
-                            },
+                        // Uses activation gesture for consistent touch response
+                        val answerInteractionSource = remember { MutableInteractionSource() }
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(ScaledDimensions.contactButtonHeight),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF4CAF50), // Green
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
-                            contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = WandasDimensions.ElevationMedium
-                            )
-                        ) {
-                            Text(
-                                text = "Answer",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.contactNameTextSize,
-                                    fontWeight = FontWeight.Bold
+                                .height(ScaledDimensions.contactButtonHeight)
+                                .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                                .indication(answerInteractionSource, rememberRipple())
+                                .activationGesture(
+                                    preset = buttonActivation,
+                                    debounceMs = touchDebounceMs,
+                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                    onActivate = {
+                                        viewModel.answerCall()
+                                        onCallAnswered()
+                                    },
+                                    interactionSource = answerInteractionSource
                                 ),
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
+                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                            color = Color(0xFF4CAF50), // Green
+                            shadowElevation = WandasDimensions.ElevationMedium
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Answer",
+                                    style = TextStyle(
+                                        fontSize = ScaledDimensions.contactNameTextSize,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                         
                         // Reject button - RED, same size as contact buttons, scaled
-                        Button(
-                            onClick = {
-                                viewModel.rejectCall()
-                                onCallRejected()
-                            },
+                        // Uses activation gesture for consistent touch response
+                        val rejectInteractionSource = remember { MutableInteractionSource() }
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(ScaledDimensions.contactButtonHeight),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFD32F2F), // Red
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
-                            contentPadding = PaddingValues(WandasDimensions.SpacingLarge),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = WandasDimensions.ElevationMedium
-                            )
-                        ) {
-                            Text(
-                                text = "Reject",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.contactNameTextSize,
-                                    fontWeight = FontWeight.Bold
+                                .height(ScaledDimensions.contactButtonHeight)
+                                .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                                .indication(rejectInteractionSource, rememberRipple())
+                                .activationGesture(
+                                    preset = buttonActivation,
+                                    debounceMs = touchDebounceMs,
+                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                    onActivate = {
+                                        viewModel.rejectCall()
+                                        onCallRejected()
+                                    },
+                                    interactionSource = rejectInteractionSource
                                 ),
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
+                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                            color = Color(0xFFD32F2F), // Red
+                            shadowElevation = WandasDimensions.ElevationMedium
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Reject",
+                                    style = TextStyle(
+                                        fontSize = ScaledDimensions.contactNameTextSize,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                     
@@ -210,6 +240,23 @@ class IncomingCallViewModel @Inject constructor(
     // Caller name - try from call info first, then do our own lookup
     private val _callerName = MutableStateFlow<String?>(null)
     val callerName: StateFlow<String?> = _callerName.asStateFlow()
+    
+    // Touch response settings
+    val buttonActivation: StateFlow<ButtonActivationPreset> = settingsRepository.getSettings()
+        .map { it.buttonActivation }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ButtonActivationPreset.ON_RELEASE)
+    
+    val touchDebounceMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.touchDebounceMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 150)
+    
+    val accumulatedTapThresholdMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapThresholdMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 500)
+    
+    val accumulatedTapTimeoutMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapTimeoutMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3000)
     
     init {
         // Monitor incomingRingingCall for contact name, with backup lookup

@@ -38,7 +38,7 @@ fun CarerMenuButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(88.dp),
+            .heightIn(min = 88.dp),  // Minimum height, grows to fit content
         shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.wandasColors.surface,
@@ -47,7 +47,7 @@ fun CarerMenuButton(
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 2.dp
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)  // Increased vertical padding
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -65,7 +65,8 @@ fun CarerMenuButton(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
+                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f),
+                lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.1f  // Extra line spacing
             )
         }
     }

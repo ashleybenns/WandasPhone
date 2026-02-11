@@ -174,39 +174,41 @@ fun ContactEditScreen(
                         )
                     }
                     
-                    // Button Color (Carers only - they appear on home screen)
-                    if (effectiveContactType == ContactType.CARER) {
-                        SettingCard(title = "Button Color") {
-                            Text(
-                                text = "Choose a color for this contact's button on the home screen",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(bottom = 12.dp)
-                            )
-                            
-                            // Color swatches in a row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                ButtonColor.entries.forEach { buttonColor ->
-                                    ColorSwatch(
-                                        color = buttonColor,
-                                        isSelected = selectedColor == buttonColor,
-                                        themeDefaultColor = MaterialTheme.wandasColors.primaryButton,
-                                        onClick = {
-                                            selectedColor = buttonColor
-                                            if (!isNewContact) {
-                                                saveContact(
-                                                    viewModel, existingContact, name, phoneNumber,
-                                                    effectiveContactType, isPrimary, autoAnswerEnabled,
-                                                    buttonColor
-                                                )
-                                                saveToastState.show("$name's color: ${buttonColor.displayName}")
-                                            }
+                    // Button Color (for both Carers and Grey List)
+                    SettingCard(title = "Button Color") {
+                        val colorDescription = when (effectiveContactType) {
+                            ContactType.CARER -> "Choose a color for this contact's button on the home screen"
+                            ContactType.GREY_LIST -> "Choose a color for this contact in list screens"
+                        }
+                        Text(
+                            text = colorDescription,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        
+                        // Color swatches in a row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            ButtonColor.entries.forEach { buttonColor ->
+                                ColorSwatch(
+                                    color = buttonColor,
+                                    isSelected = selectedColor == buttonColor,
+                                    themeDefaultColor = MaterialTheme.wandasColors.primaryButton,
+                                    onClick = {
+                                        selectedColor = buttonColor
+                                        if (!isNewContact) {
+                                            saveContact(
+                                                viewModel, existingContact, name, phoneNumber,
+                                                effectiveContactType, isPrimary, autoAnswerEnabled,
+                                                buttonColor
+                                            )
+                                            saveToastState.show("$name's color: ${buttonColor.displayName}")
                                         }
-                                    )
-                                }
+                                    }
+                                )
                             }
                         }
                     }
@@ -417,7 +419,7 @@ private fun getContactTypeDisplayName(type: ContactType): String {
 private fun getContactTypeDescription(type: ContactType): String {
     return when (type) {
         ContactType.CARER -> "Appears on home screen, triggers missed call reminders"
-        ContactType.GREY_LIST -> "Allows incoming calls only. No way to call back and no missed call notification."
+        ContactType.GREY_LIST -> "Can answer calls. At Level 2+, enable list buttons in Appearance to call back."
     }
 }
 

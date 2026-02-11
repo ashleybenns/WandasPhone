@@ -18,8 +18,12 @@ interface CallLogRepository {
     
     suspend fun markAsRead(id: Long): Result<Unit>
     
+    suspend fun markMissedCallsFromNumberAsRead(phoneNumber: String): Result<Unit>
+    
     suspend fun markAllMissedAsRead(): Result<Unit>
     
     suspend fun deleteOlderThan(timestamp: Long): Result<Unit>
+    
+    suspend fun deleteMissedCallsOlderThan(timestamp: Long): Result<Unit>
 }
 

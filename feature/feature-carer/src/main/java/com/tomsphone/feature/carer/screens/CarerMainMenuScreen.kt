@@ -30,6 +30,7 @@ fun CarerMainMenuScreen(
     onNavigateToUserProfile: () -> Unit,
     onNavigateToContacts: () -> Unit,
     onNavigateToCallHandling: () -> Unit,
+    onNavigateToTouchResponse: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToFeatureLevel: () -> Unit,
     onNavigateToAlwaysOn: () -> Unit,
@@ -89,10 +90,18 @@ fun CarerMainMenuScreen(
                     currentLevel = featureLevel
                 )
                 
+                // Touch Response - always visible (fundamental accessibility)
+                CarerMenuButton(
+                    title = "Touch Response",
+                    description = "How buttons respond: tap, press, or double-tap",
+                    onClick = onNavigateToTouchResponse,
+                    currentLevel = featureLevel
+                )
+                
                 // Appearance - always visible (accessibility is essential)
                 CarerMenuButton(
                     title = "Appearance",
-                    description = "Theme, text size, button size",
+                    description = "Theme, text size, list alignment",
                     onClick = onNavigateToAppearance,
                     currentLevel = featureLevel
                 )

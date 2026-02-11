@@ -124,7 +124,9 @@ fun SettingToggle(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),  // Space before next toggle
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -137,7 +139,8 @@ fun SettingToggle(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 2.dp)  // Small gap between title and description
             )
         }
         

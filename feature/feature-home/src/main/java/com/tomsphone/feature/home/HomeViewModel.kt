@@ -3,11 +3,14 @@ package com.tomsphone.feature.home
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.CarerSettings
 import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.HomeButtonConfig
+import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
+import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
@@ -37,6 +40,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val contactRepository: ContactRepository,
+    private val callLogRepository: CallLogRepository,
     private val callManager: CallManager,
     private val missedCallNagManager: MissedCallNagManager,
     private val tts: WandasTTS
@@ -68,6 +72,51 @@ class HomeViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 2
+        )
+    
+    // Text alignment for buttons (center vs left)
+    val listTextAlignment: StateFlow<ListTextAlignment> = settingsRepository.getSettings()
+        .map { it.listTextAlignment }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ListTextAlignment.CENTER
+        )
+    
+    // Button activation mode (ON_RELEASE, ON_PRESS, DOUBLE_TAP)
+    val buttonActivation: StateFlow<ButtonActivationPreset> = settingsRepository.getSettings()
+        .map { it.buttonActivation }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ButtonActivationPreset.ON_RELEASE
+        )
+    
+    // Debounce duration for accidental touch protection
+    val touchDebounceMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.touchDebounceMs }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 150
+        )
+    
+    // Accumulated tap threshold (total touch time to activate)
+    val accumulatedTapThresholdMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapThresholdMs }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 500
+        )
+    
+    // Accumulated tap timeout (time before counter resets)
+    val accumulatedTapTimeoutMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapTimeoutMs }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 3000
         )
     
     // TTS announcements enabled (separate from missed call nag)
@@ -107,6 +156,20 @@ class HomeViewModel @Inject constructor(
             initialValue = false
         )
     
+    // Count of unread missed calls (for button label)
+    private val missedCallsCount: StateFlow<Int> = callLogRepository.getMissedCalls(100)
+        .map { calls -> 
+            // Filter out empty phone numbers and count unique callers
+            calls.filter { it.phoneNumber.isNotBlank() }
+                .distinctBy { it.phoneNumber }
+                .size
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+    
     // Display off state - screen should be dimmed
     private val _isDisplayOff = MutableStateFlow(false)
     val isDisplayOff: StateFlow<Boolean> = _isDisplayOff.asStateFlow()
@@ -122,9 +185,10 @@ class HomeViewModel @Inject constructor(
      */
     val homeButtons: StateFlow<List<HomeButtonConfig>> = combine(
         contacts,
-        settings
-    ) { contactList, carerSettings ->
-        buildHomeButtons(contactList, carerSettings)
+        settings,
+        missedCallsCount
+    ) { contactList, carerSettings, missedCount ->
+        buildHomeButtons(contactList, carerSettings, missedCount)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -141,7 +205,8 @@ class HomeViewModel @Inject constructor(
      */
     private fun buildHomeButtons(
         contacts: List<Contact>,
-        settings: CarerSettings
+        settings: CarerSettings,
+        missedCallsCount: Int
     ): List<HomeButtonConfig> {
         val buttons = mutableListOf<HomeButtonConfig>()
         
@@ -174,10 +239,16 @@ class HomeViewModel @Inject constructor(
         // 2. List buttons (Level 2+) - full-width, below carers
         if (settings.featureLevel.level >= 2) {
             if (settings.homeShowMissedCallsButton) {
+                // Build label with count: "No Missed Calls", "1 Missed Call", "3 Missed Calls"
+                val missedCallsLabel = when (missedCallsCount) {
+                    0 -> "No Missed Calls"
+                    1 -> "1 Missed Call"
+                    else -> "$missedCallsCount Missed Calls"
+                }
                 buttons.add(
                     HomeButtonConfig.MenuButton(
                         id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
-                        label = "Missed Calls",
+                        label = missedCallsLabel,
                         color = settings.homeMissedCallsButtonColor,
                         isHalfWidth = false  // List buttons are full-width
                     )
@@ -188,7 +259,7 @@ class HomeViewModel @Inject constructor(
                 buttons.add(
                     HomeButtonConfig.MenuButton(
                         id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
-                        label = "Contacts",
+                        label = "Other Contacts",
                         color = settings.homeContactsListButtonColor,
                         isHalfWidth = false  // List buttons are full-width
                     )
@@ -264,6 +335,7 @@ class HomeViewModel @Inject constructor(
     
     // Emergency button tap counter
     private val _emergencyTapCount = MutableStateFlow(0)
+    val emergencyTapCount: StateFlow<Int> = _emergencyTapCount.asStateFlow()
     private val _showEmergencyConfirm = MutableStateFlow(false)
     val showEmergencyConfirm: StateFlow<Boolean> = _showEmergencyConfirm.asStateFlow()
     
@@ -279,17 +351,23 @@ class HomeViewModel @Inject constructor(
         .map { it.emergencyNumber }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "999")
     
+    val emergencyRequiredTaps: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.emergencyTapCount }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
+    
     val emergencyTestMode: StateFlow<Boolean> = settingsRepository.getSettings()
         .map { it.emergencyTestMode }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
     init {
         // Announce greeting on app start (if TTS enabled)
+        // Wait for actual settings to load, not just the initial StateFlow value
         viewModelScope.launch {
-            if (ttsAnnouncementsEnabled.value) {
-                userName.first().let { name ->
-                    tts.speak(TTSScripts.greeting(name))
-                }
+            // Get settings directly from repository to ensure we have the real values
+            val settings = settingsRepository.getSettings().first()
+            if (settings.ttsAnnouncementsEnabled) {
+                val name = settingsRepository.getUserName().first()
+                tts.speak(TTSScripts.greeting(name))
             }
         }
         
@@ -552,6 +630,15 @@ class HomeViewModel @Inject constructor(
      * Long press on emergency button - goes to carer settings (temporary dev access)
      */
     fun onEmergencyButtonLongPress() {
+        _showCarerAccess.value = true
+    }
+    
+    /**
+     * Settings access button activated (7-10 taps)
+     * The tap counting is handled in the button component itself
+     */
+    fun onSettingsAccessTap() {
+        Log.d(TAG, "Settings access button activated")
         _showCarerAccess.value = true
     }
 }

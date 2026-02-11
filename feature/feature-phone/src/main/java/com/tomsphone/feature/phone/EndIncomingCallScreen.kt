@@ -2,20 +2,22 @@ package com.tomsphone.feature.phone
 
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -24,8 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
+import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,6 +63,13 @@ fun EndIncomingCallScreen(
     val confirmPending by viewModel.confirmPending.collectAsState()
     val showSpeakerToggle by viewModel.showSpeakerToggle.collectAsState()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsState()
+    val wasAutoAnswered by viewModel.wasAutoAnswered.collectAsState()
+    
+    // Touch response settings
+    val buttonActivation by viewModel.buttonActivation.collectAsState()
+    val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
+    val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
+    val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     
     // Status message - ONE LINE
     val displayName = callerName ?: "Caller"
@@ -96,17 +107,35 @@ fun EndIncomingCallScreen(
                     .padding(horizontal = WandasDimensions.SpacingLarge),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = statusMessage,
-                    style = TextStyle(
-                        fontSize = ScaledDimensions.statusTextSize,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = ScaledDimensions.statusTextSize * 1.2f
-                    ),
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    maxLines = 3
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = statusMessage,
+                        style = TextStyle(
+                            fontSize = ScaledDimensions.statusTextSize,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = ScaledDimensions.statusTextSize * 1.2f
+                        ),
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3
+                    )
+                    
+                    // Auto-answered indicator
+                    if (wasAutoAnswered) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "(Auto-answered)",
+                            style = TextStyle(
+                                fontSize = ScaledDimensions.statusTextSize * 0.7f,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            color = Color.White.copy(alpha = 0.8f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
             
             // Button area - divided into TWO equal zones
@@ -149,22 +178,37 @@ fun EndIncomingCallScreen(
                         Spacer(modifier = Modifier.height(WandasDimensions.SpacingMedium))
                         
                         // End call button - round, red, scaled size
-                        Button(
-                            onClick = { viewModel.onEndCallTap() },
-                            modifier = Modifier.size(ScaledDimensions.endCallButtonSize),
+                        // Uses activation gesture for consistent touch response
+                        val endCallInteractionSource = remember { MutableInteractionSource() }
+                        Surface(
+                            modifier = Modifier
+                                .size(ScaledDimensions.endCallButtonSize)
+                                .clip(CircleShape)
+                                .indication(endCallInteractionSource, rememberRipple())
+                                .activationGesture(
+                                    preset = buttonActivation,
+                                    debounceMs = touchDebounceMs,
+                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                    onActivate = { viewModel.onEndCallTap() },
+                                    interactionSource = endCallInteractionSource
+                                ),
                             shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFD32F2F),
-                                contentColor = Color.White
-                            )
+                            color = Color(0xFFD32F2F)
                         ) {
-                            Text(
-                                text = "End",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.buttonTextSize,
-                                    fontWeight = FontWeight.Bold
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "End",
+                                    style = TextStyle(
+                                        fontSize = ScaledDimensions.buttonTextSize,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = Color.White
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -178,27 +222,23 @@ fun EndIncomingCallScreen(
                 ) {
                     if (showSpeakerToggle) {
                         val speakerConfirmPending by viewModel.speakerConfirmPending.collectAsState()
+                        val speakerInteractionSource = remember { MutableInteractionSource() }
                         
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { viewModel.onSpeakerTap() }
+                                .indication(speakerInteractionSource, rememberRipple(bounded = false))
+                                .activationGesture(
+                                    preset = buttonActivation,
+                                    debounceMs = touchDebounceMs,
+                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                    onActivate = { viewModel.onSpeakerTap() },
+                                    interactionSource = speakerInteractionSource
+                                )
                         ) {
-                            // Speaker icon - large, touchable
-                            Icon(
-                                imageVector = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                                contentDescription = if (isSpeakerOn) "Speaker on" else "Speaker off",
-                                modifier = Modifier.size(ScaledDimensions.endCallButtonSize * 0.7f),
-                                tint = Color.White
-                            )
-                            
-                            Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
-                            
-                            // State text below icon (same style as End button)
+                            // State text above icon (reduces risk of hand covering text)
                             Text(
                                 text = if (isSpeakerOn) "Speaker on," else "Speaker off,",
                                 style = TextStyle(
@@ -211,7 +251,7 @@ fun EndIncomingCallScreen(
                             
                             Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
                             
-                            // Instruction text below
+                            // Instruction text
                             Text(
                                 text = if (speakerConfirmPending) "Tap again" else "press twice",
                                 style = TextStyle(
@@ -220,6 +260,16 @@ fun EndIncomingCallScreen(
                                 ),
                                 color = if (speakerConfirmPending) Color.Red else Color.White.copy(alpha = 0.8f),
                                 textAlign = TextAlign.Center
+                            )
+                            
+                            Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
+                            
+                            // Speaker icon - large, touchable
+                            Icon(
+                                imageVector = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                contentDescription = if (isSpeakerOn) "Speaker on" else "Speaker off",
+                                modifier = Modifier.size(ScaledDimensions.endCallButtonSize * 0.7f),
+                                tint = Color.White
                             )
                         }
                     }
@@ -257,6 +307,28 @@ class EndIncomingCallViewModel @Inject constructor(
     val isSpeakerOn: StateFlow<Boolean> = callManager.currentCall
         .map { it?.isSpeakerOn ?: true }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    
+    // Auto-answer indicator
+    val wasAutoAnswered: StateFlow<Boolean> = callManager.currentCall
+        .map { it?.wasAutoAnswered ?: false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    
+    // Touch response settings
+    val buttonActivation: StateFlow<ButtonActivationPreset> = settingsRepository.getSettings()
+        .map { it.buttonActivation }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ButtonActivationPreset.ON_RELEASE)
+    
+    val touchDebounceMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.touchDebounceMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 150)
+    
+    val accumulatedTapThresholdMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapThresholdMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 500)
+    
+    val accumulatedTapTimeoutMs: StateFlow<Int> = settingsRepository.getSettings()
+        .map { it.accumulatedTapTimeoutMs }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3000)
     
     // End call double-tap
     private val _tapCount = MutableStateFlow(0)

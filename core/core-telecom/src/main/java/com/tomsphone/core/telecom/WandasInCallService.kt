@@ -14,8 +14,10 @@ import com.tomsphone.core.tts.WandasTTS
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -53,6 +55,9 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     @Inject
     lateinit var missedCallNagManager: dagger.Lazy<MissedCallNagManager>
     
+    @Inject
+    lateinit var ringtonePlayer: RingtonePlayer
+    
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     private var currentCall: Call? = null
@@ -60,10 +65,12 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     private var isMuted = false
     private var wasCallActive = false  // Track if call was ever connected
     private var wasIncomingCall = false  // Track if this was an incoming call
+    private var wasAutoAnswered = false  // Track if call was auto-answered
     private var lastIncomingPhoneNumber: String? = null  // For missed call nag
     private var lastIncomingContactName: String? = null
     private var isRegisteredWithCallManager = false
     private var currentContactName: String? = null  // Preserve contact name across state updates
+    private var autoAnswerJob: Job? = null  // Job for delayed auto-answer
     
     /**
      * Speak TTS if announcements are enabled.
@@ -174,10 +181,12 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         currentCall = call
         call.registerCallback(callCallback)
         wasCallActive = false  // Reset for new call
+        wasAutoAnswered = false  // Reset for new call
         wasIncomingCall = isIncoming
         lastIncomingPhoneNumber = if (isIncoming) phoneNumber else null
         lastIncomingContactName = null  // Will be set during contact lookup
         currentContactName = null  // Reset for new call - will be set when contact is looked up
+        cancelAutoAnswer()  // Cancel any pending auto-answer from previous call
         
         // Enable speakerphone when call is added
         serviceScope.launch {
@@ -218,10 +227,12 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         
         // Reset state
         wasCallActive = false
+        wasAutoAnswered = false
         wasIncomingCall = false
         lastIncomingPhoneNumber = null
         lastIncomingContactName = null
         currentContactName = null
+        cancelAutoAnswer()
     }
     
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
@@ -331,6 +342,87 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         }
     }
     
+    /**
+     * Check if auto-answer should be triggered for this incoming call
+     * and start the delayed auto-answer if eligible.
+     */
+    private fun checkAndStartAutoAnswer(phoneNumber: String) {
+        // Cancel any existing auto-answer job
+        autoAnswerJob?.cancel()
+        autoAnswerJob = null
+        
+        serviceScope.launch {
+            try {
+                // Check global auto-answer setting
+                val isAutoAnswerAllowed = settingsRepository.isAutoAnswerAllowed().first()
+                if (!isAutoAnswerAllowed) {
+                    Log.d(TAG, "Auto-answer: globally disabled")
+                    return@launch
+                }
+                
+                // Check if this contact has auto-answer enabled
+                val contact = contactRepository.getContactByPhone(phoneNumber).first()
+                    ?: contactRepository.getContactByPhone(normalizePhoneNumber(phoneNumber)).first()
+                
+                if (contact == null) {
+                    Log.d(TAG, "Auto-answer: contact not found for $phoneNumber")
+                    return@launch
+                }
+                
+                if (!contact.autoAnswerEnabled) {
+                    Log.d(TAG, "Auto-answer: disabled for contact ${contact.name}")
+                    return@launch
+                }
+                
+                // Get delay from settings
+                val settings = settingsRepository.getSettings().first()
+                val delaySeconds = settings.autoAnswerDelaySeconds
+                Log.d(TAG, "Auto-answer: starting ${delaySeconds}s delay for ${contact.name}")
+                
+                // Start delayed auto-answer
+                autoAnswerJob = serviceScope.launch {
+                    // Wait for the configured delay
+                    delay(delaySeconds * 1000L)
+                    
+                    // Check if call is still ringing
+                    val call = currentCall
+                    if (call == null || call.state != Call.STATE_RINGING) {
+                        Log.d(TAG, "Auto-answer: call no longer ringing, cancelling")
+                        return@launch
+                    }
+                    
+                    Log.d(TAG, "Auto-answer: triggering for ${contact.name}")
+                    
+                    // PRIVACY: Play alert sound and announce BEFORE answering
+                    // This is critical - user MUST know the call is being answered
+                    ringtonePlayer.playAndWait(RingtonePlayer.Ringtone.TANNOY_SHORT)
+                    tts.speakAndWait(TTSScripts.autoAnswerNotification(contact.name))
+                    
+                    // Final check - still ringing?
+                    if (currentCall?.state != Call.STATE_RINGING) {
+                        Log.d(TAG, "Auto-answer: call ended during notification, cancelling")
+                        return@launch
+                    }
+                    
+                    // Answer the call
+                    wasAutoAnswered = true
+                    currentCall?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
+                    Log.d(TAG, "Auto-answer: call answered")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Auto-answer error: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Cancel any pending auto-answer
+     */
+    private fun cancelAutoAnswer() {
+        autoAnswerJob?.cancel()
+        autoAnswerJob = null
+    }
+    
     private fun handleCallStateChange(call: Call, state: Int) {
         val wandasState = when (state) {
             Call.STATE_DIALING -> CallState.DIALING
@@ -350,6 +442,14 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
             CallDirection.OUTGOING
         }
         
+        // Handle auto-answer for incoming RINGING calls
+        if (wandasState == CallState.RINGING && direction == CallDirection.INCOMING) {
+            checkAndStartAutoAnswer(phoneNumber)
+        } else if (wandasState != CallState.RINGING) {
+            // Cancel auto-answer if call is no longer ringing
+            cancelAutoAnswer()
+        }
+        
         // Emit state IMMEDIATELY so UI can react (especially for incoming calls)
         // Contact name will be updated in a follow-up emission
         val immediateCallInfo = CallInfo(
@@ -361,10 +461,11 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
             direction = direction,
             startTime = System.currentTimeMillis(),
             isSpeakerOn = isSpeakerOn,
-            isMuted = isMuted
+            isMuted = isMuted,
+            wasAutoAnswered = wasAutoAnswered
         )
         callManager.updateCallState(immediateCallInfo)
-        Log.d(TAG, "Call state (immediate): $wandasState, direction: $direction")
+        Log.d(TAG, "Call state (immediate): $wandasState, direction: $direction, autoAnswered: $wasAutoAnswered")
         
         // Then look up contact name and update again
         serviceScope.launch {
@@ -450,7 +551,8 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                 direction = direction,
                 startTime = System.currentTimeMillis(),
                 isSpeakerOn = isSpeakerOn,
-                isMuted = isMuted
+                isMuted = isMuted,
+                wasAutoAnswered = wasAutoAnswered
             )
             callManager.updateCallState(callInfo)
         }

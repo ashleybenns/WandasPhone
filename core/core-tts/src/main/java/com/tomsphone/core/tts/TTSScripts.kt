@@ -88,5 +88,13 @@ object TTSScripts {
     fun returningHome(): String {
         return "Going back to home screen."
     }
+    
+    /**
+     * Auto-answer notification - announces that the call is now live
+     * This is CRITICAL for privacy - user must know someone can hear them
+     */
+    fun autoAnswerNotification(callerName: String): String {
+        return "$callerName is calling. Answering now. Call is live."
+    }
 }
 

@@ -36,6 +36,7 @@ data class CallInfo(
     val direction: CallDirection,
     val startTime: Long,
     val isSpeakerOn: Boolean,
-    val isMuted: Boolean
+    val isMuted: Boolean,
+    val wasAutoAnswered: Boolean = false
 )
 

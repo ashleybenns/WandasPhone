@@ -169,10 +169,9 @@ class BatteryMonitor @Inject constructor(
             }
         }
         
-        // Announce charging started
-        if (charging && !wasCharging) {
-            announceCharging()
-        }
+        // NOTE: Do NOT announce charging here - use ACTION_POWER_CONNECTED instead
+        // The BATTERY_CHANGED intent can have stale data that races with POWER_DISCONNECTED,
+        // causing false "charging" announcements when unplugging the device.
     }
     
     private fun announceLowBattery(level: Int, critical: Boolean) {

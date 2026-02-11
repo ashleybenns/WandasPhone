@@ -54,7 +54,26 @@ class MissedCallNagManager @Inject constructor(
     // Track if a call is in progress - completely suppress nag while calling
     private var callInProgress: Boolean = false
     
+    // Deduplication: track recently logged missed calls to prevent duplicates
+    // Maps phone number to timestamp of last logged missed call
+    private val recentlyLoggedCalls = mutableMapOf<String, Long>()
+    private val DEDUP_WINDOW_MS = 5000L  // 5 second window to prevent duplicates
+    
+    // Auto-expire: missed calls older than 7 days are automatically deleted
+    private val MISSED_CALL_EXPIRY_DAYS = 7
+    
     init {
+        // Auto-expire old missed calls on startup
+        scope.launch {
+            val expiryTimestamp = System.currentTimeMillis() - (MISSED_CALL_EXPIRY_DAYS * 24 * 60 * 60 * 1000L)
+            val result = callLogRepository.deleteMissedCallsOlderThan(expiryTimestamp)
+            if (result.isSuccess) {
+                Log.d(TAG, "Auto-expired missed calls older than $MISSED_CALL_EXPIRY_DAYS days")
+            } else {
+                Log.e(TAG, "Failed to auto-expire old missed calls: ${result.exceptionOrNull()}")
+            }
+        }
+        
         // Monitor for new missed calls - only nag for CARER contacts
         scope.launch {
             callLogRepository.getMissedCalls(10)
@@ -204,6 +223,37 @@ class MissedCallNagManager @Inject constructor(
     }
     
     /**
+     * Mark ALL missed calls from a phone number as read and stop nagging
+     * Called when user places a call to that number (they're calling back)
+     */
+    suspend fun markMissedCallsAsReadAndDismiss(phoneNumber: String) {
+        // Stop all audio immediately
+        stopAllAudio()
+        
+        // Normalize the phone number for matching
+        val normalizedPhone = normalizePhoneNumber(phoneNumber)
+        
+        // Mark all missed calls from this number as read
+        // Try both the original format and normalized format
+        callLogRepository.markMissedCallsFromNumberAsRead(phoneNumber)
+        if (normalizedPhone != phoneNumber) {
+            callLogRepository.markMissedCallsFromNumberAsRead(normalizedPhone)
+        }
+        
+        Log.d(TAG, "Marked all missed calls from $phoneNumber as read")
+        
+        // Stop nagging if this was the person being nagged about
+        val mostRecentMissedCall = _activeMissedCalls.value.firstOrNull()
+        if (mostRecentMissedCall != null) {
+            val missedNormalized = normalizePhoneNumber(mostRecentMissedCall.phoneNumber)
+            if (normalizedPhone == missedNormalized) {
+                Log.d(TAG, "Calling back the missed caller - stopping nag")
+                stopNagging()
+            }
+        }
+    }
+    
+    /**
      * Normalize phone number for comparison (UK format)
      */
     private fun normalizePhoneNumber(phone: String): String {
@@ -263,35 +313,56 @@ class MissedCallNagManager @Inject constructor(
     }
     
     /**
-     * Manually trigger a missed call nag (for rejected calls)
-     * Only triggers if the contact is a CARER
+     * Log a missed call and optionally trigger nag
+     * 
+     * All missed calls are logged (carers, grey list, unknown) for the missed calls list.
+     * Only CARER contacts trigger the nagging reminder.
+     * 
+     * Includes deduplication to prevent the same call being logged twice
+     * (can happen due to multiple code paths in InCallService)
      */
     fun onMissedCall(phoneNumber: String, contactName: String?) {
         scope.launch {
-            // Check if this is a carer contact
-            val contact = contactRepository.getContactByPhone(phoneNumber).first()
+            val now = System.currentTimeMillis()
             
-            if (contact?.contactType != ContactType.CARER) {
-                Log.d(TAG, "Missed call from non-carer - no nag")
+            // Deduplication check - prevent logging same number twice within window
+            val lastLogged = recentlyLoggedCalls[phoneNumber]
+            if (lastLogged != null && (now - lastLogged) < DEDUP_WINDOW_MS) {
+                Log.d(TAG, "Skipping duplicate missed call from $phoneNumber (logged ${now - lastLogged}ms ago)")
                 return@launch
             }
             
-            // Log as missed call
+            // Mark as recently logged before actually logging (to catch concurrent calls)
+            recentlyLoggedCalls[phoneNumber] = now
+            
+            // Clean up old entries (older than 1 minute)
+            recentlyLoggedCalls.entries.removeIf { now - it.value > 60_000 }
+            
+            // Look up contact (may be null for unknown callers)
+            val contact = contactRepository.getContactByPhone(phoneNumber).first()
+            
+            // Log as missed call - ALL missed calls go in the log for the list
             val entry = CallLogEntry(
                 id = 0,
-                contactId = contact.id,
+                contactId = contact?.id,
                 phoneNumber = phoneNumber,
-                contactName = contactName ?: contact.name,
+                contactName = contactName ?: contact?.name,
                 type = com.tomsphone.core.data.model.CallType.MISSED,
-                timestamp = System.currentTimeMillis(),
+                timestamp = now,
                 duration = 0,
                 isRead = false
             )
             
             callLogRepository.logCall(entry)
-            Log.d(TAG, "Logged missed call from carer ${contact.name} - nag will start")
             
-            // The existing flow will pick up the missed call and start nagging
+            // Only nag for CARER contacts - grey list and unknown don't trigger nag
+            if (contact?.contactType == ContactType.CARER) {
+                Log.d(TAG, "Logged missed call from carer ${contact.name} - nag will start")
+            } else {
+                Log.d(TAG, "Logged missed call from ${contact?.name ?: phoneNumber} (non-carer) - no nag")
+            }
+            
+            // The existing flow will pick up the missed call and start nagging (for carers only)
         }
     }
     

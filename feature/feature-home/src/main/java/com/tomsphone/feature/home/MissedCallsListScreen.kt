@@ -1,27 +1,35 @@
 package com.tomsphone.feature.home
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tomsphone.core.config.ButtonActivationPreset
+import com.tomsphone.core.config.ListTextAlignment
+import com.tomsphone.core.ui.components.activationGesture
+import com.tomsphone.core.ui.components.ListScreenLayout
+import com.tomsphone.core.ui.theme.PastelColors
 import com.tomsphone.core.ui.theme.ScaledDimensions
+import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
-import android.util.Log
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.*
 
-// #region agent log helper
-private fun debugLog(location: String, hypothesisId: String, message: String, data: Map<String, Any?> = emptyMap()) {
-    Log.d("DEBUG_NAV", "[$hypothesisId] $location: $message | $data")
-}
-// #endregion
+private const val INACTIVITY_TIMEOUT_MS = 30_000L
 
 /**
  * Missed Calls List Screen (Level 2+)
@@ -29,9 +37,10 @@ private fun debugLog(location: String, hypothesisId: String, message: String, da
  * Shows list of missed calls for the user to return.
  * Tap a contact to call them back.
  * 
- * Design: Large touch targets, simple list, prominent names.
+ * Design: Matches home screen with pastel blue background,
+ * inert gutters, and home-style call buttons.
+ * Time text appears below each button.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MissedCallsListScreen(
     onBack: () -> Unit,
@@ -39,107 +48,161 @@ fun MissedCallsListScreen(
     viewModel: MissedCallsListViewModel = hiltViewModel()
 ) {
     val missedCalls by viewModel.missedCalls.collectAsState()
-    val userName by viewModel.userName.collectAsState()
+    val listTextAlignment by viewModel.listTextAlignment.collectAsState()
+    val buttonActivation by viewModel.buttonActivation.collectAsState()
+    val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
+    val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
+    val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     
-    // #region agent log
-    LaunchedEffect(Unit) { debugLog("MissedCallsListScreen.kt:40", "H5", "MissedCallsListScreen composed", mapOf("missedCallsCount" to missedCalls.size)) }
-    DisposableEffect(Unit) {
-        onDispose { debugLog("MissedCallsListScreen.kt:42", "H3", "MissedCallsListScreen disposed", emptyMap()) }
+    // Auto-dismiss after 30 seconds of inactivity
+    LaunchedEffect(Unit) {
+        delay(INACTIVITY_TIMEOUT_MS)
+        onBack()
     }
-    // #endregion
     
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.wandasColors.background
+    ListScreenLayout(
+        backgroundColor = PastelColors.lightBlue,
+        title = "Missed Calls",
+        emptyMessage = "No Missed Calls",
+        isEmpty = missedCalls.isEmpty(),
+        onBack = onBack,
+        activationPreset = buttonActivation,
+        debounceMs = touchDebounceMs,
+        accumulatedThresholdMs = accumulatedThresholdMs,
+        accumulatedTimeoutMs = accumulatedTimeoutMs
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Top bar with back button
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Missed Calls",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.wandasColors.surface
-                )
+        missedCalls.forEach { call ->
+            MissedCallItem(
+                contactName = call.contactName ?: call.phoneNumber,
+                timestamp = call.timestamp,
+                textAlignment = listTextAlignment,
+                activationPreset = buttonActivation,
+                debounceMs = touchDebounceMs,
+                accumulatedThresholdMs = accumulatedThresholdMs,
+                accumulatedTimeoutMs = accumulatedTimeoutMs,
+                onClick = {
+                    onCallContact(call.contactName ?: call.phoneNumber, call.phoneNumber)
+                }
             )
-            
-            if (missedCalls.isEmpty()) {
-                // No missed calls message
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No missed calls",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            } else {
-                // Missed calls list
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(missedCalls) { call ->
-                        MissedCallItem(
-                            contactName = call.contactName ?: call.phoneNumber,
-                            phoneNumber = call.phoneNumber,
-                            onClick = {
-                                onCallContact(call.contactName ?: call.phoneNumber, call.phoneNumber)
-                            }
-                        )
-                    }
-                }
-            }
         }
     }
 }
 
+/**
+ * Missed call item - button with time text below
+ * Button matches contacts list style exactly
+ * Uses custom activation gesture for consistent touch response
+ */
 @Composable
 private fun MissedCallItem(
     contactName: String,
-    phoneNumber: String,
+    timestamp: Long,
+    textAlignment: ListTextAlignment,
+    activationPreset: ButtonActivationPreset,
+    debounceMs: Int,
+    accumulatedThresholdMs: Int,
+    accumulatedTimeoutMs: Int,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        color = MaterialTheme.wandasColors.primaryButton,
-        shape = MaterialTheme.shapes.medium,
-        tonalElevation = 2.dp
+    val textSize = ScaledDimensions.buttonTextSize
+    val timeText = formatRelativeTime(timestamp)
+    
+    // Convert setting to Compose alignment
+    val boxAlignment = when (textAlignment) {
+        ListTextAlignment.LEFT -> Alignment.CenterStart
+        ListTextAlignment.CENTER -> Alignment.Center
+    }
+    val textAlign = when (textAlignment) {
+        ListTextAlignment.LEFT -> TextAlign.Start
+        ListTextAlignment.CENTER -> TextAlign.Center
+    }
+    val columnAlignment = when (textAlignment) {
+        ListTextAlignment.LEFT -> Alignment.Start
+        ListTextAlignment.CENTER -> Alignment.CenterHorizontally
+    }
+    
+    // Interaction source for ripple effect
+    val interactionSource = remember { MutableInteractionSource() }
+    
+    Column(
+        horizontalAlignment = columnAlignment,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
+        // Call button - same design as contacts list, with custom activation
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 24.dp, horizontal = 20.dp),
-            contentAlignment = Alignment.Center
+                .wrapContentHeight()
+                .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                .indication(interactionSource, rememberRipple())
+                .activationGesture(
+                    preset = activationPreset,
+                    debounceMs = debounceMs,
+                    accumulatedThresholdMs = accumulatedThresholdMs,
+                    accumulatedTimeoutMs = accumulatedTimeoutMs,
+                    onActivate = onClick,
+                    interactionSource = interactionSource
+                ),
+            color = MaterialTheme.wandasColors.primaryButton,
+            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
         ) {
-            Text(
-                text = contactName,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.wandasColors.onPrimaryButton
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = boxAlignment
+            ) {
+                Text(
+                    text = contactName,
+                    style = TextStyle(
+                        fontSize = textSize,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.wandasColors.onPrimaryButton,
+                    textAlign = textAlign
+                )
+            }
+        }
+        
+        // Time text below button - same size as button text, aligned with button text
+        Text(
+            text = timeText,
+            style = TextStyle(
+                fontSize = textSize,
+                fontWeight = FontWeight.Normal
+            ),
+            color = Color.Black,
+            textAlign = textAlign,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+        )
+    }
+}
+
+/**
+ * Format timestamp as relative time
+ * Returns: "X minutes ago", "X hours ago", "yesterday at HH:MM", "X days ago"
+ */
+private fun formatRelativeTime(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    
+    val minutes = diff / 60_000
+    val hours = diff / 3_600_000
+    val days = diff / 86_400_000
+    
+    return when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "$minutes minute${if (minutes > 1) "s" else ""} ago"
+        hours < 24 -> "$hours hour${if (hours > 1) "s" else ""} ago"
+        days < 2 -> {
+            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            "yesterday at ${timeFormat.format(Date(timestamp))}"
+        }
+        days < 7 -> "$days days ago"
+        else -> {
+            val dateFormat = SimpleDateFormat("MMM d", Locale.getDefault())
+            dateFormat.format(Date(timestamp))
         }
     }
 }

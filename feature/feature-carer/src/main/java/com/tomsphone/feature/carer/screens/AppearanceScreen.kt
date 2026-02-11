@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.ThemeOption
 import com.tomsphone.core.config.UserTextSize
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -106,6 +107,39 @@ fun AppearanceScreen(
                     // Button Size - handled automatically by text size setting
                     // Container heights are calculated from text size
                     
+                    // List Text Alignment (Level 1 - always visible)
+                    SettingCard(title = "List Text Alignment") {
+                        Text(
+                            text = "Left-aligned text is easier to scan down a list. Center looks more balanced.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        ListTextAlignment.entries.forEach { alignment ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = settings.listTextAlignment == alignment,
+                                    onClick = {
+                                        viewModel.setListTextAlignment(alignment)
+                                        saveToastState.show("Alignment saved: ${alignment.displayName}")
+                                    }
+                                )
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
+                                
+                                Text(
+                                    text = alignment.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.wandasColors.onSurface
+                                )
+                            }
+                        }
+                    }
+                    
                     // Screen Off Button (Level 2+)
                     // List Buttons (Level 2+)
                     LevelGatedContent(
@@ -134,17 +168,33 @@ fun AppearanceScreen(
                             )
                             
                             SettingToggle(
-                                title = "Contacts Button",
-                                description = "Shows list of all carers to call",
+                                title = "Other Contacts Button",
+                                description = "Shows contacts not on home screen",
                                 checked = settings.homeShowContactsListButton,
                                 onCheckedChange = { enabled ->
                                     viewModel.setShowContactsListButton(enabled)
                                     saveToastState.show(
-                                        if (enabled) "Contacts button enabled"
-                                        else "Contacts button disabled"
+                                        if (enabled) "Other Contacts button enabled"
+                                        else "Other Contacts button disabled"
                                     )
                                 }
                             )
+                            
+                            // Sub-option: Grey List Only (only visible when contacts button enabled)
+                            if (settings.homeShowContactsListButton) {
+                                SettingToggle(
+                                    title = "Grey List Only",
+                                    description = "Only show answer-only contacts (not carers)",
+                                    checked = settings.homeContactsListShowGreyListOnly,
+                                    onCheckedChange = { enabled ->
+                                        viewModel.setContactsListShowGreyListOnly(enabled)
+                                        saveToastState.show(
+                                            if (enabled) "Showing grey list only"
+                                            else "Showing all contacts"
+                                        )
+                                    }
+                                )
+                            }
                             
                             SettingToggle(
                                 title = "Screen Off Button",

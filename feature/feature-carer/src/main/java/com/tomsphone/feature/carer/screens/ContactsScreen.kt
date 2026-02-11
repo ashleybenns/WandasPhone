@@ -138,46 +138,58 @@ fun ContactsScreen(
                 
                 // ========== GREY LIST SECTION ==========
                 // Grey list available at all levels - allows calls without home button
-                if (true) {  // Was: featureLevel.level >= 2
-                    item {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Text(
-                            text = "Grey List",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.wandasColors.onSurface
-                        )
-                        
-                        Text(
-                            text = "Allows incoming calls only. No way to call back and no missed call notification.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Text(
+                        text = "Grey List",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.wandasColors.onSurface
+                    )
+                    
+                    // Description varies by level
+                    val greyListDescription = if (featureLevel.level >= 2) {
+                        "Can answer calls but no home screen button. At Level 2+, use 'Other Contacts' and 'Missed Calls' buttons in Appearance settings to allow calling back."
+                    } else {
+                        "Can answer calls only. No home screen button, no way to call back."
                     }
                     
-                    val greyList = contacts.filter { it.contactType == ContactType.GREY_LIST }
-                    items(greyList, key = { it.id }) { contact ->
-                        ContactListItem(
-                            contact = contact,
-                            onClick = { onNavigateToContactEdit(contact.id, contact.contactType) }
+                    Text(
+                        text = greyListDescription,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                
+                val greyList = contacts.filter { it.contactType == ContactType.GREY_LIST }
+                    .sortedBy { it.buttonPosition }
+                items(greyList, key = { it.id }) { contact ->
+                    val index = greyList.indexOf(contact)
+                    ContactListItem(
+                        contact = contact,
+                        onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
+                        showReorderButtons = true,
+                        isFirst = index == 0,
+                        isLast = index == greyList.size - 1,
+                        onMoveUp = { viewModel.moveContactUp(contact, greyList) },
+                        onMoveDown = { viewModel.moveContactDown(contact, greyList) }
+                    )
+                }
+                
+                // Add to Grey List button (always enabled - no limit)
+                item {
+                    OutlinedButton(
+                        onClick = { onNavigateToContactEdit(0, ContactType.GREY_LIST) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
                         )
-                    }
-                    
-                    // Add to Grey List button (always enabled)
-                    item {
-                        OutlinedButton(
-                            onClick = { onNavigateToContactEdit(0, ContactType.GREY_LIST) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Add to Grey List")
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add to Grey List")
                     }
                 }
                 

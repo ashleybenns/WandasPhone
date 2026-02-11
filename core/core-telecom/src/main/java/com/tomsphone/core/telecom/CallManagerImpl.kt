@@ -120,18 +120,14 @@ class CallManagerImpl @Inject constructor(
                 Log.d(TAG, "Placed call via Intent (fallback) to $phoneNumber")
             }
             
-            // Only dismiss nag if calling the person who called
-            // If calling someone else, the nag will resume after this call
+            // Mark all missed calls from this number as read (user is calling back)
+            // Also stop the nag if calling the person who called
             scope.launch {
                 try {
-                    val dismissed = missedCallNagManager.get().dismissIfCallingMissedCaller(phoneNumber)
-                    if (dismissed) {
-                        Log.d(TAG, "Dismissed missed call nag (calling the missed caller)")
-                    } else {
-                        Log.d(TAG, "Nag not dismissed (calling different person)")
-                    }
+                    missedCallNagManager.get().markMissedCallsAsReadAndDismiss(phoneNumber)
+                    Log.d(TAG, "Marked missed calls from $phoneNumber as read")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to check nag: ${e.message}")
+                    Log.e(TAG, "Failed to mark missed calls as read: ${e.message}")
                 }
             }
         }

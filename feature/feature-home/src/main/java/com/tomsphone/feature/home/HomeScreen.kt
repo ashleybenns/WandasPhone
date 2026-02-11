@@ -17,13 +17,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.HomeButtonConfig
+import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.telecom.CallDirection
 import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.ui.components.CallingStateButton
 import com.tomsphone.core.ui.components.ConfigurableButton
 import com.tomsphone.core.ui.components.DisplayOffButton
 import com.tomsphone.core.ui.components.EmergencyButton
+import com.tomsphone.core.ui.components.SettingsAccessButton
 import com.tomsphone.core.ui.components.HalfWidthButtonRow
 import com.tomsphone.core.ui.components.InertBorderLayout
 import com.tomsphone.core.ui.components.ListButton
@@ -78,7 +81,14 @@ fun HomeScreen(
     // #endregion
     val callingContact by viewModel.callingContact.collectAsState()
     val emergencyTestMode by viewModel.emergencyTestMode.collectAsState()
+    val emergencyTapCount by viewModel.emergencyTapCount.collectAsState()
+    val emergencyRequiredTaps by viewModel.emergencyRequiredTaps.collectAsState()
     val unknownCallsAllowed by viewModel.unknownCallsAllowed.collectAsState()
+    val textAlignment by viewModel.listTextAlignment.collectAsState()
+    val buttonActivation by viewModel.buttonActivation.collectAsState()
+    val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
+    val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
+    val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     val displayOffButtonEnabled by viewModel.displayOffButtonEnabled.collectAsState()
     val displayOffButtonActive by viewModel.displayOffButtonActive.collectAsState()
     val isDisplayOff by viewModel.isDisplayOff.collectAsState()
@@ -340,6 +350,11 @@ fun HomeScreen(
                                 ) {
                                     RenderContactButton(
                                         button = button,
+                                        textAlignment = textAlignment,
+                                        activationPreset = buttonActivation,
+                                        debounceMs = touchDebounceMs,
+                                        accumulatedThresholdMs = accumulatedThresholdMs,
+                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
                                         onClick = { viewModel.onContactButtonTap(button) }
                                     )
                                 }
@@ -359,6 +374,11 @@ fun HomeScreen(
                                             leftButton = { modifier ->
                                                 RenderContactButton(
                                                     button = pair[0],
+                                                    textAlignment = textAlignment,
+                                                    activationPreset = buttonActivation,
+                                                    debounceMs = touchDebounceMs,
+                                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
                                                     onClick = { viewModel.onContactButtonTap(pair[0]) },
                                                     modifier = modifier
                                                 )
@@ -366,6 +386,11 @@ fun HomeScreen(
                                             rightButton = { modifier ->
                                                 RenderContactButton(
                                                     button = pair[1],
+                                                    textAlignment = textAlignment,
+                                                    activationPreset = buttonActivation,
+                                                    debounceMs = touchDebounceMs,
+                                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
                                                     onClick = { viewModel.onContactButtonTap(pair[1]) },
                                                     modifier = modifier
                                                 )
@@ -374,6 +399,11 @@ fun HomeScreen(
                                     } else {
                                         RenderContactButton(
                                             button = pair[0],
+                                            textAlignment = textAlignment,
+                                            activationPreset = buttonActivation,
+                                            debounceMs = touchDebounceMs,
+                                            accumulatedThresholdMs = accumulatedThresholdMs,
+                                            accumulatedTimeoutMs = accumulatedTimeoutMs,
                                             onClick = { viewModel.onContactButtonTap(pair[0]) },
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -396,6 +426,11 @@ fun HomeScreen(
                                 ) {
                                     RenderMenuButton(
                                         button = button,
+                                        textAlignment = textAlignment,
+                                        activationPreset = buttonActivation,
+                                        debounceMs = touchDebounceMs,
+                                        accumulatedThresholdMs = accumulatedThresholdMs,
+                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
                                         onClick = { viewModel.onMenuButtonTap(button) },
                                         modifier = Modifier.fillMaxWidth()
                                     )
@@ -416,6 +451,11 @@ fun HomeScreen(
                                             leftButton = { modifier ->
                                                 RenderMenuButton(
                                                     button = pair[0],
+                                                    textAlignment = textAlignment,
+                                                    activationPreset = buttonActivation,
+                                                    debounceMs = touchDebounceMs,
+                                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
                                                     onClick = { viewModel.onMenuButtonTap(pair[0]) },
                                                     modifier = modifier
                                                 )
@@ -423,6 +463,11 @@ fun HomeScreen(
                                             rightButton = { modifier ->
                                                 RenderMenuButton(
                                                     button = pair[1],
+                                                    textAlignment = textAlignment,
+                                                    activationPreset = buttonActivation,
+                                                    debounceMs = touchDebounceMs,
+                                                    accumulatedThresholdMs = accumulatedThresholdMs,
+                                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
                                                     onClick = { viewModel.onMenuButtonTap(pair[1]) },
                                                     modifier = modifier
                                                 )
@@ -431,6 +476,11 @@ fun HomeScreen(
                                     } else {
                                         RenderMenuButton(
                                             button = pair[0],
+                                            textAlignment = textAlignment,
+                                            activationPreset = buttonActivation,
+                                            debounceMs = touchDebounceMs,
+                                            accumulatedThresholdMs = accumulatedThresholdMs,
+                                            accumulatedTimeoutMs = accumulatedTimeoutMs,
                                             onClick = { viewModel.onMenuButtonTap(pair[0]) },
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -451,7 +501,11 @@ fun HomeScreen(
                                     // Only show and enable when active (not during nag)
                                     if (displayOffButtonActive) {
                                         DisplayOffButton(
-                                            onClick = { viewModel.onDisplayOffTap() }
+                                            onClick = { viewModel.onDisplayOffTap() },
+                                            activationPreset = buttonActivation,
+                                            debounceMs = touchDebounceMs,
+                                            accumulatedThresholdMs = accumulatedThresholdMs,
+                                            accumulatedTimeoutMs = accumulatedTimeoutMs
                                         )
                                     }
                                     // Otherwise: empty box reserves space
@@ -460,17 +514,39 @@ fun HomeScreen(
                         }
                     }
                     
-                    // BOTTOM: Emergency button - fixed at bottom, close to inert gutter
-                    // Tap 3 times = emergency, Long press = carer settings
+                    // BOTTOM: Emergency button + Settings access button
+                    // Emergency: Tap 3 times = emergency
+                    // Settings: Tap 7-10 times = carer settings access
                     if (emergencyButton != null && callingContact == null) {
                         Spacer(modifier = Modifier.height(ScaledDimensions.buttonSpacing))
-                        EmergencyButton(
-                            text = if (emergencyTestMode) "${emergencyButton.label} (Test)" else emergencyButton.label,
-                            subtitle = "Press 3 times",
-                            onClick = { viewModel.onEmergencyButtonTap() },
-                            onLongPress = { viewModel.onEmergencyButtonLongPress() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Emergency button - takes remaining space
+                            EmergencyButton(
+                                text = if (emergencyTestMode) "${emergencyButton.label} (Test)" else emergencyButton.label,
+                                subtitle = "Press $emergencyRequiredTaps times",
+                                tapCount = emergencyTapCount,
+                                requiredTaps = emergencyRequiredTaps,
+                                onClick = { viewModel.onEmergencyButtonTap() },
+                                activationPreset = buttonActivation,
+                                debounceMs = touchDebounceMs,
+                                accumulatedThresholdMs = accumulatedThresholdMs,
+                                accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            // Settings access button - square, to the right
+                            SettingsAccessButton(
+                                onSettingsAccess = { viewModel.onSettingsAccessTap() },
+                                activationPreset = buttonActivation,
+                                debounceMs = touchDebounceMs,
+                                accumulatedThresholdMs = accumulatedThresholdMs,
+                                accumulatedTimeoutMs = accumulatedTimeoutMs
+                            )
+                        }
                     } else if (emergencyButton != null) {
                         // Maintain layout space during calling animation
                         Spacer(modifier = Modifier.height(
@@ -530,6 +606,11 @@ fun HomeScreen(
 @Composable
 private fun RenderContactButton(
     button: HomeButtonConfig.ContactButton,
+    textAlignment: ListTextAlignment,
+    activationPreset: ButtonActivationPreset,
+    debounceMs: Int,
+    accumulatedThresholdMs: Int,
+    accumulatedTimeoutMs: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -540,7 +621,12 @@ private fun RenderContactButton(
         backgroundColor = button.color?.let { Color(it) } 
             ?: MaterialTheme.wandasColors.primaryButton,
         textColor = MaterialTheme.wandasColors.onPrimaryButton,
-        warningText = if (button.showAutoAnswerWarning) "Auto-Answer" else null
+        warningText = if (button.showAutoAnswerWarning) "Auto-Answer" else null,
+        textAlignment = textAlignment,
+        activationPreset = activationPreset,
+        debounceMs = debounceMs,
+        accumulatedThresholdMs = accumulatedThresholdMs,
+        accumulatedTimeoutMs = accumulatedTimeoutMs
     )
 }
 
@@ -555,6 +641,11 @@ private fun RenderContactButton(
 @Composable
 private fun RenderMenuButton(
     button: HomeButtonConfig.MenuButton,
+    textAlignment: ListTextAlignment,
+    activationPreset: ButtonActivationPreset,
+    debounceMs: Int,
+    accumulatedThresholdMs: Int,
+    accumulatedTimeoutMs: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -569,6 +660,11 @@ private fun RenderMenuButton(
         label = button.label,
         fillColor = fillColor,
         onClick = onClick,
-        modifier = modifier
+        modifier = modifier,
+        textAlignment = textAlignment,
+        activationPreset = activationPreset,
+        debounceMs = debounceMs,
+        accumulatedThresholdMs = accumulatedThresholdMs,
+        accumulatedTimeoutMs = accumulatedTimeoutMs
     )
 }

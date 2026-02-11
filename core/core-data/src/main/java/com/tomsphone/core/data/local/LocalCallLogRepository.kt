@@ -47,6 +47,12 @@ class LocalCallLogRepository @Inject constructor(
         }
     }
     
+    override suspend fun markMissedCallsFromNumberAsRead(phoneNumber: String): Result<Unit> {
+        return runCatching {
+            callLogDao.markMissedCallsFromNumberAsRead(phoneNumber)
+        }
+    }
+    
     override suspend fun markAllMissedAsRead(): Result<Unit> {
         return runCatching {
             callLogDao.markAllMissedAsRead()
@@ -56,6 +62,12 @@ class LocalCallLogRepository @Inject constructor(
     override suspend fun deleteOlderThan(timestamp: Long): Result<Unit> {
         return runCatching {
             callLogDao.deleteOlderThan(timestamp)
+        }
+    }
+    
+    override suspend fun deleteMissedCallsOlderThan(timestamp: Long): Result<Unit> {
+        return runCatching {
+            callLogDao.deleteMissedCallsOlderThan(timestamp)
         }
     }
 }

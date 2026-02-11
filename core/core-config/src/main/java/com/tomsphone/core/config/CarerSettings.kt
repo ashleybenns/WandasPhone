@@ -40,6 +40,7 @@ data class CarerSettings(
     val homeShowEmergencyButton: Boolean = true,    // SAFE: Emergency always visible
     val homeShowMissedCallsButton: Boolean = false, // Level 2+: Show missed calls list button
     val homeShowContactsListButton: Boolean = false,// Level 2+: Show contacts list button
+    val homeContactsListShowGreyListOnly: Boolean = false, // Only show grey list contacts (not carers)
     val homeMissedCallsButtonColor: Long? = null,   // ARGB, null = theme default
     val homeContactsListButtonColor: Long? = null,  // ARGB, null = theme default
     // Actual number of contacts configured (updated when contacts change)
@@ -71,12 +72,24 @@ data class CarerSettings(
     val missedCallNagSound: NagSound = NagSound.TANNOY_BINGBONG,
     
     // ========== INTERACTION CONFIG ==========
+    // Button activation: how buttons respond to touch
+    // Level 1 setting - fundamental to how user interacts
+    val buttonActivation: ButtonActivationPreset = ButtonActivationPreset.ON_RELEASE,
+    val touchDebounceMs: Int = 150,  // Ignore very brief touches (filters accidental brushes)
+    // Accumulated Tap settings (only used when buttonActivation = ACCUMULATED_TAP)
+    // Total touch time needed to activate (ms) - higher = more deliberate touch required
+    val accumulatedTapThresholdMs: Int = 500,  // 0.5 seconds total touch time
+    // Time after first touch before counter resets (ms) - higher = more time to complete
+    val accumulatedTapTimeoutMs: Int = 3000,   // 3 seconds timeout
     // Default: Safe interaction settings (see InteractionConfig for details)
     val interaction: InteractionConfig = InteractionConfig(),
     
     // ========== UI APPEARANCE ==========
     // Default: High contrast for accessibility
     val ui: UIConfig = UIConfig(),
+    // LEVEL 1: Text alignment for list screens (contacts, missed calls)
+    // Left-aligned is easier to scan, center looks more balanced
+    val listTextAlignment: ListTextAlignment = ListTextAlignment.CENTER,
     // LEVEL 2: Display Off button - helps users who can't find power button
     // Hidden during calls and missed call nag
     val showDisplayOffButton: Boolean = false,
@@ -219,6 +232,46 @@ enum class TapMode {
     TAP_AND_CONFIRM  // Tap, then confirm in dialog
 }
 
+/**
+ * Button activation presets
+ * 
+ * Different users have different natural touch behaviors.
+ * Carers observe how the user touches and select the best match.
+ * 
+ * Key insight: We adapt to their behavior, not train new behavior.
+ */
+enum class ButtonActivationPreset(
+    val displayName: String,
+    val description: String,
+    val minHoldMs: Int,           // Ignore touches shorter than this (filters brushes)
+    val activateOnRelease: Boolean,  // True = on release, False = after minHoldMs
+    val isAccumulatedMode: Boolean = false,  // True = accumulated tap mode
+    val accumulatedTimeMs: Int = 0,  // For ACCUMULATED_TAP: total touch time to activate
+    val accumulatedTimeoutMs: Int = 0 // For ACCUMULATED_TAP: reset timer after this idle time
+) {
+    ON_RELEASE(
+        displayName = "Tap and Release",
+        description = "Traditional: tap, then lift finger to activate",
+        minHoldMs = 50,
+        activateOnRelease = true
+    ),
+    ON_PRESS(
+        displayName = "Press to Activate", 
+        description = "Activates after brief hold - no need to release. Good for users who hold until something happens.",
+        minHoldMs = 350,
+        activateOnRelease = false
+    ),
+    ACCUMULATED_TAP(
+        displayName = "Accumulated Tap",
+        description = "Multiple touches add up. Forgiving for shaky hands - any touches on the button count toward activation.",
+        minHoldMs = 50,
+        activateOnRelease = true,
+        isAccumulatedMode = true,
+        accumulatedTimeMs = 500,    // Default: 0.5 seconds total touch time to activate
+        accumulatedTimeoutMs = 3000  // Default: 3 seconds before counter resets
+    )
+}
+
 enum class ButtonSize {
     LARGE,        // 72dp minimum
     EXTRA_LARGE,  // 96dp minimum
@@ -242,6 +295,17 @@ enum class ThemeOption {
     HIGH_CONTRAST_DARK,    // White on black
     YELLOW_BLACK,          // For visual impairment
     SOFT_CONTRAST          // Gentler colors
+}
+
+/**
+ * Text alignment options for list screens
+ * 
+ * Left-aligned text is easier to scan down a list.
+ * Center-aligned looks more balanced but harder to scan.
+ */
+enum class ListTextAlignment(val displayName: String) {
+    CENTER("Center"),
+    LEFT("Left")
 }
 
 /**
