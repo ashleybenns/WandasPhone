@@ -160,6 +160,13 @@ class CarerSettingsViewModel @Inject constructor(
         }
     }
     
+    fun setShowTimeInStatus(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(showTimeInStatus = enabled))
+        }
+    }
+    
     fun setButtonActivation(preset: com.tomsphone.core.config.ButtonActivationPreset) {
         viewModelScope.launch {
             val current = settingsRepository.getSettings().first()

@@ -140,6 +140,22 @@ fun AppearanceScreen(
                         }
                     }
                     
+                    // Time Display (Level 1)
+                    SettingCard(title = "Status Display") {
+                        SettingToggle(
+                            title = "Show Time",
+                            description = "Display current time in the status text area",
+                            checked = settings.showTimeInStatus,
+                            onCheckedChange = { enabled ->
+                                viewModel.setShowTimeInStatus(enabled)
+                                saveToastState.show(
+                                    if (enabled) "Time display enabled"
+                                    else "Time display disabled"
+                                )
+                            }
+                        )
+                    }
+                    
                     // Missed Call Return Button (Level 1)
                     // Simple one-button solution for returning grey list missed calls
                     SettingCard(title = "Missed Call Button") {

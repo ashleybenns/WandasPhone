@@ -116,13 +116,14 @@ class SettingsRepositoryImpl @Inject constructor(
     }
     
     /**
-     * SECURITY: Auto-answer is only allowed at Level 2+ (BASIC or higher).
-     * This protects vulnerable Level 1 users from privacy/spoofing risks.
+     * Auto-answer is allowed at Level 1+ (MINIMAL or higher).
+     * Requires user consent via the carer settings toggle.
+     * Level 1 users benefit most from auto-answer as it requires no interaction.
      */
     override fun isAutoAnswerAllowed(): Flow<Boolean> {
         return combine(getFeatureLevel(), getSettings()) { level, settings ->
-            // Must be Level 2+ AND have auto-answer enabled
-            level.level >= FeatureLevel.BASIC.level && settings.autoAnswerEnabled
+            // Must have auto-answer enabled (level check removed - allowed at all levels)
+            level.level >= FeatureLevel.MINIMAL.level && settings.autoAnswerEnabled
         }
     }
     

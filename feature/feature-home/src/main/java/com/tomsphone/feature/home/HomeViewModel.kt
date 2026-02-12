@@ -22,6 +22,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -146,6 +149,19 @@ class HomeViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = CarerSettings()
         )
+    
+    // Current time (updates every 30 seconds for status display)
+    private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val currentTime: StateFlow<String> = flow {
+        while (true) {
+            emit(timeFormatter.format(Date()))
+            delay(30_000) // Update every 30 seconds
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = timeFormatter.format(Date())
+    )
     
     // Warning: unknown calls are allowed (after emergency call)
     val unknownCallsAllowed: StateFlow<Boolean> = settings
@@ -289,7 +305,8 @@ class HomeViewModel @Inject constructor(
                     name = contact.name,
                     phoneNumber = contact.phoneNumber,
                     color = contact.buttonColor,
-                    showAutoAnswerWarning = contact.autoAnswerEnabled,
+                    // Only show warning if BOTH global and per-contact auto-answer are enabled
+                    showAutoAnswerWarning = settings.autoAnswerEnabled && contact.autoAnswerEnabled,
                     isHalfWidth = contact.isHalfWidth
                 )
             )
@@ -357,21 +374,38 @@ class HomeViewModel @Inject constructor(
     private var statusMessageResetJob: Job? = null
     
     // Combine with priority: calling > carer_missed > grey_list_missed > default
+    // Optional time prefix when showTimeInStatus is enabled
     val displayMessage: StateFlow<String> = combine(
         userName, 
         _callingStatus, 
         _missedCallStatus,
         mostRecentGreyListMissedCall,
-        settings
-    ) { name, callingMsg, carerMissedMsg, greyListMissed, carerSettings ->
-        // Priority-based selection
-        when {
+        settings,
+        currentTime
+    ) { values ->
+        val name = values[0] as String
+        val callingMsg = values[1] as String?
+        val carerMissedMsg = values[2] as String?
+        @Suppress("UNCHECKED_CAST")
+        val greyListMissed = values[3] as GreyListMissedCall?
+        val carerSettings = values[4] as CarerSettings
+        val time = values[5] as String
+        
+        // Build status message with priority
+        val baseMessage = when {
             callingMsg != null -> callingMsg
             carerMissedMsg != null -> carerMissedMsg
             // Show grey list missed call in status (no nag, just info)
             greyListMissed != null && carerSettings.homeShowMissedCallReturnButton -> 
                 "Missed call from ${greyListMissed.callerName}"
             else -> "$name's phone"
+        }
+        
+        // Prepend time if enabled (only for default status, not during calls/nags)
+        if (carerSettings.showTimeInStatus && callingMsg == null && carerMissedMsg == null) {
+            "$time\n$baseMessage"
+        } else {
+            baseMessage
         }
     }.stateIn(
         scope = viewModelScope,

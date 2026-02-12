@@ -233,9 +233,9 @@ fun ContactEditScreen(
                         }
                     }
                     
-                    // Auto-Answer (Carers only, Level 2+)
+                    // Auto-Answer (Carers only, Level 1+)
                     LevelGatedContent(
-                        minLevel = FeatureLevel.BASIC,
+                        minLevel = FeatureLevel.MINIMAL,
                         currentLevel = featureLevel
                     ) {
                         if (effectiveContactType == ContactType.CARER) {

@@ -152,12 +152,8 @@ fun CallHandlingScreen(
                         }
                     }
                     
-                    // Auto-Answer - Level 2+ only (security/privacy concerns at Level 1)
-                    LevelGatedContent(
-                        minLevel = FeatureLevel.BASIC,
-                        currentLevel = featureLevel
-                    ) {
-                        SettingCard(title = "Auto-Answer") {
+                    // Auto-Answer - Available at Level 1 (requires no user interaction)
+                    SettingCard(title = "Auto-Answer") {
                             // Privacy warning
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
@@ -226,7 +222,6 @@ fun CallHandlingScreen(
                                 )
                             }
                         }
-                    }
                     
                     // Missed Call Nag
                     SettingCard(title = "Missed Call Reminders") {

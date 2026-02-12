@@ -140,71 +140,60 @@ fun HomeScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // TOP GUTTER: Warning strip for carer alerts (battery, all callers)
-            // Small, unobtrusive, doesn't affect button layout
-            val hasWarnings = isLowBattery || (isCharging && batteryLevel < 100) || unknownCallsAllowed
-            if (hasWarnings) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+            // TOP GUTTER: Status strip showing battery and warnings
+            // Always visible, small, unobtrusive, doesn't affect button layout
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Battery status - always visible
+                // Color: red if low, green if charging, gray if normal
+                val batteryColor = when {
+                    isLowBattery -> Color(0xFFD32F2F)  // Red
+                    isCharging -> Color(0xFF4CAF50)    // Green
+                    else -> Color(0xFF757575)          // Gray
+                }
+                val batteryIcon = when {
+                    isCharging -> "🔌"
+                    isLowBattery -> "🔋"
+                    batteryLevel >= 80 -> "🔋"
+                    batteryLevel >= 40 -> "🔋"
+                    else -> "🔋"
+                }
+                Surface(
+                    color = batteryColor,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
                 ) {
-                    // Battery warning (red) or charging (green)
-                    if (isLowBattery) {
-                        Surface(
-                            color = Color(0xFFD32F2F),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "🔋 $batteryLevel%",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.scaledSp(12f),
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
-                    } else if (isCharging && batteryLevel < 100) {
-                        Surface(
-                            color = Color(0xFF4CAF50),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "🔌 $batteryLevel%",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.scaledSp(12f),
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    
-                    // Spacer between warnings
-                    if ((isLowBattery || (isCharging && batteryLevel < 100)) && unknownCallsAllowed) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    
-                    // All callers allowed warning (blue)
-                    if (unknownCallsAllowed) {
-                        Surface(
-                            color = Color(0xFF1976D2),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "📞 All callers",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.scaledSp(12f),
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
+                    Text(
+                        text = "$batteryIcon $batteryLevel%",
+                        style = TextStyle(
+                            fontSize = ScaledDimensions.scaledSp(12f),
+                            fontWeight = if (isLowBattery) FontWeight.Bold else FontWeight.Medium
+                        ),
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+                
+                // All callers allowed warning (blue) - separate indicator
+                if (unknownCallsAllowed) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = Color(0xFF1976D2),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "📞 All callers",
+                            style = TextStyle(
+                                fontSize = ScaledDimensions.scaledSp(12f),
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }

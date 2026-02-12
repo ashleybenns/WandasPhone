@@ -92,6 +92,8 @@ data class CarerSettings(
     // LEVEL 1: Text alignment for list screens (contacts, missed calls)
     // Left-aligned is easier to scan, center looks more balanced
     val listTextAlignment: ListTextAlignment = ListTextAlignment.CENTER,
+    // LEVEL 1: Show time in status text (simple format, e.g., "12:45")
+    val showTimeInStatus: Boolean = false,
     // LEVEL 2: Display Off button - helps users who can't find power button
     // Hidden during calls and missed call nag
     val showDisplayOffButton: Boolean = false,
