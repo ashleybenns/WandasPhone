@@ -64,7 +64,7 @@ fun AlwaysOnScreen(
                     SettingCard(title = "Pinned Mode") {
                         SettingToggle(
                             title = "Enable Pinned Mode",
-                            description = "Prevents accidentally exiting the app",
+                            description = "Prevents accidentally exiting the app. On Samsung devices, you may need to manually pin: swipe up for recent apps, tap the app icon, select 'Pin this app'.",
                             checked = settings.pinnedModeEnabled,
                             onCheckedChange = { enabled ->
                                 viewModel.setPinnedMode(enabled)

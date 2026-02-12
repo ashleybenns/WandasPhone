@@ -1,9 +1,14 @@
 package com.tomsphone
 
 import android.app.ActivityManager
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -87,6 +92,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Show over lock screen - allows app to appear without unlocking
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        
         hideSystemBars()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         
@@ -111,8 +129,20 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         hideSystemBars()
         
-        if (pinnedModeEnabled) {
-            ensurePinnedMode()
+        // Re-check settings on each resume to respect carer changes
+        lifecycleScope.launch {
+            try {
+                val settings = settingsRepository.getSettings().first()
+                pinnedModeEnabled = settings.pinnedModeEnabled
+                lockVolumeButtons = settings.lockVolumeButtons
+                
+                val isConfigured = settings.carerPin.isNotEmpty()
+                if (pinnedModeEnabled && isConfigured) {
+                    ensurePinnedMode()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to check settings in onResume: ${e.message}")
+            }
         }
     }
     
@@ -138,7 +168,8 @@ class MainActivity : ComponentActivity() {
             // This prevents pinning on first launch before carer can configure
             val isConfigured = settings.carerPin.isNotEmpty()
             if (settings.pinnedModeEnabled && isConfigured) {
-                startPinnedMode()
+                // Use delay to ensure window is fully visible (Samsung needs this)
+                startPinnedMode(delayMs = 500)
             } else if (settings.pinnedModeEnabled && !isConfigured) {
                 Log.d(TAG, "Pinned mode enabled but app not configured yet - skipping pin")
             }
@@ -149,19 +180,31 @@ class MainActivity : ComponentActivity() {
         }
     }
     
-    private fun startPinnedMode() {
+    private fun startPinnedMode(delayMs: Long = 0) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-                    if (am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) {
-                        return
+            // Use a delay to ensure window is fully visible (helps on Samsung)
+            val runPinning = Runnable {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                        if (am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) {
+                            Log.d(TAG, "Already in pinned mode")
+                            return@Runnable
+                        }
                     }
+                    Log.d(TAG, "Requesting pinned mode (startLockTask)")
+                    startLockTask()
+                    Log.d(TAG, "Pinned mode request sent")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to start pinned mode: ${e.message}")
                 }
-                startLockTask()
-                Log.d(TAG, "Pinned mode started")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to start pinned mode: ${e.message}")
+            }
+            
+            if (delayMs > 0) {
+                Handler(Looper.getMainLooper()).postDelayed(runPinning, delayMs)
+            } else {
+                // Post to window to ensure UI is ready
+                window.decorView.post(runPinning)
             }
         }
     }
@@ -170,14 +213,15 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             if (am.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
-                startPinnedMode()
+                // Shorter delay for resume - window should already be mostly ready
+                startPinnedMode(delayMs = 200)
             }
         }
     }
     
     /**
-     * Exit the app - unpin and close
-     * Used by carer as an escape hatch when pinning causes issues
+     * Exit the app - unpin, disable home launcher, and open settings
+     * Used by carer as an escape hatch when pinning/home launcher causes issues
      */
     private fun exitApp() {
         Log.d(TAG, "Carer requested app exit")
@@ -189,6 +233,28 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "Stopped lock task")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to stop lock task: ${e.message}")
+            }
+        }
+        
+        // Open Android Settings - this always works even if we're the home launcher
+        // From settings, user can navigate anywhere or change default home app
+        try {
+            val settingsIntent = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            startActivity(settingsIntent)
+            Log.d(TAG, "Opened Android Settings")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open settings: ${e.message}")
+            // Fallback: try to open home app settings specifically
+            try {
+                val homeSettingsIntent = Intent(android.provider.Settings.ACTION_HOME_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(homeSettingsIntent)
+                Log.d(TAG, "Opened Home Settings")
+            } catch (e2: Exception) {
+                Log.e(TAG, "Failed to open home settings: ${e2.message}")
             }
         }
         

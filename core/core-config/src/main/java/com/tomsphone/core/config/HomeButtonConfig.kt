@@ -49,6 +49,21 @@ sealed class HomeButtonConfig {
     }
     
     /**
+     * Missed Call Return button - calls back the most recent grey list missed call
+     * Level 1 feature - simple one-button missed call return
+     * Shows "No Missed Calls" when no grey list missed calls
+     * Takes one of the 4 button slots (max 3 carer contacts when enabled)
+     */
+    data class MissedCallReturnButton(
+        /** Name of caller, or null if no missed call */
+        val callerName: String?,
+        /** Phone number to call back, or null if no missed call */
+        val phoneNumber: String?,
+        /** Display label: caller name or "No Missed Calls" */
+        val label: String = callerName ?: "No Missed Calls"
+    ) : HomeButtonConfig()
+    
+    /**
      * Screen Off button - turns off screen, any touch wakes it
      * Level 2+ feature - helps users who can't find power button
      * Hidden during calls and missed call nag

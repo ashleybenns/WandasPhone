@@ -132,6 +132,13 @@ class CarerSettingsViewModel @Inject constructor(
         }
     }
     
+    fun setShowMissedCallReturnButton(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(homeShowMissedCallReturnButton = enabled))
+        }
+    }
+    
     fun setShowContactsListButton(enabled: Boolean) {
         viewModelScope.launch {
             val current = settingsRepository.getSettings().first()

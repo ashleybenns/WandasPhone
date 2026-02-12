@@ -23,6 +23,7 @@ import com.tomsphone.core.ui.theme.WandasDimensions
 fun InertBorderLayout(
     modifier: Modifier = Modifier,
     borderWidth: Dp = WandasDimensions.InertBorderWidth,
+    topBorderWidth: Dp = WandasDimensions.InertBorderWidth,
     bottomBorderWidth: Dp = WandasDimensions.InertBorderBottom,
     content: @Composable () -> Unit
 ) {
@@ -31,7 +32,7 @@ fun InertBorderLayout(
             .fillMaxSize()
             .padding(
                 start = borderWidth,
-                top = borderWidth,
+                top = topBorderWidth,
                 end = borderWidth,
                 bottom = bottomBorderWidth  // Extra large at bottom
             )

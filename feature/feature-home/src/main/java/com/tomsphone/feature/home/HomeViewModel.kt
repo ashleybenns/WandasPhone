@@ -170,6 +170,58 @@ class HomeViewModel @Inject constructor(
             initialValue = 0
         )
     
+    // Grey list contacts (for filtering missed calls)
+    private val greyListContacts: StateFlow<List<Contact>> = contactRepository.getGreyListContacts(100)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+    
+    // Carer contacts (for filtering - we want missed calls NOT from carers)
+    private val carerContacts: StateFlow<List<Contact>> = contactRepository.getCarerContacts(100)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+    
+    // Most recent missed call from grey list (not a carer)
+    // Used for Level 1 simple missed call return button
+    data class GreyListMissedCall(
+        val callerName: String,
+        val phoneNumber: String,
+        val timestamp: Long
+    )
+    
+    private val mostRecentGreyListMissedCall: StateFlow<GreyListMissedCall?> = combine(
+        callLogRepository.getMissedCalls(100),
+        carerContacts
+    ) { missedCalls, carers ->
+        // Get carer phone numbers to exclude
+        val carerPhoneNumbers = carers.map { it.phoneNumber.replace(Regex("[^0-9+]"), "") }.toSet()
+        
+        // Find most recent missed call NOT from a carer
+        missedCalls
+            .filter { it.phoneNumber.isNotBlank() }
+            .filter { call -> 
+                val normalizedNumber = call.phoneNumber.replace(Regex("[^0-9+]"), "")
+                !carerPhoneNumbers.contains(normalizedNumber)
+            }
+            .maxByOrNull { it.timestamp }
+            ?.let { call ->
+                GreyListMissedCall(
+                    callerName = call.contactName ?: call.phoneNumber,
+                    phoneNumber = call.phoneNumber,
+                    timestamp = call.timestamp
+                )
+            }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+    
     // Display off state - screen should be dimmed
     private val _isDisplayOff = MutableStateFlow(false)
     val isDisplayOff: StateFlow<Boolean> = _isDisplayOff.asStateFlow()
@@ -186,9 +238,10 @@ class HomeViewModel @Inject constructor(
     val homeButtons: StateFlow<List<HomeButtonConfig>> = combine(
         contacts,
         settings,
-        missedCallsCount
-    ) { contactList, carerSettings, missedCount ->
-        buildHomeButtons(contactList, carerSettings, missedCount)
+        missedCallsCount,
+        mostRecentGreyListMissedCall
+    ) { contactList, carerSettings, missedCount, greyListMissed ->
+        buildHomeButtons(contactList, carerSettings, missedCount, greyListMissed)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -200,20 +253,26 @@ class HomeViewModel @Inject constructor(
      * 
      * Order:
      * 1. Contact buttons (sorted by buttonPosition)
-     * 2. Menu buttons (if Level 2+)
-     * 3. Emergency button (if enabled)
+     * 2. Missed Call Return button (Level 1, if enabled)
+     * 3. Menu buttons (if Level 2+)
+     * 4. Emergency button (if enabled)
      */
     private fun buildHomeButtons(
         contacts: List<Contact>,
         settings: CarerSettings,
-        missedCallsCount: Int
+        missedCallsCount: Int,
+        greyListMissedCall: GreyListMissedCall?
     ): List<HomeButtonConfig> {
         val buttons = mutableListOf<HomeButtonConfig>()
         
+        // Check if Level 1 missed call return button is enabled
+        val missedCallReturnEnabled = settings.homeShowMissedCallReturnButton
+        
         // 1. Contact buttons - only CARER contacts that can call out
         // Level determines max contacts (list buttons take remaining space)
+        // If missed call return button is enabled at Level 1, reduce max by 1
         val maxByLevel = when (settings.featureLevel) {
-            FeatureLevel.MINIMAL -> 4  // L1: 4 carers only
+            FeatureLevel.MINIMAL -> if (missedCallReturnEnabled) 3 else 4  // L1: 3-4 carers
             FeatureLevel.BASIC -> 5    // L2: 5 carers + list buttons + Screen Off
             FeatureLevel.STANDARD -> 5 // L3: Same carers + menu buttons
             FeatureLevel.EXTENDED -> 6 // L4: Full 6 carers + all buttons
@@ -236,7 +295,18 @@ class HomeViewModel @Inject constructor(
             )
         }
         
-        // 2. List buttons (Level 2+) - full-width, below carers
+        // 2. Missed Call Return button (Level 1, if enabled)
+        // Simple one-button solution for returning grey list missed calls
+        if (missedCallReturnEnabled) {
+            buttons.add(
+                HomeButtonConfig.MissedCallReturnButton(
+                    callerName = greyListMissedCall?.callerName,
+                    phoneNumber = greyListMissedCall?.phoneNumber
+                )
+            )
+        }
+        
+        // 3. List buttons (Level 2+) - full-width, below carers
         if (settings.featureLevel.level >= 2) {
             if (settings.homeShowMissedCallsButton) {
                 // Build label with count: "No Missed Calls", "1 Missed Call", "3 Missed Calls"
@@ -281,19 +351,28 @@ class HomeViewModel @Inject constructor(
     }
     
     // Status messages with priority levels to prevent race conditions
-    // Priority: calling > missed_call > default
+    // Priority: calling > carer_missed_call > grey_list_missed_call > default
     private val _callingStatus = MutableStateFlow<String?>(null)      // Highest priority
-    private val _missedCallStatus = MutableStateFlow<String?>(null)   // Medium priority
+    private val _missedCallStatus = MutableStateFlow<String?>(null)   // Carer missed call nag
     private var statusMessageResetJob: Job? = null
     
-    // Combine with priority: calling > missed_call > default
+    // Combine with priority: calling > carer_missed > grey_list_missed > default
     val displayMessage: StateFlow<String> = combine(
         userName, 
         _callingStatus, 
-        _missedCallStatus
-    ) { name, callingMsg, missedMsg ->
+        _missedCallStatus,
+        mostRecentGreyListMissedCall,
+        settings
+    ) { name, callingMsg, carerMissedMsg, greyListMissed, carerSettings ->
         // Priority-based selection
-        callingMsg ?: missedMsg ?: "$name's phone"
+        when {
+            callingMsg != null -> callingMsg
+            carerMissedMsg != null -> carerMissedMsg
+            // Show grey list missed call in status (no nag, just info)
+            greyListMissed != null && carerSettings.homeShowMissedCallReturnButton -> 
+                "Missed call from ${greyListMissed.callerName}"
+            else -> "$name's phone"
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -527,6 +606,78 @@ class HomeViewModel @Inject constructor(
             }
             HomeButtonConfig.MenuButton.ID_CONTACTS_LIST -> {
                 _showContactsList.value = true
+            }
+        }
+    }
+    
+    /**
+     * User tapped the Missed Call Return button (Level 1)
+     * Calls back the most recent grey list missed call
+     * 
+     * Note: We look up the current state directly rather than relying on button data
+     * to avoid any timing/recomposition issues between rendering and clicking.
+     */
+    fun onMissedCallReturnButtonTap(button: HomeButtonConfig.MissedCallReturnButton) {
+        // Get current state directly - more reliable than button closure
+        val currentMissedCall = mostRecentGreyListMissedCall.value
+        
+        val phoneNumber = currentMissedCall?.phoneNumber
+        val callerName = currentMissedCall?.callerName
+        
+        Log.d(TAG, "onMissedCallReturnButtonTap: button.label=${button.label}, currentMissedCall=$currentMissedCall")
+        
+        if (phoneNumber == null || callerName == null) {
+            // No missed call to return
+            Log.d(TAG, "onMissedCallReturnButtonTap: No missed call to return")
+            if (ttsAnnouncementsEnabled.value) {
+                viewModelScope.launch {
+                    tts.speak("No missed calls")
+                }
+            }
+            return
+        }
+        
+        Log.d(TAG, "onMissedCallReturnButtonTap: Calling back $callerName at $phoneNumber")
+        
+        // Enter calling mode
+        _callingContact.value = Contact(
+            id = 0,
+            name = callerName,
+            phoneNumber = phoneNumber,
+            photoUri = null,
+            priority = 0,
+            isPrimary = false,
+            contactType = com.tomsphone.core.data.model.ContactType.GREY_LIST,
+            createdAt = 0,
+            updatedAt = 0
+        )
+        setCallingStatus("Calling $callerName")
+        
+        // Notify nag manager that a call is starting
+        missedCallNagManager.onCallStarted()
+        
+        viewModelScope.launch {
+            // Announce and wait
+            if (ttsAnnouncementsEnabled.value) {
+                tts.speakAndWait(TTSScripts.calling(callerName))
+            } else {
+                delay(500)
+            }
+            
+            // Mark the missed call as read before placing call
+            callLogRepository.markMissedCallsFromNumberAsRead(phoneNumber)
+            
+            // Place the call
+            val result = callManager.placeCall(phoneNumber)
+            
+            if (result.isFailure) {
+                Log.e(TAG, "Failed to place call: ${result.exceptionOrNull()}")
+                _callingContact.value = null
+                setTemporaryCallingStatus("Couldn't place call")
+                missedCallNagManager.onCallEnded()
+                if (ttsAnnouncementsEnabled.value) {
+                    tts.speakNow("Sorry, I couldn't place that call.")
+                }
             }
         }
     }

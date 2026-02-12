@@ -43,6 +43,8 @@ data class CarerSettings(
     val homeContactsListShowGreyListOnly: Boolean = false, // Only show grey list contacts (not carers)
     val homeMissedCallsButtonColor: Long? = null,   // ARGB, null = theme default
     val homeContactsListButtonColor: Long? = null,  // ARGB, null = theme default
+    // Level 1: Simple missed call return button (one button for most recent grey list missed call)
+    val homeShowMissedCallReturnButton: Boolean = false,
     // Actual number of contacts configured (updated when contacts change)
     // Used for screen-first layout scaling
     val homeContactCount: Int = 2,                  // Number of contact buttons on home screen

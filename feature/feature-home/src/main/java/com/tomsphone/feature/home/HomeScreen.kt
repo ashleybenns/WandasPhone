@@ -217,11 +217,14 @@ fun HomeScreen(
             )
             
             // Rest of screen has inert border for buttons
+            // No top border - status box is in the "dead zone" (not a button)
             InertBorderLayout(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                topBorderWidth = 0.dp
             ) {
                 // Separate buttons by type
                 val contactButtons = homeButtons.filterIsInstance<HomeButtonConfig.ContactButton>()
+                val missedCallReturnButton = homeButtons.filterIsInstance<HomeButtonConfig.MissedCallReturnButton>().firstOrNull()
                 val menuButtons = homeButtons.filterIsInstance<HomeButtonConfig.MenuButton>()
                 val emergencyButton = homeButtons.filterIsInstance<HomeButtonConfig.EmergencyButton>().firstOrNull()
                 
@@ -230,7 +233,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = ScaledDimensions.edgePadding)
-                        .padding(top = 4.dp, bottom = ScaledDimensions.edgePadding),
+                        .padding(bottom = ScaledDimensions.edgePadding),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // MIDDLE: Contact/Menu/Utility buttons - each row gets equal weight
@@ -238,11 +241,12 @@ fun HomeScreen(
                     val fullWidthContacts = contactButtons.filter { !it.isHalfWidth }
                     val halfWidthContacts = contactButtons.filter { it.isHalfWidth }
                     val halfWidthContactRows = (halfWidthContacts.size + 1) / 2
+                    val missedCallReturnRows = if (missedCallReturnButton != null) 1 else 0
                     val fullWidthMenus = menuButtons.filter { !it.isHalfWidth }
                     val halfWidthMenus = menuButtons.filter { it.isHalfWidth }
                     val menuButtonRows = fullWidthMenus.size + (halfWidthMenus.size + 1) / 2
                     val displayOffRows = if (displayOffButtonEnabled) 1 else 0
-                    val totalRows = fullWidthContacts.size + halfWidthContactRows + menuButtonRows + displayOffRows
+                    val totalRows = fullWidthContacts.size + halfWidthContactRows + missedCallReturnRows + menuButtonRows + displayOffRows
                     
                     Column(
                         modifier = Modifier
@@ -288,6 +292,28 @@ fun HomeScreen(
                                     if (callingButton != null) {
                                         CallingStateButton(
                                             contactName = callingButton.name,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // Missed Call Return button row (preserve structure)
+                            // Show calling animation if this is the button being used to call
+                            if (missedCallReturnButton != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Check if we're calling from this button (callingContact id would be 0)
+                                    val isCallingFromMissedReturn = callingContact?.id == 0L && 
+                                        callingContact?.phoneNumber == missedCallReturnButton.phoneNumber
+                                    if (isCallingFromMissedReturn) {
+                                        CallingStateButton(
+                                            contactName = missedCallReturnButton.label,
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -408,6 +434,28 @@ fun HomeScreen(
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
+                                }
+                            }
+                            
+                            // Missed Call Return button (Level 1) - same styling as contact buttons
+                            if (missedCallReturnButton != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    RenderMissedCallReturnButton(
+                                        button = missedCallReturnButton,
+                                        textAlignment = textAlignment,
+                                        activationPreset = buttonActivation,
+                                        debounceMs = touchDebounceMs,
+                                        accumulatedThresholdMs = accumulatedThresholdMs,
+                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                        onClick = { viewModel.onMissedCallReturnButtonTap(missedCallReturnButton) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                 }
                             }
                             
@@ -622,6 +670,39 @@ private fun RenderContactButton(
             ?: MaterialTheme.wandasColors.primaryButton,
         textColor = MaterialTheme.wandasColors.onPrimaryButton,
         warningText = if (button.showAutoAnswerWarning) "Auto-Answer" else null,
+        textAlignment = textAlignment,
+        activationPreset = activationPreset,
+        debounceMs = debounceMs,
+        accumulatedThresholdMs = accumulatedThresholdMs,
+        accumulatedTimeoutMs = accumulatedTimeoutMs
+    )
+}
+
+/**
+ * Render a Missed Call Return button (Level 1)
+ * 
+ * Styled like a contact button (same color scheme) since it's a call action.
+ * Shows caller name if there's a missed call, or "No Missed Calls" if not.
+ */
+@Composable
+private fun RenderMissedCallReturnButton(
+    button: HomeButtonConfig.MissedCallReturnButton,
+    textAlignment: ListTextAlignment,
+    activationPreset: ButtonActivationPreset,
+    debounceMs: Int,
+    accumulatedThresholdMs: Int,
+    accumulatedTimeoutMs: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ConfigurableButton(
+        label = button.label,
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        // Use primary button colors (same as contact buttons)
+        backgroundColor = MaterialTheme.wandasColors.primaryButton,
+        textColor = MaterialTheme.wandasColors.onPrimaryButton,
+        warningText = null,
         textAlignment = textAlignment,
         activationPreset = activationPreset,
         debounceMs = debounceMs,

@@ -140,6 +140,30 @@ fun AppearanceScreen(
                         }
                     }
                     
+                    // Missed Call Return Button (Level 1)
+                    // Simple one-button solution for returning grey list missed calls
+                    SettingCard(title = "Missed Call Button") {
+                        Text(
+                            text = "Add a button to call back missed calls from contacts not on the home screen. Uses one of the 4 button slots.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        SettingToggle(
+                            title = "Enable Missed Call Button",
+                            description = "Shows caller name or 'No Missed Calls'. Tapping calls them back.",
+                            checked = settings.homeShowMissedCallReturnButton,
+                            onCheckedChange = { enabled ->
+                                viewModel.setShowMissedCallReturnButton(enabled)
+                                saveToastState.show(
+                                    if (enabled) "Missed Call button enabled (max 3 carer buttons)"
+                                    else "Missed Call button disabled (max 4 carer buttons)"
+                                )
+                            }
+                        )
+                    }
+                    
                     // Screen Off Button (Level 2+)
                     // List Buttons (Level 2+)
                     LevelGatedContent(
