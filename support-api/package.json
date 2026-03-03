@@ -1,0 +1,10 @@
+{
+  "name": "phoneapp26-support-api",
+  "version": "1.0.0",
+  "description": "Anonymous support/suggestions board API for PhoneApp26 (deploy to Vercel)",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/kv": "^2.0.0"
+  }
+}
