@@ -4,9 +4,9 @@ Anonymous support and feature-suggestion board backend. Deploy to Vercel and con
 
 ## Deploy to Vercel
 
-1. **Create a Vercel KV database**
-   - In [Vercel Dashboard](https://vercel.com/dashboard) → your project → Storage → Create Database → KV (Redis).
-   - This adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` to your project.
+1. **Create a Redis store and connect to the project**
+   - In [Vercel Dashboard](https://vercel.com/dashboard) → your project → **Storage** → Create Database → choose **Redis** (or KV/Upstash).
+   - Connect the store to your project so it gets **REDIS_URL** (connection string). The API uses this; no KV_REST_* vars needed.
 
 2. **Deploy this folder**
    - From this directory: `npx vercel` (or link the repo and set Root Directory to `support-api`).

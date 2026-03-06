@@ -1,6 +1,4 @@
-import { kv } from '@vercel/kv';
-
-const LIST_KEY = 'support_posts';
+import { getRedis, LIST_KEY } from './redis.js';
 
 function setCors(res, extra = {}) {
   const headers = {
@@ -22,6 +20,7 @@ export default async function handler(req, res) {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
+  let client;
   try {
     const { category, body, context } = req.body || {};
     if (!category || typeof body !== 'string') {
@@ -35,11 +34,14 @@ export default async function handler(req, res) {
       context: context || null,
       createdAt: Date.now(),
     };
-    await kv.lpush(LIST_KEY, JSON.stringify(item));
+    client = await getRedis();
+    await client.lPush(LIST_KEY, JSON.stringify(item));
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json({ ok: true });
   } catch (e) {
     console.error('post error', e);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (client) await client.quit().catch(() => {});
   }
 }
