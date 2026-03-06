@@ -1,4 +1,4 @@
-import { getRedis, LIST_KEY } from './redis.js';
+import { getRedis, LIST_KEY } from '../lib/redis.js';
 
 function setCors(res, extra = {}) {
   const headers = {
