@@ -27,4 +27,13 @@ Anonymous support and feature-suggestion board backend. Deploy to Vercel and con
   Query: `since` = Unix timestamp (ms).  
   Response: `{ "count": N }` — number of posts created after `since`. Used for the “unread” badge.
 
+- **GET /api/admin**  
+  Returns an HTML admin page. Enter the admin key to load and view all messages.
+
+- **GET /api/admin/posts?key=**  
+  Query: `key` = admin secret (or header `X-Admin-Key`).  
+  Response: `{ "posts": [ { "id", "category", "body", "context", "createdAt" }, … ] }` — all stored messages (newest first). Returns 401 if the key is missing or wrong.
+
+**Admin secret:** Set environment variable **SUPPORT_ADMIN_SECRET** in Vercel (e.g. a long random string). Use this key on the admin page or when calling `/api/admin/posts?key=YOUR_SECRET`.
+
 All submissions are anonymous (no user identifiers stored).
