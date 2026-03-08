@@ -13,6 +13,7 @@ import com.tomsphone.feature.carer.screens.*
  */
 object CarerRoutes {
     const val MAIN_MENU = "carer_menu"
+    const val TOMS_PHONE_DESCRIPTION = "carer_toms_phone_description"
     const val USER_PROFILE = "carer_user_profile"
     const val PHOTO_CAPTURE = "carer_photo_capture"
     const val CONTACTS = "carer_contacts"
@@ -23,7 +24,12 @@ object CarerRoutes {
     const val FEATURE_LEVEL = "carer_feature_level"
     const val ALWAYS_ON = "carer_always_on"
     const val FACTORY_RESET = "carer_factory_reset"
-    
+    const val SUPPORT_SUGGESTIONS = "carer_support_suggestions"
+    const val SUPPORT_THREAD = "carer_support_thread/{threadId}"
+    const val SUPPORT_NEW = "carer_support_new"
+
+    fun supportThread(threadId: String) = "carer_support_thread/$threadId"
+
     fun contactEdit(contactId: Long, contactType: ContactType) = 
         "carer_contact_edit/$contactId/${contactType.name}"
 }
@@ -47,6 +53,7 @@ fun CarerNavigation(
         // Main Menu
         composable(CarerRoutes.MAIN_MENU) {
             CarerMainMenuScreen(
+                onNavigateToTomsPhoneDescription = { navController.navigate(CarerRoutes.TOMS_PHONE_DESCRIPTION) },
                 onNavigateToUserProfile = { navController.navigate(CarerRoutes.USER_PROFILE) },
                 onNavigateToContacts = { navController.navigate(CarerRoutes.CONTACTS) },
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
@@ -55,11 +62,19 @@ fun CarerNavigation(
                 onNavigateToFeatureLevel = { navController.navigate(CarerRoutes.FEATURE_LEVEL) },
                 onNavigateToAlwaysOn = { navController.navigate(CarerRoutes.ALWAYS_ON) },
                 onNavigateToFactoryReset = { navController.navigate(CarerRoutes.FACTORY_RESET) },
+                onNavigateToSupportSuggestions = { navController.navigate(CarerRoutes.SUPPORT_SUGGESTIONS) },
                 onExitApp = onExitApp,
                 onBack = onExitCarerSettings
             )
         }
         
+        // Tom's Phone Description
+        composable(CarerRoutes.TOMS_PHONE_DESCRIPTION) {
+            TomsPhoneDescriptionScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         // User Profile
         composable(CarerRoutes.USER_PROFILE) {
             UserProfileScreen(
@@ -145,6 +160,35 @@ fun CarerNavigation(
         composable(CarerRoutes.FACTORY_RESET) {
             FactoryResetScreen(
                 onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // Support & suggestions (inbox)
+        composable(CarerRoutes.SUPPORT_SUGGESTIONS) {
+            SupportSuggestionsScreen(
+                onBack = { navController.popBackStack() },
+                onThreadClick = { threadId -> navController.navigate(CarerRoutes.supportThread(threadId)) },
+                onNewMessage = { navController.navigate(CarerRoutes.SUPPORT_NEW) }
+            )
+        }
+
+        // Thread detail (conversation)
+        composable(CarerRoutes.SUPPORT_THREAD) { backStackEntry ->
+            val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
+            SupportThreadDetailScreen(
+                threadId = threadId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // New message form
+        composable(CarerRoutes.SUPPORT_NEW) {
+            SupportNewMessageScreen(
+                onBack = { navController.popBackStack() },
+                onSent = { threadId ->
+                    navController.popBackStack()
+                    if (threadId != null) navController.navigate(CarerRoutes.supportThread(threadId))
+                }
             )
         }
     }

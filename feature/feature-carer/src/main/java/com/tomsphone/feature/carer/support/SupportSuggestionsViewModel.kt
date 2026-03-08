@@ -15,31 +15,50 @@ class SupportSuggestionsViewModel @Inject constructor(
     private val prefs: SupportSuggestionsPrefs
 ) : ViewModel() {
 
+    private val _deviceId = MutableStateFlow<String?>(null)
+    val deviceId: StateFlow<String?> = _deviceId.asStateFlow()
+
+    private val _threads = MutableStateFlow<List<SupportThread>>(emptyList())
+    val threads: StateFlow<List<SupportThread>> = _threads.asStateFlow()
+
+    private val _selectedThread = MutableStateFlow<SupportThread?>(null)
+    val selectedThread: StateFlow<SupportThread?> = _selectedThread.asStateFlow()
+
     private val _unreadCount = MutableStateFlow(0)
     val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
 
     private val _submitState = MutableStateFlow<SubmitState>(SubmitState.Idle)
     val submitState: StateFlow<SubmitState> = _submitState.asStateFlow()
 
-    private val _replies = MutableStateFlow<List<SupportReply>>(emptyList())
-    val replies: StateFlow<List<SupportReply>> = _replies.asStateFlow()
-
     private val _announcements = MutableStateFlow<List<SupportAnnouncement>>(emptyList())
     val announcements: StateFlow<List<SupportAnnouncement>> = _announcements.asStateFlow()
 
-    fun refreshUnreadCount() {
+    fun ensureDeviceId() {
         viewModelScope.launch {
-            val since = prefs.getLastVisitedAt()
-            val result = apiClient.getPostsCountSince(since)
-            _unreadCount.value = result.getOrElse { 0 }
+            _deviceId.value = prefs.getOrCreateAnonymousId()
         }
     }
 
-    /** Load replies from support and announcements (for the Support screen). */
-    fun loadRepliesAndAnnouncements() {
+    fun loadThreads() {
         viewModelScope.launch {
-            _replies.value = apiClient.getReplies().getOrElse { emptyList() }
-            _announcements.value = apiClient.getAnnouncements().getOrElse { emptyList() }
+            val did = _deviceId.value ?: prefs.getOrCreateAnonymousId()
+            _deviceId.value = did
+            apiClient.getThreads(did).onSuccess { _threads.value = it }
+        }
+    }
+
+    fun loadThread(threadId: String) {
+        viewModelScope.launch {
+            val did = _deviceId.value ?: prefs.getOrCreateAnonymousId()
+            apiClient.getThread(threadId, did).onSuccess { _selectedThread.value = it }
+        }
+    }
+
+    fun refreshUnreadCount() {
+        viewModelScope.launch {
+            val did = _deviceId.value ?: prefs.getOrCreateAnonymousId()
+            val since = prefs.getLastVisitedAt()
+            _unreadCount.value = apiClient.getPostsCountSince(since, did).getOrElse { 0 }
         }
     }
 
@@ -50,11 +69,31 @@ class SupportSuggestionsViewModel @Inject constructor(
         }
     }
 
-    fun submit(category: String, body: String) {
+    fun submitNewThread(category: String, body: String) {
         viewModelScope.launch {
             _submitState.value = SubmitState.Sending
-            val result = apiClient.post(category, body.trim(), null)
-            _submitState.value = if (result.isSuccess) SubmitState.Success else SubmitState.Error
+            val did = _deviceId.value ?: prefs.getOrCreateAnonymousId()
+            val result = apiClient.postThread(did, category, body.trim())
+            _submitState.value = when {
+                result.isSuccess && result.getOrNull() != null -> SubmitState.Success(result.getOrNull())
+                else -> SubmitState.Error
+            }
+        }
+    }
+
+    fun addReply(threadId: String, message: String) {
+        viewModelScope.launch {
+            val did = _deviceId.value ?: prefs.getOrCreateAnonymousId()
+            apiClient.addReply(threadId, did, message.trim()).onSuccess {
+                loadThread(threadId)
+                loadThreads()
+            }
+        }
+    }
+
+    fun loadAnnouncements() {
+        viewModelScope.launch {
+            _announcements.value = apiClient.getAnnouncements().getOrElse { emptyList() }
         }
     }
 
@@ -62,10 +101,14 @@ class SupportSuggestionsViewModel @Inject constructor(
         _submitState.value = SubmitState.Idle
     }
 
+    fun clearSelectedThread() {
+        _selectedThread.value = null
+    }
+
     sealed class SubmitState {
         data object Idle : SubmitState()
         data object Sending : SubmitState()
-        data object Success : SubmitState()
+        data class Success(val threadId: String?) : SubmitState()
         data object Error : SubmitState()
     }
 }

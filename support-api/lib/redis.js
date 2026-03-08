@@ -5,6 +5,11 @@ const REPLIES_LIST_KEY = 'support_replies_list';
 const REPLY_KEY_PREFIX = 'support_reply:';
 const ANNOUNCEMENTS_KEY = 'support_announcements';
 
+// Thread-based messaging (per-user, anonymous deviceId)
+const THREADS_LIST_KEY = 'support_threads_list';
+const THREAD_PREFIX = 'support_thread:';
+const THREAD_REPLIES_PREFIX = 'support_thread_replies:';
+
 /** Get a Redis client using REDIS_URL. Caller must call client.quit() when done. */
 export async function getRedis() {
   const url = process.env.REDIS_URL;
@@ -16,4 +21,12 @@ export async function getRedis() {
   return client;
 }
 
-export { LIST_KEY, REPLIES_LIST_KEY, REPLY_KEY_PREFIX, ANNOUNCEMENTS_KEY };
+export {
+  LIST_KEY,
+  REPLIES_LIST_KEY,
+  REPLY_KEY_PREFIX,
+  ANNOUNCEMENTS_KEY,
+  THREADS_LIST_KEY,
+  THREAD_PREFIX,
+  THREAD_REPLIES_PREFIX,
+};

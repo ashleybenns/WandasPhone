@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -27,6 +28,7 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
  */
 @Composable
 fun CarerMainMenuScreen(
+    onNavigateToTomsPhoneDescription: () -> Unit,
     onNavigateToUserProfile: () -> Unit,
     onNavigateToContacts: () -> Unit,
     onNavigateToCallHandling: () -> Unit,
@@ -35,12 +37,20 @@ fun CarerMainMenuScreen(
     onNavigateToFeatureLevel: () -> Unit,
     onNavigateToAlwaysOn: () -> Unit,
     onNavigateToFactoryReset: () -> Unit,
+    onNavigateToSupportSuggestions: () -> Unit,
     onExitApp: () -> Unit,
     onBack: () -> Unit,
-    viewModel: CarerSettingsViewModel = hiltViewModel()
+    viewModel: CarerSettingsViewModel = hiltViewModel(),
+    supportViewModel: com.tomsphone.feature.carer.support.SupportSuggestionsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
     val featureLevel = settings.featureLevel
+    val supportUnreadCount by supportViewModel.unreadCount.collectAsState(initial = 0)
+
+    LaunchedEffect(Unit) {
+        supportViewModel.ensureDeviceId()
+        supportViewModel.refreshUnreadCount()
+    }
     
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -66,6 +76,14 @@ fun CarerMainMenuScreen(
                     .padding(WandasDimensions.SpacingMedium),
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
             ) {
+                // Tom's Phone Description - first, informational
+                CarerMenuButton(
+                    title = "Tom's Phone Description",
+                    description = "The story behind this phone app for seniors",
+                    onClick = onNavigateToTomsPhoneDescription,
+                    currentLevel = featureLevel
+                )
+
                 // User Profile - always visible
                 CarerMenuButton(
                     title = "User Profile",
@@ -120,6 +138,15 @@ fun CarerMainMenuScreen(
                     description = "Charging stand, pinned mode",
                     onClick = onNavigateToAlwaysOn,
                     currentLevel = featureLevel
+                )
+                
+                // Support & suggestions - anonymous feedback, unread badge
+                CarerMenuButton(
+                    title = "Support & suggestions",
+                    description = "Get support or suggest improvements (anonymous)",
+                    onClick = onNavigateToSupportSuggestions,
+                    currentLevel = featureLevel,
+                    unreadCount = supportUnreadCount
                 )
                 
                 Spacer(modifier = Modifier.height(32.dp))
