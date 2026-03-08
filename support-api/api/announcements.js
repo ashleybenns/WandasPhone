@@ -1,6 +1,4 @@
-import { getRedis, LIST_KEY, REPLY_KEY_PREFIX } from '../../lib/redis.js';
-
-const ADMIN_SECRET = process.env.SUPPORT_ADMIN_SECRET;
+import { getRedis, ANNOUNCEMENTS_KEY } from '../lib/redis.js';
 
 function setCors(res, extra = {}) {
   const headers = {
@@ -19,42 +17,27 @@ export default async function handler(req, res) {
     return;
   }
   if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-  const key = req.query.key || req.headers['x-admin-key'] || '';
-  if (!ADMIN_SECRET || key !== ADMIN_SECRET) {
     res.setHeader('Content-Type', 'application/json');
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(405).json({ error: 'Method not allowed' });
     return;
   }
   let client;
   try {
     client = await getRedis();
-    const raw = await client.lRange(LIST_KEY, 0, -1);
-    const posts = (raw || []).map((s) => {
+    const raw = await client.lRange(ANNOUNCEMENTS_KEY, 0, 49);
+    const announcements = (raw || []).map((s) => {
       try {
         return typeof s === 'string' ? JSON.parse(s) : s;
       } catch {
         return null;
       }
     }).filter(Boolean);
-    for (const p of posts) {
-      if (p.id) {
-        try {
-          const replyJson = await client.get(REPLY_KEY_PREFIX + p.id);
-          if (replyJson) p.reply = JSON.parse(replyJson);
-        } catch {
-          // ignore
-        }
-      }
-    }
     res.setHeader('Content-Type', 'application/json');
-    res.status(200).json({ posts });
+    res.status(200).json({ announcements });
   } catch (e) {
-    console.error('admin/posts error', e);
+    console.error('announcements error', e);
     res.setHeader('Content-Type', 'application/json');
-    res.status(500).json({ error: 'Server error' });
+    res.status(200).json({ announcements: [] });
   } finally {
     if (client) await client.quit().catch(() => {});
   }

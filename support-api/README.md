@@ -32,8 +32,20 @@ Anonymous support and feature-suggestion board backend. Deploy to Vercel and con
 
 - **GET /api/admin/posts?key=**  
   Query: `key` = admin secret (or header `X-Admin-Key`).  
-  Response: `{ "posts": [ { "id", "category", "body", "context", "createdAt" }, … ] }` — all stored messages (newest first). Returns 401 if the key is missing or wrong.
+  Response: `{ "posts": [ { "id", "category", "body", "context", "createdAt", "reply"?: { "messageId", "reply", "repliedAt" } }, … ] }` — all stored messages (newest first). Each post may include a support reply. Returns 401 if the key is missing or wrong.
 
-**Admin secret:** Set environment variable **SUPPORT_ADMIN_SECRET** in Vercel (e.g. a long random string). Use this key on the admin page or when calling `/api/admin/posts?key=YOUR_SECRET`.
+- **POST /api/admin/reply?key=**  
+  Body: `{ "messageId": "<post id>", "reply": "…" }`. Admin only. Stores a reply for that message; the app fetches it via GET /api/replies.
+
+- **GET /api/replies**  
+  Response: `{ "replies": [ { "messageId", "reply", "repliedAt" }, … ] }` — recent support replies (no auth). Used by the app to show “Replies from support”.
+
+- **POST /api/admin/announce?key=**  
+  Body: `{ "body": "…" }`. Admin only. Adds an announcement (message to all carers). App fetches via GET /api/announcements.
+
+- **GET /api/announcements**  
+  Response: `{ "announcements": [ { "id", "body", "createdAt" }, … ] }` — recent announcements (no auth). Used for updates, new features, etc.
+
+**Admin secret:** Set environment variable **SUPPORT_ADMIN_SECRET** in Vercel (e.g. a long random string). Use this key on the admin page or when calling admin endpoints (`/api/admin/posts`, `/api/admin/reply`, `/api/admin/announce`).
 
 All submissions are anonymous (no user identifiers stored).
