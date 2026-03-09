@@ -7,3 +7,6 @@ build/
 local.properties
 *.iml
 .cxx/
+
+# Firebase / Google (contains API keys — get from Firebase Console per developer)
+app/google-services.json
