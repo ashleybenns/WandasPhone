@@ -54,5 +54,8 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
+    // Phone number parsing/validation (international)
+    implementation(libs.libphonenumber)
 }
 

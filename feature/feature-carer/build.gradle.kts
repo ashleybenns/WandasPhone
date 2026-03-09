@@ -44,6 +44,8 @@ dependencies {
     implementation(project(":core:core-tts"))
     implementation(project(":core:core-config"))
     implementation(project(":core:core-data"))
+    implementation(project(":core:core-analytics"))
+    implementation(libs.datastore.preferences)
     
     // Compose
     implementation(platform(libs.compose.bom))
@@ -75,6 +77,12 @@ dependencies {
     // Coil for image loading
     implementation(libs.coil.compose)
     
+    // Guava for ListenableFuture (required by CameraX)
+    implementation("com.google.guava:guava:31.1-android")
+
+    // Phone number country selector and validation
+    implementation(libs.libphonenumber)
+
     debugImplementation(libs.compose.ui.tooling)
 }
 

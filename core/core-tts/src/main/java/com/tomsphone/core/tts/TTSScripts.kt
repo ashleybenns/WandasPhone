@@ -53,8 +53,9 @@ object TTSScripts {
         return "$userName, you missed a call. Please call $callerName now."
     }
     
-    fun batteryLow(percent: Int): String {
-        return "Battery is low. Please charge the phone."
+    fun batteryLow(userName: String?): String {
+        val name = userName ?: "User"
+        return "$name, the phone battery is low. Please charge the phone."
     }
     
     fun batteryCharging(): String {

@@ -76,7 +76,7 @@ private fun PinDialog(
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
             ) {
                 Text(
-                    text = "Enter Carer PIN",
+                    text = "Enter Assistant PIN",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.wandasColors.onSurface,
                     textAlign = TextAlign.Center

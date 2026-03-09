@@ -8,6 +8,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,9 +35,16 @@ import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+
+private const val INACTIVITY_TIMEOUT_MS = 30_000L
+private const val REQUIRED_TAPS = 3
+private const val TAP_TIMEOUT_MS = 3000L
 
 /**
  * ViewModel for EmergencyConfirmScreen - provides touch response settings
@@ -60,16 +69,56 @@ class EmergencyConfirmViewModel @Inject constructor(
     val accumulatedTapTimeoutMs: StateFlow<Int> = settingsRepository.getSettings()
         .map { it.accumulatedTapTimeoutMs }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3000)
+    
+    // Tap counting for 3-tap activation
+    private val _tapCount = MutableStateFlow(0)
+    val tapCount: StateFlow<Int> = _tapCount.asStateFlow()
+    
+    private var tapResetJob: Job? = null
+    
+    /**
+     * Handle a tap on the emergency call button.
+     * Returns true if the required taps have been reached.
+     */
+    fun onEmergencyTap(): Boolean {
+        _tapCount.value++
+        
+        // Cancel previous reset job
+        tapResetJob?.cancel()
+        
+        if (_tapCount.value >= REQUIRED_TAPS) {
+            _tapCount.value = 0
+            return true
+        }
+        
+        // Reset tap count after timeout
+        tapResetJob = viewModelScope.launch {
+            delay(TAP_TIMEOUT_MS)
+            _tapCount.value = 0
+        }
+        
+        return false
+    }
+    
+    /**
+     * Reset tap count when leaving screen
+     */
+    fun resetTaps() {
+        _tapCount.value = 0
+        tapResetJob?.cancel()
+    }
 }
 
 /**
- * Emergency confirm screen - shown after 3 taps on emergency button.
+ * Emergency confirm screen - requires 3 taps to make the call.
  * 
- * Design matches end call screens:
- * - Round button in CENTER of screen (different position from home screen buttons)
- * - 2 lines of instruction text above
- * - Test mode indicator at top
- * - Cancel option
+ * Design matches end call screens with styling like ListScreenLayout:
+ * - Red background
+ * - Back button at top (arrow + "Back" text, white on red)
+ * - "Press 3 times" instruction with countdown
+ * - Large round button in center
+ * - Test mode indicator
+ * - Auto-cancels after 30 seconds of inactivity
  */
 @Composable
 fun EmergencyConfirmScreen(
@@ -80,14 +129,38 @@ fun EmergencyConfirmScreen(
     viewModel: EmergencyConfirmViewModel = hiltViewModel()
 ) {
     val emergencyRed = Color(0xFFD32F2F)
-    val buttonSize = 180.dp
-    val textSize = ScaledDimensions.statusTextSize
+    val buttonSize = ScaledDimensions.endCallButtonSize * 1.2f // Slightly larger than end call button
+    val headerTextSize = ScaledDimensions.contactNameTextSize
+    val iconSize = headerTextSize.value.dp * 1.2f
     
     // Touch response settings
     val buttonActivation by viewModel.buttonActivation.collectAsState()
     val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
     val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
     val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
+    
+    // Tap count for 3-tap activation
+    val tapCount by viewModel.tapCount.collectAsState()
+    
+    // Auto-cancel after 30 seconds of inactivity
+    LaunchedEffect(Unit) {
+        delay(INACTIVITY_TIMEOUT_MS)
+        onCancel()
+    }
+    
+    // Reset taps on leaving screen
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.resetTaps()
+        }
+    }
+    
+    // Handle tap and check if call should be made
+    val handleTap: () -> Unit = {
+        if (viewModel.onEmergencyTap()) {
+            onConfirm()
+        }
+    }
     
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -96,55 +169,67 @@ fun EmergencyConfirmScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(ScaledDimensions.edgePadding),
+                .padding(
+                    start = WandasDimensions.InertBorderWidth,
+                    top = WandasDimensions.InertBorderWidth,
+                    end = WandasDimensions.InertBorderWidth,
+                    bottom = WandasDimensions.InertBorderBottom
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top section - test mode banner and cancel
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Test mode banner
-                if (isTestMode) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFFFFEB3B),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = "⚠️ TEST MODE\nNo real call will be made",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-                
-                // Cancel button - uses activation gesture for consistency
-                val cancelInteractionSource = remember { MutableInteractionSource() }
+            // Test mode banner
+            if (isTestMode) {
                 Surface(
-                    modifier = Modifier
-                        .indication(cancelInteractionSource, rememberRipple(bounded = false))
-                        .activationGesture(
-                            preset = buttonActivation,
-                            debounceMs = touchDebounceMs,
-                            accumulatedThresholdMs = accumulatedThresholdMs,
-                            accumulatedTimeoutMs = accumulatedTimeoutMs,
-                            onActivate = onCancel,
-                            interactionSource = cancelInteractionSource
-                        )
-                        .padding(8.dp),
-                    color = Color.Transparent
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFFFFEB3B),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "← Cancel",
+                        text = "⚠️ TEST MODE\nNo real call will be made",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.8f)
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            
+            // Back button row - styled like ListScreenLayout
+            val backInteractionSource = remember { MutableInteractionSource() }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .indication(backInteractionSource, rememberRipple())
+                    .activationGesture(
+                        preset = buttonActivation,
+                        debounceMs = touchDebounceMs,
+                        accumulatedThresholdMs = accumulatedThresholdMs,
+                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                        onActivate = onCancel,
+                        interactionSource = backInteractionSource
+                    )
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(iconSize)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Back",
+                    style = TextStyle(
+                        fontSize = headerTextSize,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White
+                )
             }
             
             // Center section - instruction text and round button
@@ -153,23 +238,19 @@ fun EmergencyConfirmScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // 2 lines of instruction text (like end call screens)
+                // Instruction text - shows tap progress
+                val instructionText = if (tapCount > 0) {
+                    "$tapCount / $REQUIRED_TAPS"
+                } else {
+                    "Press $REQUIRED_TAPS times"
+                }
+                
                 Text(
-                    text = "Press to confirm",
+                    text = instructionText,
                     style = TextStyle(
-                        fontSize = textSize,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = textSize * 1.2f
-                    ),
-                    color = Color.White,
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    text = "$emergencyNumber call",
-                    style = TextStyle(
-                        fontSize = textSize,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = textSize * 1.2f
+                        fontSize = ScaledDimensions.statusTextSize,
+                        fontWeight = if (tapCount > 0) FontWeight.Bold else FontWeight.Medium,
+                        lineHeight = ScaledDimensions.statusTextSize * 1.2f
                     ),
                     color = Color.White,
                     textAlign = TextAlign.Center
@@ -177,7 +258,7 @@ fun EmergencyConfirmScreen(
                 
                 Spacer(modifier = Modifier.height(32.dp))
                 
-                // Round confirm button (centered, different position from home buttons)
+                // Round emergency button (centered)
                 // Uses activation gesture for consistent touch response
                 val confirmInteractionSource = remember { MutableInteractionSource() }
                 Surface(
@@ -190,7 +271,7 @@ fun EmergencyConfirmScreen(
                             debounceMs = touchDebounceMs,
                             accumulatedThresholdMs = accumulatedThresholdMs,
                             accumulatedTimeoutMs = accumulatedTimeoutMs,
-                            onActivate = onConfirm,
+                            onActivate = handleTap,
                             interactionSource = confirmInteractionSource
                         ),
                     shape = CircleShape,
@@ -201,12 +282,24 @@ fun EmergencyConfirmScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (isTestMode) "TEST" else "CALL",
-                            fontSize = ScaledDimensions.buttonTextSize,
-                            fontWeight = FontWeight.Bold,
-                            color = emergencyRed
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = if (isTestMode) "TEST" else emergencyNumber,
+                                fontSize = ScaledDimensions.contactNameTextSize,
+                                fontWeight = FontWeight.Bold,
+                                color = emergencyRed,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "CALL",
+                                fontSize = ScaledDimensions.statusTextSize,
+                                fontWeight = FontWeight.Medium,
+                                color = emergencyRed.copy(alpha = 0.8f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
@@ -443,7 +536,7 @@ fun EmergencyCallScreen(
                     )
                 ) {
                     Text(
-                        text = "No emergency info configured.\n\nCarer can add details in:\nSettings → User Profile",
+                        text = "No emergency info configured.\n\nAssistant can add details in:\nSettings → User Profile",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                         textAlign = TextAlign.Center,

@@ -12,6 +12,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberPermissionState
+import android.Manifest
+import com.tomsphone.core.config.CarerSettings
 import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.MissedCallNagInterval
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -36,6 +40,11 @@ fun CallHandlingScreen(
     val settings by viewModel.settings.collectAsState()
     val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
+
+    // When opening this screen, sync device volumes to saved settings
+    LaunchedEffect(Unit) {
+        viewModel.syncVolumesToDevice()
+    }
     
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -51,7 +60,7 @@ fun CallHandlingScreen(
                 // Breadcrumb
                 CarerBreadcrumb(
                     title = "Call Handling",
-                    parentTitle = "Settings",
+                    parentTitle = "Assistant Settings",
                     onBack = onBack
                 )
                 
@@ -63,6 +72,61 @@ fun CallHandlingScreen(
                         .padding(WandasDimensions.SpacingMedium),
                     verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
                 ) {
+                    // Volume - ringtone and call volume without leaving the app
+                    SettingCard(title = "Volume") {
+                        Text(
+                            text = "Adjust ringtone and call volume here so you don't need to leave the app.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        Text(
+                            text = "Ringtone volume",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.wandasColors.onSurface
+                        )
+                        Text(
+                            text = "Volume for incoming call ring. ${settings.ringtoneVolume}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Slider(
+                            value = settings.ringtoneVolume.toFloat(),
+                            onValueChange = { percent ->
+                                viewModel.setRingtoneVolume(percent.toInt())
+                            },
+                            onValueChangeFinished = {
+                                saveToastState.show("Ringtone volume saved")
+                            },
+                            valueRange = 0f..100f,
+                            steps = 19
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Call (speaker) volume",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.wandasColors.onSurface
+                        )
+                        Text(
+                            text = "Volume during calls. Restored when each call ends. ${settings.speakerVolume}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Slider(
+                            value = settings.speakerVolume.toFloat(),
+                            onValueChange = { percent ->
+                                viewModel.setSpeakerVolume(percent.toInt())
+                            },
+                            onValueChangeFinished = {
+                                saveToastState.show("Call volume saved")
+                            },
+                            valueRange = 0f..100f,
+                            steps = 19
+                        )
+                    }
+
                     // Unknown Callers
                     SettingCard(title = "Unknown Callers") {
                         SettingToggle(
@@ -75,6 +139,13 @@ fun CallHandlingScreen(
                             }
                         )
                     }
+
+                    // Battery alert SMS (Level 1)
+                    BatteryAlertSmsCard(
+                        settings = settings,
+                        viewModel = viewModel,
+                        saveToastState = saveToastState
+                    )
                     
                     // Speakerphone
                     SettingCard(title = "Speakerphone") {
@@ -87,7 +158,6 @@ fun CallHandlingScreen(
                                 saveToastState.show("Speakerphone setting saved")
                             }
                         )
-                        
                     }
                     
                     // Voice Announcements (Level 1)
@@ -153,7 +223,17 @@ fun CallHandlingScreen(
                     }
                     
                     // Auto-Answer - Available at Level 1 (requires no user interaction)
-                    SettingCard(title = "Auto-Answer") {
+                    SettingCard(
+                        title = "Auto-Answer",
+                        trailingContent = {
+                            InfoTipButton(
+                                tipId = "auto_answer",
+                                tipTitle = "Auto-Answer",
+                                tipContent = viewModel.getOnboardingTip("auto_answer"),
+                                onTipViewed = { viewModel.onTipViewed(it) }
+                            )
+                        }
+                    ) {
                             // Privacy warning
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
@@ -171,7 +251,7 @@ fun CallHandlingScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Auto-Answer allows carers to call and listen without the user pressing Answer. " +
+                                        text = "Auto-Answer allows assistants to call and listen without the user pressing Answer. " +
                                                "The user will hear a ringtone and announcement when a call is answered automatically. " +
                                                "This feature requires the user's informed consent.",
                                         style = MaterialTheme.typography.bodySmall,
@@ -184,7 +264,7 @@ fun CallHandlingScreen(
                             
                             SettingToggle(
                                 title = "Enable Auto-Answer",
-                                description = "Automatically answer calls from enabled carers",
+                                description = "Automatically answer calls from enabled assistants",
                                 checked = settings.autoAnswerEnabled,
                                 onCheckedChange = { enabled ->
                                     viewModel.setAutoAnswer(enabled, settings.autoAnswerDelaySeconds)
@@ -216,7 +296,7 @@ fun CallHandlingScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 
                                 Text(
-                                    text = "Configure which contacts have auto-answer in their contact settings.",
+                                    text = "Configure which assistants have auto-answer in Assistants.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
                                 )
@@ -227,7 +307,7 @@ fun CallHandlingScreen(
                     SettingCard(title = "Missed Call Reminders") {
                         SettingToggle(
                             title = "Enable Reminders",
-                            description = "Remind user to call back missed calls from carers",
+                            description = "Remind user to call back missed calls from assistants",
                             checked = settings.missedCallNagEnabled,
                             onCheckedChange = { enabled ->
                                 viewModel.setMissedCallNagEnabled(enabled)
@@ -279,5 +359,38 @@ fun CallHandlingScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+private fun BatteryAlertSmsCard(
+    settings: CarerSettings,
+    viewModel: CarerSettingsViewModel,
+    saveToastState: SaveToastState
+) {
+    val smsPermissionState = rememberPermissionState(Manifest.permission.SEND_SMS)
+    SettingCard(title = "Battery alert texts") {
+        Text(
+            text = "Send a text to assistants when battery is low or when the device is plugged in after low battery. Turn on \"Notify for battery alerts\" for each assistant in Assistants.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        SettingToggle(
+            title = "Send battery alert texts",
+            description = "Low battery and device connected after low battery",
+            checked = settings.batteryAlertSmsEnabled,
+            onCheckedChange = { enabled ->
+                if (enabled) {
+                    viewModel.setBatteryAlertSmsEnabled(true)
+                    smsPermissionState.launchPermissionRequest()
+                    saveToastState.show("Battery alerts on. Grant SMS when prompted.")
+                } else {
+                    viewModel.setBatteryAlertSmsEnabled(false)
+                    saveToastState.show("Battery alert texts disabled")
+                }
+            }
+        )
     }
 }

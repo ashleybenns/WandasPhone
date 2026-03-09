@@ -49,7 +49,7 @@ fun AppearanceScreen(
                 // Breadcrumb
                 CarerBreadcrumb(
                     title = "Appearance",
-                    parentTitle = "Settings",
+                    parentTitle = "Assistant Settings",
                     onBack = onBack
                 )
                 
@@ -160,7 +160,7 @@ fun AppearanceScreen(
                     // Simple one-button solution for returning grey list missed calls
                     SettingCard(title = "Missed Call Button") {
                         Text(
-                            text = "Add a button to call back missed calls from contacts not on the home screen. Uses one of the 4 button slots.",
+                            text = "Add a button to call back missed calls from friends or other contacts not on the home screen. Uses one of the 4 button slots.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -173,8 +173,8 @@ fun AppearanceScreen(
                             onCheckedChange = { enabled ->
                                 viewModel.setShowMissedCallReturnButton(enabled)
                                 saveToastState.show(
-                                    if (enabled) "Missed Call button enabled (max 3 carer buttons)"
-                                    else "Missed Call button disabled (max 4 carer buttons)"
+                                    if (enabled) "Missed Call button enabled (max 3 assistant buttons)"
+                                    else "Missed Call button disabled (max 4 assistant buttons)"
                                 )
                             }
                         )
@@ -209,7 +209,7 @@ fun AppearanceScreen(
                             
                             SettingToggle(
                                 title = "Other Contacts Button",
-                                description = "Shows contacts not on home screen",
+                                description = "Shows friends and other contacts not on home screen",
                                 checked = settings.homeShowContactsListButton,
                                 onCheckedChange = { enabled ->
                                     viewModel.setShowContactsListButton(enabled)
@@ -223,13 +223,13 @@ fun AppearanceScreen(
                             // Sub-option: Grey List Only (only visible when contacts button enabled)
                             if (settings.homeShowContactsListButton) {
                                 SettingToggle(
-                                    title = "Grey List Only",
-                                    description = "Only show answer-only contacts (not carers)",
+                                    title = "Friends Only",
+                                    description = "Only show answer-only contacts (not assistants)",
                                     checked = settings.homeContactsListShowGreyListOnly,
                                     onCheckedChange = { enabled ->
                                         viewModel.setContactsListShowGreyListOnly(enabled)
                                         saveToastState.show(
-                                            if (enabled) "Showing grey list only"
+                                            if (enabled) "Showing friends only"
                                             else "Showing all contacts"
                                         )
                                     }

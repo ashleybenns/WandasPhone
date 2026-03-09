@@ -7,14 +7,14 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ContactDao {
     
-    @Query("SELECT * FROM contacts WHERE isPrimary = 1 LIMIT 1")
-    fun getPrimaryContact(): Flow<ContactEntity?>
-    
     @Query("SELECT * FROM contacts ORDER BY priority ASC, name ASC LIMIT :limit")
     fun getContacts(limit: Int): Flow<List<ContactEntity>>
     
     @Query("SELECT * FROM contacts WHERE contactType = 'CARER' ORDER BY buttonPosition ASC, priority ASC, name ASC LIMIT :limit")
     fun getCarerContacts(limit: Int): Flow<List<ContactEntity>>
+
+    @Query("SELECT * FROM contacts WHERE contactType = 'CARER' AND notifyBatteryAlerts = 1")
+    suspend fun getCarerContactsWithBatteryAlerts(): List<ContactEntity>
     
     @Query("SELECT * FROM contacts WHERE contactType = 'GREY_LIST' ORDER BY name ASC LIMIT :limit")
     fun getGreyListContacts(limit: Int): Flow<List<ContactEntity>>
@@ -39,9 +39,6 @@ interface ContactDao {
     
     @Query("DELETE FROM contacts WHERE id = :id")
     suspend fun deleteById(id: Long)
-    
-    @Query("UPDATE contacts SET isPrimary = 0")
-    suspend fun clearAllPrimary()
     
     @Query("SELECT COUNT(*) FROM contacts")
     suspend fun getContactCount(): Int

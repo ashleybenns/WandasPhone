@@ -109,8 +109,6 @@ class SettingsRepositoryImpl @Inject constructor(
             when (level) {
                 FeatureLevel.MINIMAL -> 4  // Up to 4 carers at Level 1
                 FeatureLevel.BASIC -> 5    // Up to 5 carers at Level 2 (+ list buttons + Screen Off)
-                FeatureLevel.STANDARD -> 5 // Same carers, + menu buttons
-                FeatureLevel.EXTENDED -> 6 // Full 6 carers + all buttons
             }
         }
     }

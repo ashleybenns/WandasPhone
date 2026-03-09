@@ -11,6 +11,8 @@ import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
+import com.tomsphone.core.analytics.AnalyticsManager
+import com.tomsphone.core.analytics.AnalyticsEvent
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +59,9 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     
     @Inject
     lateinit var ringtonePlayer: RingtonePlayer
+    
+    @Inject
+    lateinit var analytics: AnalyticsManager
     
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
@@ -216,6 +221,16 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         if (wasCallActive) {
             // Call was connected - announce "call ended"
             speakIfEnabled(TTSScripts.callEnded())
+            // Restore call volume to carer default (in case user adjusted during call)
+            serviceScope.launch {
+                try {
+                    val settings = settingsRepository.getSettings().first()
+                    setCallVolume(settings.speakerVolume)
+                    Log.d(TAG, "Restored call volume to ${settings.speakerVolume}%")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to restore volume: ${e.message}")
+                }
+            }
         } else if (wasIncomingCall && lastIncomingPhoneNumber != null) {
             // Incoming call was NOT answered → trigger missed call nag
             Log.d(TAG, "Unanswered incoming call from ${lastIncomingContactName ?: lastIncomingPhoneNumber} - triggering nag")
@@ -328,6 +343,8 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
             if (call.state == Call.STATE_RINGING) {
                 call.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
                 Log.d(TAG, "Answered call")
+                // Track manual call answer
+                analytics.logEvent(AnalyticsEvent.CallAnswered(wasAutoAnswer = false))
             }
         }
     }
@@ -408,6 +425,10 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                     wasAutoAnswered = true
                     currentCall?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
                     Log.d(TAG, "Auto-answer: call answered")
+                    
+                    // Track auto-answer
+                    analytics.logEvent(AnalyticsEvent.AutoAnswerTriggered)
+                    analytics.logEvent(AnalyticsEvent.CallAnswered(wasAutoAnswer = true))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Auto-answer error: ${e.message}")
@@ -514,15 +535,10 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     }
     
     /**
-     * Normalize phone number for matching (UK format)
+     * Normalize phone number for matching (E.164; default region GB for national format).
      */
     private fun normalizePhoneNumber(phone: String): String {
-        var digits = phone.replace(Regex("[^0-9]"), "")
-        // Handle UK +44 prefix -> 0
-        if (digits.startsWith("44") && digits.length > 10) {
-            digits = "0" + digits.substring(2)
-        }
-        return digits
+        return com.tomsphone.core.data.util.PhoneNumberUtils.normalizeToE164(phone, "GB")
     }
     
     private fun updateCallInfo() {

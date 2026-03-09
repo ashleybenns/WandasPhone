@@ -19,10 +19,6 @@ class LocalContactRepository @Inject constructor(
     private val contactDao: ContactDao
 ) : ContactRepository {
     
-    override fun getPrimaryContact(): Flow<Contact?> {
-        return contactDao.getPrimaryContact().map { it?.toContact() }
-    }
-    
     override fun getContacts(limit: Int): Flow<List<Contact>> {
         return contactDao.getContacts(limit).map { list -> 
             list.map { it.toContact() }
@@ -33,6 +29,10 @@ class LocalContactRepository @Inject constructor(
         return contactDao.getCarerContacts(limit).map { list ->
             list.map { it.toContact() }
         }
+    }
+
+    override suspend fun getCarerContactsWithBatteryAlerts(): List<Contact> {
+        return contactDao.getCarerContactsWithBatteryAlerts().map { it.toContact() }
     }
     
     override fun getGreyListContacts(limit: Int): Flow<List<Contact>> {
@@ -76,19 +76,6 @@ class LocalContactRepository @Inject constructor(
     override suspend fun removeContact(id: Long): Result<Unit> {
         return runCatching {
             contactDao.deleteById(id)
-        }
-    }
-    
-    override suspend fun setPrimaryContact(id: Long): Result<Unit> {
-        return runCatching {
-            // Clear all primary flags first
-            contactDao.clearAllPrimary()
-            
-            // Set new primary
-            val contact = contactDao.getContactById(id)
-            if (contact != null) {
-                contactDao.update(contact.copy(isPrimary = true))
-            }
         }
     }
     

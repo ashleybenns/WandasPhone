@@ -25,6 +25,7 @@ include(":core:core-tts")
 include(":core:core-config")
 include(":core:core-data")
 include(":core:core-telecom")
+include(":core:core-analytics")
 
 // Feature modules
 include(":feature:feature-home")

@@ -56,7 +56,7 @@ fun UserProfileScreen(
                 // Breadcrumb
                 CarerBreadcrumb(
                     title = "User Profile",
-                    parentTitle = "Settings",
+                    parentTitle = "Assistant Settings",
                     onBack = onBack
                 )
                 
@@ -300,7 +300,7 @@ fun UserProfileScreen(
                     // Emergency Contacts (people to notify, not 999)
                     SettingCard(title = "Emergency Contacts") {
                         Text(
-                            text = "People to contact in an emergency (family, carers). Displayed on the emergency screen for attending help.",
+                            text = "People to contact in an emergency (family, assistants). Displayed on the emergency screen for attending help.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 12.dp)
@@ -510,6 +510,7 @@ fun UserProfileScreen(
 fun SettingCard(
     title: String,
     modifier: Modifier = Modifier,
+    trailingContent: @Composable (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -521,11 +522,20 @@ fun SettingCard(
         Column(
             modifier = Modifier.padding(WandasDimensions.SpacingMedium)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.wandasColors.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.wandasColors.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                trailingContent?.invoke()
+            }
             
             Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
             

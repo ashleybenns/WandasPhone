@@ -45,7 +45,9 @@ import com.tomsphone.feature.phone.EndIncomingCallScreen
 import com.tomsphone.feature.phone.EndOutgoingCallScreen
 import com.tomsphone.feature.phone.IncomingCallScreen
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -87,6 +89,7 @@ class MainActivity : ComponentActivity() {
     lateinit var batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor
     
     private var lockVolumeButtons = true
+    private var volumeKeysAllowedDuringCall = false  // Only true when call active and lockVolumeButtons=false
     private var pinnedModeEnabled = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,13 +117,42 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             applySettings()
         }
-        
+
+        // Observe settings + call state for volume lock in real time
+        // Volume keys: locked always when lockVolumeButtons=true; when false, only allow during active call (protect ringtone)
+        lifecycleScope.launch {
+            combine(
+                settingsRepository.getSettings().map { it.lockVolumeButtons },
+                callManager.currentCall.map { call ->
+                    call != null && (call.state == CallState.ACTIVE || call.state == CallState.DIALING || call.state == CallState.RINGING)
+                }
+            ) { lockVol, hasActiveCall -> lockVol to hasActiveCall }
+                .collect { (lockVol, hasActiveCall) ->
+                    lockVolumeButtons = lockVol
+                    volumeKeysAllowedDuringCall = hasActiveCall
+                }
+        }
+
+        // Observe screen always on so toggle applies immediately (like volume lock)
+        lifecycleScope.launch {
+            settingsRepository.getSettings().map { it.screenAlwaysOn }.collect { screenAlwaysOn ->
+                if (screenAlwaysOn) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+                Log.d(TAG, "Screen always on updated: $screenAlwaysOn")
+            }
+        }
+
         setContent {
             WandasPhoneApp(
                 callManager = callManager, 
                 settingsRepository = settingsRepository, 
                 batteryMonitor = batteryMonitor,
-                onExitApp = { exitApp() }
+                onExitApp = { exitApp() },
+                onTurnOffScreen = { turnOffScreenForLowBattery() },
+                onRestoreScreen = { restoreScreen() }
             )
         }
     }
@@ -220,6 +252,33 @@ class MainActivity : ComponentActivity() {
     }
     
     /**
+     * Turn off screen for low battery power saving.
+     * Removes keep screen on flag and sets brightness to minimum.
+     */
+    fun turnOffScreenForLowBattery() {
+        Log.d(TAG, "Turning off screen for low battery")
+        runOnUiThread {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val params = window.attributes
+            params.screenBrightness = 0.01f  // Minimum brightness
+            window.attributes = params
+        }
+    }
+    
+    /**
+     * Restore screen for normal operation.
+     */
+    fun restoreScreen() {
+        Log.d(TAG, "Restoring screen")
+        runOnUiThread {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val params = window.attributes
+            params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            window.attributes = params
+        }
+    }
+    
+    /**
      * Exit the app - unpin, disable home launcher, and open settings
      * Used by carer as an escape hatch when pinning/home launcher causes issues
      */
@@ -263,11 +322,16 @@ class MainActivity : ComponentActivity() {
     }
     
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (lockVolumeButtons) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_VOLUME_UP,
-                KeyEvent.KEYCODE_VOLUME_DOWN,
-                KeyEvent.KEYCODE_VOLUME_MUTE -> return true
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP,
+            KeyEvent.KEYCODE_VOLUME_DOWN,
+            KeyEvent.KEYCODE_VOLUME_MUTE -> {
+                // Lock ON: always consume (protect both call and ringtone volume)
+                if (lockVolumeButtons) return true
+                // Lock OFF: only allow during active call (protect ringtone when idle)
+                if (!volumeKeysAllowedDuringCall) return true
+                // Lock OFF + active call: pass through so system shows volume panel
+                return super.dispatchKeyEvent(event)
             }
         }
         return super.dispatchKeyEvent(event)
@@ -310,7 +374,9 @@ fun WandasPhoneApp(
     callManager: CallManager, 
     settingsRepository: SettingsRepository,
     batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor,
-    onExitApp: () -> Unit
+    onExitApp: () -> Unit,
+    onTurnOffScreen: () -> Unit = {},
+    onRestoreScreen: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     
@@ -332,6 +398,23 @@ fun WandasPhoneApp(
     val batteryLevel by batteryMonitor.batteryLevel.collectAsState()
     val isLowBattery by batteryMonitor.isLowBattery.collectAsState()
     val isCharging by batteryMonitor.isCharging.collectAsState()
+    val shouldTurnOffScreen by batteryMonitor.shouldTurnOffScreen.collectAsState()
+    
+    // Handle low battery screen off
+    LaunchedEffect(shouldTurnOffScreen) {
+        if (shouldTurnOffScreen) {
+            onTurnOffScreen()
+        } else {
+            onRestoreScreen()
+        }
+    }
+    
+    // Restore screen when charging starts
+    LaunchedEffect(isCharging) {
+        if (isCharging) {
+            onRestoreScreen()
+        }
+    }
     
     // Update contact name when we have call info
     LaunchedEffect(currentCall) {
@@ -427,39 +510,40 @@ fun WandasPhoneApp(
         }
     }
     
+    // Calculate button row count ONCE based on home screen layout
+    // This ensures consistent text sizing across ALL screens
+    val homeButtonRowCount = run {
+        val currentSettings = settings
+        val contactRows = when (currentSettings?.featureLevel?.level ?: 1) {
+            1 -> 4  // Level 1: 4 contacts
+            else -> 5  // Level 2: 5 contacts
+        }.coerceAtMost(6)
+        val displayOffRow = if (currentSettings?.featureLevel?.level ?: 1 >= 2 && 
+                                currentSettings?.showDisplayOffButton == true) 1 else 0
+        val menuRows = if (currentSettings?.featureLevel?.level ?: 1 >= 2) {
+            var count = 0
+            if (currentSettings?.homeShowMissedCallsButton == true) count++
+            if (currentSettings?.homeShowContactsListButton == true) count++
+            (count + 1) / 2  // Pair into rows
+        } else 0
+        (contactRows + displayOffRow + menuRows).coerceIn(2, 6)
+    }
+    
     WandasPhoneTheme(themeOption = ThemeOption.HIGH_CONTRAST_LIGHT) {
         NavHost(
             navController = navController,
             startDestination = "home"
         ) {
-            // USER SCREENS - wrapped with UserScalingProvider
-            // These scale text/buttons based on carer-configured userTextSize
+            // USER SCREENS - all use the same scale calculated from home screen
+            // This ensures consistent text sizing across all screens
             
             composable("home") {
                 // #region agent log
                 LaunchedEffect(Unit) { debugLog("MainActivity.kt:378", "H2", "home composable entered", mapOf("settingsNull" to (settings == null))) }
                 // #endregion
-                // Calculate button row count from actual settings
-                // This uses feature level max + display off + menu buttons
-                val currentSettings = settings
-                val contactRows = when (currentSettings?.featureLevel?.level ?: 1) {
-                    1 -> 4  // MINIMAL: 4 contacts
-                    2 -> 5  // BASIC: 5 contacts
-                    else -> 6  // STANDARD+: more contacts, but cap layout at 6
-                }.coerceAtMost(6)  // Never calculate for more than 6 rows
-                val displayOffRow = if (currentSettings?.featureLevel?.level ?: 1 >= 2 && 
-                                        currentSettings?.showDisplayOffButton == true) 1 else 0
-                val menuRows = if (currentSettings?.featureLevel?.level ?: 1 >= 2) {
-                    var count = 0
-                    if (currentSettings?.homeShowMissedCallsButton == true) count++
-                    if (currentSettings?.homeShowContactsListButton == true) count++
-                    (count + 1) / 2  // Pair into rows
-                } else 0
-                val buttonRowCount = (contactRows + displayOffRow + menuRows).coerceIn(2, 6)
-                
                 UserScalingProvider(
-                    buttonRowCount = buttonRowCount,
-                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)  // User can reduce from max
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
                 ) {
                     HomeScreen(
                         onNavigateToCarer = {
@@ -487,7 +571,10 @@ fun WandasPhoneApp(
                 LaunchedEffect(Unit) { debugLog("MainActivity.kt:410", "H1", "missedCalls composable entered", mapOf("backStackSize" to navController.currentBackStack.value.size)) }
                 // #endregion
                 val scope = rememberCoroutineScope()
-                UserScalingProvider(scale = userTextScale) {
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
                     com.tomsphone.feature.home.MissedCallsListScreen(
                         onBack = {
                             // #region agent log
@@ -509,7 +596,10 @@ fun WandasPhoneApp(
             // Contacts List (Level 2+)
             composable("contactsList") {
                 val scope = rememberCoroutineScope()
-                UserScalingProvider(scale = userTextScale) {
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
                     com.tomsphone.feature.home.ContactsListScreen(
                         onBack = { navController.popBackStack() },
                         onCallContact = { name, phoneNumber ->
@@ -528,7 +618,10 @@ fun WandasPhoneApp(
                 val emergencyNumber = settings?.emergencyNumber ?: "999"
                 val isTestMode = settings?.emergencyTestMode ?: true
                 
-                UserScalingProvider(scale = userTextScale) {
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
                     EmergencyConfirmScreen(
                         emergencyNumber = emergencyNumber,
                         isTestMode = isTestMode,
@@ -587,7 +680,10 @@ fun WandasPhoneApp(
                     call.state == CallState.CONNECTING
                 } ?: false
                 
-                UserScalingProvider(scale = userTextScale) {
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
                     EmergencyCallScreen(
                         userName = userName,
                         userSurname = settings?.userSurname ?: "",
@@ -615,7 +711,10 @@ fun WandasPhoneApp(
             
             // Incoming call - Answer/Reject
             composable("incoming") {
-                UserScalingProvider(scale = userTextScale) {
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
                     IncomingCallScreen(
                         onCallAnswered = {
                             // Will navigate to endIncoming when call becomes ACTIVE
@@ -628,9 +727,12 @@ fun WandasPhoneApp(
                 }
             }
             
-            // End call screen for INCOMING (GREEN)
+            // End call screen for INCOMING
             composable("endIncoming") {
-                UserScalingProvider(scale = userTextScale) {
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
                     EndIncomingCallScreen(
                         onCallEnded = {
                             navController.popBackStack("home", inclusive = false)
@@ -639,10 +741,13 @@ fun WandasPhoneApp(
                 }
             }
             
-            // End call screen for OUTGOING (YELLOW)
+            // End call screen for OUTGOING
             composable("endOutgoing/{contactName}") { backStackEntry ->
                 val contactName = backStackEntry.arguments?.getString("contactName") ?: "Caller"
-                UserScalingProvider(scale = userTextScale) {
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
                     EndOutgoingCallScreen(
                         contactName = contactName,
                         onCallEnded = {

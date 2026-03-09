@@ -3,6 +3,7 @@ package com.tomsphone.core.data
 import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.tomsphone.core.data.local.LocalCallLogRepository
 import com.tomsphone.core.data.local.LocalContactRepository
@@ -17,6 +18,12 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE contacts ADD COLUMN notifyBatteryAlerts INTEGER NOT NULL DEFAULT 0")
+    }
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -43,8 +50,9 @@ abstract class DataModule {
             return Room.databaseBuilder(
                 context,
                 WandasDatabase::class.java,
-                "toms_phone_db_v5"  // v5: Added button config fields to contacts
+                "toms_phone_db_v5"
             )
+                .addMigrations(MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .addCallback(SeedDatabaseCallback())
                 .build()
@@ -79,21 +87,21 @@ private class SeedDatabaseCallback : RoomDatabase.Callback() {
         val now = System.currentTimeMillis()
         
         // DEBUG ONLY: Test contacts
-        // 1. Ashley - 07597086211 - CARER - Primary (main test contact)
+        // 1. Ashley - 07597086211 - CARER (main test contact)
         // 2. Dev - 07510940646 - CARER (second test contact)
         
         // Seed contacts with all columns including new button config fields
-        // Columns: name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt,
+        // Columns: name, phoneNumber, photoUri, priority, contactType, createdAt, updatedAt,
         //          buttonColor, autoAnswerEnabled, buttonPosition, isHalfWidth
         
         db.execSQL(
-            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, buttonPosition, isHalfWidth) " +
-            "VALUES ('Ashley', '07597086211', NULL, 1, 1, 'CARER', $now, $now, NULL, 0, 0, 0)"
+            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, notifyBatteryAlerts, buttonPosition, isHalfWidth) " +
+            "VALUES ('Ashley', '07597086211', NULL, 1, 'CARER', $now, $now, NULL, 0, 0, 0, 0)"
         )
         
         db.execSQL(
-            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, isPrimary, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, buttonPosition, isHalfWidth) " +
-            "VALUES ('Dev', '07510940646', NULL, 2, 0, 'CARER', $now, $now, NULL, 0, 1, 0)"
+            "INSERT INTO contacts (name, phoneNumber, photoUri, priority, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, notifyBatteryAlerts, buttonPosition, isHalfWidth) " +
+            "VALUES ('Dev', '07510940646', NULL, 2, 'CARER', $now, $now, NULL, 0, 0, 1, 0)"
         )
     }
 }

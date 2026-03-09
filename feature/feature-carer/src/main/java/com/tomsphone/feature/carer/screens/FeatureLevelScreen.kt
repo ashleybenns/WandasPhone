@@ -49,7 +49,7 @@ fun FeatureLevelScreen(
                 // Breadcrumb
                 CarerBreadcrumb(
                     title = "Feature Level",
-                    parentTitle = "Settings",
+                    parentTitle = "Assistant Settings",
                     onBack = onBack
                 )
                 
@@ -76,32 +76,6 @@ fun FeatureLevelScreen(
                                 saveToastState.show("Feature level saved")
                             }
                         )
-                    }
-                    
-                    // Paywall placeholder
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.wandasColors.surface.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(WandasDimensions.SpacingMedium)
-                        ) {
-                            Text(
-                                text = "Subscription",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.5f)
-                            )
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Text(
-                                text = "Subscription tiers and payment will be available in a future release. All levels are currently available for testing.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
                     }
                     
                     Spacer(modifier = Modifier.height(32.dp))
@@ -200,47 +174,29 @@ private fun FeatureLevelCard(
 private fun getLevelInfo(level: FeatureLevel): Triple<String, String, List<String>> {
     return when (level) {
         FeatureLevel.MINIMAL -> Triple(
-            "Simple",
+            "One Touch",
             "The clearest possible interface. One-touch calling with no choices to make.",
             listOf(
-                "Up to 4 carer contact buttons",
-                "Emergency button (always visible)",
+                "Up to 4 assistant contact buttons",
+                "Emergency button",
                 "Always-on speakerphone",
+                "Missed call button",
                 "Missed call reminders",
                 "Voice announcements (optional)",
                 "Drag-to-reorder contacts"
             )
         )
         FeatureLevel.BASIC -> Triple(
-            "Comfortable",
+            "Two Touch",
             "Two-touch navigation for users comfortable with simple list screens.",
             listOf(
-                "Up to 5 carer contact buttons",
+                "Up to 5 assistant contact buttons",
+                "Emergency button",
                 "Missed Calls list button",
                 "Contacts list button",
                 "Screen Off button",
                 "Speaker toggle during calls",
                 "Appearance options"
-            )
-        )
-        FeatureLevel.STANDARD -> Triple(
-            "Capable",
-            "Menu navigation for users who can browse multiple options.",
-            listOf(
-                "Up to 5 carer contacts",
-                "Menu buttons (coming soon)",
-                "Contact photos",
-                "Additional customization"
-            )
-        )
-        FeatureLevel.EXTENDED -> Triple(
-            "Independent",
-            "Full functionality for users who need larger buttons and clearer design.",
-            listOf(
-                "Up to 6 carer contacts",
-                "All buttons and features",
-                "Full customization",
-                "Future: voicemail, notifications"
             )
         )
     }

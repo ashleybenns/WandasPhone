@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.Flow
  */
 interface ContactRepository {
     
-    fun getPrimaryContact(): Flow<Contact?>
-    
     fun getContacts(limit: Int): Flow<List<Contact>>
     
     /**
@@ -19,6 +17,11 @@ interface ContactRepository {
      * Ordered by buttonPosition for home screen display
      */
     fun getCarerContacts(limit: Int): Flow<List<Contact>>
+
+    /**
+     * Get carer contacts that have battery alert SMS enabled (for low battery / device connected notifications).
+     */
+    suspend fun getCarerContactsWithBatteryAlerts(): List<Contact>
     
     /**
      * Get only GREY_LIST contacts (answer-only, not on home screen)
@@ -35,8 +38,6 @@ interface ContactRepository {
     suspend fun updateContact(contact: Contact): Result<Unit>
     
     suspend fun removeContact(id: Long): Result<Unit>
-    
-    suspend fun setPrimaryContact(id: Long): Result<Unit>
     
     suspend fun getContactCount(): Int
     

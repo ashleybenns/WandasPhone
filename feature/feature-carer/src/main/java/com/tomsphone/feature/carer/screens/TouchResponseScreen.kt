@@ -55,7 +55,7 @@ fun TouchResponseScreen(
                 // Breadcrumb
                 CarerBreadcrumb(
                     title = "Touch Response",
-                    parentTitle = "Settings",
+                    parentTitle = "Assistant Settings",
                     onBack = onBack
                 )
                 
@@ -100,11 +100,71 @@ fun TouchResponseScreen(
                     if (settings.buttonActivation == ButtonActivationPreset.ACCUMULATED_TAP) {
                         SettingCard(title = "Tune Accumulated Tap") {
                             Text(
-                                text = "Adjust how much total touch time is needed and how long before the counter resets.",
+                                text = "Accumulated tap adds up the time from multiple touches. Each touch must be held long enough to count (shake protection), then the total touch time must reach the threshold before the timeout expires.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
+                            
+                            // Shake protection (debounce) - minimum touch duration
+                            Text(
+                                text = "Shake protection (minimum touch):",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.wandasColors.onSurface
+                            )
+                            Text(
+                                text = "Touches shorter than this are ignored as accidental.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                DebouncePresetButton(
+                                    label = "None",
+                                    valueMs = 0,
+                                    isSelected = settings.touchDebounceMs == 0,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(0)
+                                        saveToastState.show("No shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DebouncePresetButton(
+                                    label = "Light",
+                                    valueMs = 100,
+                                    isSelected = settings.touchDebounceMs in 1..100,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(100)
+                                        saveToastState.show("Light shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DebouncePresetButton(
+                                    label = "Medium",
+                                    valueMs = 200,
+                                    isSelected = settings.touchDebounceMs in 101..200,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(200)
+                                        saveToastState.show("Medium shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DebouncePresetButton(
+                                    label = "Strong",
+                                    valueMs = 350,
+                                    isSelected = settings.touchDebounceMs > 200,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(350)
+                                        saveToastState.show("Strong shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
                             
                             // Threshold setting
                             Text(
@@ -208,69 +268,71 @@ fun TouchResponseScreen(
                         }
                     }
                     
-                    // Debounce / Shake Protection
-                    SettingCard(title = "Shake Protection") {
-                        Text(
-                            text = "Ignore very brief touches to filter accidental brushes from shaky hands.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-                        
-                        // Show current value
-                        Text(
-                            text = "Ignore touches under: ${settings.touchDebounceMs}ms",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.wandasColors.onSurface
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Preset buttons instead of confusing slider
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            DebouncePresetButton(
-                                label = "None",
-                                valueMs = 0,
-                                isSelected = settings.touchDebounceMs == 0,
-                                onClick = {
-                                    viewModel.setTouchDebounceMs(0)
-                                    saveToastState.show("No shake protection")
-                                },
-                                modifier = Modifier.weight(1f)
+                    // Debounce / Shake Protection - only show for non-accumulated modes
+                    if (settings.buttonActivation != ButtonActivationPreset.ACCUMULATED_TAP) {
+                        SettingCard(title = "Shake Protection") {
+                            Text(
+                                text = "Ignore very brief touches to filter accidental brushes from shaky hands.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(bottom = 12.dp)
                             )
-                            DebouncePresetButton(
-                                label = "Light",
-                                valueMs = 100,
-                                isSelected = settings.touchDebounceMs in 1..100,
-                                onClick = {
-                                    viewModel.setTouchDebounceMs(100)
-                                    saveToastState.show("Light shake protection")
-                                },
-                                modifier = Modifier.weight(1f)
+                            
+                            // Show current value
+                            Text(
+                                text = "Ignore touches under: ${settings.touchDebounceMs}ms",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.wandasColors.onSurface
                             )
-                            DebouncePresetButton(
-                                label = "Medium",
-                                valueMs = 200,
-                                isSelected = settings.touchDebounceMs in 101..200,
-                                onClick = {
-                                    viewModel.setTouchDebounceMs(200)
-                                    saveToastState.show("Medium shake protection")
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            DebouncePresetButton(
-                                label = "Strong",
-                                valueMs = 350,
-                                isSelected = settings.touchDebounceMs > 200,
-                                onClick = {
-                                    viewModel.setTouchDebounceMs(350)
-                                    saveToastState.show("Strong shake protection")
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // Preset buttons instead of confusing slider
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                DebouncePresetButton(
+                                    label = "None",
+                                    valueMs = 0,
+                                    isSelected = settings.touchDebounceMs == 0,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(0)
+                                        saveToastState.show("No shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DebouncePresetButton(
+                                    label = "Light",
+                                    valueMs = 100,
+                                    isSelected = settings.touchDebounceMs in 1..100,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(100)
+                                        saveToastState.show("Light shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DebouncePresetButton(
+                                    label = "Medium",
+                                    valueMs = 200,
+                                    isSelected = settings.touchDebounceMs in 101..200,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(200)
+                                        saveToastState.show("Medium shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DebouncePresetButton(
+                                    label = "Strong",
+                                    valueMs = 350,
+                                    isSelected = settings.touchDebounceMs > 200,
+                                    onClick = {
+                                        viewModel.setTouchDebounceMs(350)
+                                        saveToastState.show("Strong shake protection")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                     
@@ -287,7 +349,7 @@ fun TouchResponseScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "• End Call: Always requires double tap",
+                                text = "• End Call: Always requires accumulated tap",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface
                             )

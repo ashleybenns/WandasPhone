@@ -61,7 +61,7 @@ fun SupportSuggestionsScreen(
                 DevLevelIndicator(level = com.tomsphone.core.config.FeatureLevel.MINIMAL)
                 CarerBreadcrumb(
                     title = "Support & suggestions",
-                    parentTitle = "Settings",
+                    parentTitle = "Assistant Settings",
                     onBack = onBack
                 )
                 LazyColumn(

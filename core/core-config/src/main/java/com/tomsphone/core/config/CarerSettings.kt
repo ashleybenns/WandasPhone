@@ -30,10 +30,6 @@ data class CarerSettings(
     // Default: Minimal features for safety
     val featureLevel: FeatureLevel = FeatureLevel.MINIMAL,
     
-    // ========== CONTACTS ==========
-    // Default: No primary contact (carer must set up)
-    val primaryContactId: Long? = null,
-    
     // ========== HOME SCREEN LAYOUT ==========
     // Each setting is discrete for individual remote sync and paywall gating
     val homeMaxButtons: Int = 6,                    // 1-6 contact buttons on home screen
@@ -65,6 +61,10 @@ data class CarerSettings(
     val speakerDefaultOn: Boolean = true,    // Default speaker state at call start
     // SAFETY: Reject unknown calls by default (scam protection)
     val rejectUnknownCalls: Boolean = true,
+    
+    // ========== BATTERY ALERT SMS (Level 1) ==========
+    // Send SMS to carers (with "Notify for battery alerts" on) for low battery and device connected after low battery
+    val batteryAlertSmsEnabled: Boolean = false,
     
     // ========== MISSED CALL NAGGING ==========
     // SAFE: Reminders on - helps user return important calls

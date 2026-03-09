@@ -81,8 +81,6 @@ fun HomeScreen(
     // #endregion
     val callingContact by viewModel.callingContact.collectAsState()
     val emergencyTestMode by viewModel.emergencyTestMode.collectAsState()
-    val emergencyTapCount by viewModel.emergencyTapCount.collectAsState()
-    val emergencyRequiredTaps by viewModel.emergencyRequiredTaps.collectAsState()
     val unknownCallsAllowed by viewModel.unknownCallsAllowed.collectAsState()
     val textAlignment by viewModel.listTextAlignment.collectAsState()
     val buttonActivation by viewModel.buttonActivation.collectAsState()
@@ -260,14 +258,17 @@ fun HomeScreen(
                                     if (isThisContactCalling) {
                                         CallingStateButton(
                                             contactName = button.name,
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlignment = textAlignment,
+                                            initialBackgroundColor = button.color?.let { Color(it) }
+                                                ?: MaterialTheme.wandasColors.primaryButton
                                         )
                                     }
                                     // Other buttons: empty space preserves layout
                                 }
                             }
                             
-                            // Half-width contact button rows (preserve structure)
+                            // Half-width contact button rows (preserve structure - button stays in same position)
                             halfWidthContacts.chunked(2).forEach { pair ->
                                 Box(
                                     modifier = Modifier
@@ -276,12 +277,38 @@ fun HomeScreen(
                                         .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    // Check if either button in pair is calling
-                                    val callingButton = pair.find { it.contactId == callingContact?.id }
-                                    if (callingButton != null) {
+                                    if (pair.size == 2) {
+                                        HalfWidthButtonRow(
+                                            leftButton = { mod ->
+                                                if (pair[0].contactId == callingContact?.id) {
+                                                    CallingStateButton(
+                                                        contactName = pair[0].name,
+                                                        modifier = mod,
+                                                        textAlignment = textAlignment,
+                                                        initialBackgroundColor = pair[0].color?.let { Color(it) }
+                                                            ?: MaterialTheme.wandasColors.primaryButton
+                                                    )
+                                                }
+                                            },
+                                            rightButton = { mod ->
+                                                if (pair[1].contactId == callingContact?.id) {
+                                                    CallingStateButton(
+                                                        contactName = pair[1].name,
+                                                        modifier = mod,
+                                                        textAlignment = textAlignment,
+                                                        initialBackgroundColor = pair[1].color?.let { Color(it) }
+                                                            ?: MaterialTheme.wandasColors.primaryButton
+                                                    )
+                                                }
+                                            }
+                                        )
+                                    } else if (pair[0].contactId == callingContact?.id) {
                                         CallingStateButton(
-                                            contactName = callingButton.name,
-                                            modifier = Modifier.fillMaxWidth()
+                                            contactName = pair[0].name,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlignment = textAlignment,
+                                            initialBackgroundColor = pair[0].color?.let { Color(it) }
+                                                ?: MaterialTheme.wandasColors.primaryButton
                                         )
                                     }
                                 }
@@ -297,13 +324,14 @@ fun HomeScreen(
                                         .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    // Check if we're calling from this button (callingContact id would be 0)
-                                    val isCallingFromMissedReturn = callingContact?.id == 0L && 
+                                    val isCallingFromMissedReturn = callingContact?.id == 0L &&
                                         callingContact?.phoneNumber == missedCallReturnButton.phoneNumber
                                     if (isCallingFromMissedReturn) {
                                         CallingStateButton(
                                             contactName = missedCallReturnButton.label,
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlignment = textAlignment,
+                                            initialBackgroundColor = MaterialTheme.wandasColors.primaryButton
                                         )
                                     }
                                 }
@@ -561,12 +589,12 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Emergency button - takes remaining space
+                            // Emergency button - single tap opens emergency screen
                             EmergencyButton(
                                 text = if (emergencyTestMode) "${emergencyButton.label} (Test)" else emergencyButton.label,
-                                subtitle = "Press $emergencyRequiredTaps times",
-                                tapCount = emergencyTapCount,
-                                requiredTaps = emergencyRequiredTaps,
+                                subtitle = null, // No subtitle - tap to open emergency screen
+                                tapCount = 0,
+                                requiredTaps = 1,
                                 onClick = { viewModel.onEmergencyButtonTap() },
                                 activationPreset = buttonActivation,
                                 debounceMs = touchDebounceMs,
@@ -575,13 +603,11 @@ fun HomeScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             
-                            // Settings access button - square, to the right
+                            // Settings access button - normal touch response so carers can open quickly
                             SettingsAccessButton(
                                 onSettingsAccess = { viewModel.onSettingsAccessTap() },
-                                activationPreset = buttonActivation,
-                                debounceMs = touchDebounceMs,
-                                accumulatedThresholdMs = accumulatedThresholdMs,
-                                accumulatedTimeoutMs = accumulatedTimeoutMs
+                                activationPreset = ButtonActivationPreset.ON_RELEASE,
+                                debounceMs = 50
                             )
                         }
                     } else if (emergencyButton != null) {

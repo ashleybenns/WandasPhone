@@ -15,7 +15,6 @@ fun ContactEntity.toContact(): Contact {
         phoneNumber = phoneNumber,
         photoUri = photoUri,
         priority = priority,
-        isPrimary = isPrimary,
         contactType = try {
             ContactType.valueOf(contactType)
         } catch (e: IllegalArgumentException) {
@@ -26,6 +25,7 @@ fun ContactEntity.toContact(): Contact {
         // Button configuration
         buttonColor = buttonColor,
         autoAnswerEnabled = autoAnswerEnabled,
+        notifyBatteryAlerts = notifyBatteryAlerts,
         buttonPosition = buttonPosition,
         isHalfWidth = isHalfWidth
     )
@@ -38,13 +38,13 @@ fun Contact.toEntity(): ContactEntity {
         phoneNumber = phoneNumber,
         photoUri = photoUri,
         priority = priority,
-        isPrimary = isPrimary,
         contactType = contactType.name,
         createdAt = createdAt,
         updatedAt = updatedAt,
         // Button configuration
         buttonColor = buttonColor,
         autoAnswerEnabled = autoAnswerEnabled,
+        notifyBatteryAlerts = notifyBatteryAlerts,
         buttonPosition = buttonPosition,
         isHalfWidth = isHalfWidth
     )

@@ -19,6 +19,7 @@ import com.tomsphone.core.ui.theme.wandasColors
  * - Title + description for clarity
  * - Level gating (only shows if currentLevel >= minLevel)
  * - Big touch target for accessibility
+ * - Optional [unreadCount] badge (e.g. for Support & suggestions)
  */
 @Composable
 fun CarerMenuButton(
@@ -27,12 +28,15 @@ fun CarerMenuButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     minLevel: FeatureLevel = FeatureLevel.MINIMAL,
-    currentLevel: FeatureLevel = FeatureLevel.MINIMAL
+    currentLevel: FeatureLevel = FeatureLevel.MINIMAL,
+    unreadCount: Int = 0
 ) {
     // Level gating
     if (currentLevel.level < minLevel.level) {
         return
     }
+    
+    val displayTitle = if (unreadCount > 0) "$title ($unreadCount new)" else title
     
     Button(
         onClick = onClick,
@@ -55,7 +59,7 @@ fun CarerMenuButton(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = title,
+                text = displayTitle,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.wandasColors.onSurface
             )

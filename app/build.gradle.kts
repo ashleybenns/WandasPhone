@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -15,7 +17,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
-        
+        // Support & suggestions API (Vercel). Rebuild app after changing.
+        buildConfigField("String", "SUPPORT_API_BASE_URL", "\"https://wandas-phone.vercel.app\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -43,6 +47,7 @@ android {
     
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     
     composeOptions {
@@ -95,6 +100,15 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+    
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.config)
+    
+    // Analytics module
+    implementation(project(":core:core-analytics"))
     
     // Testing
     testImplementation(libs.junit)

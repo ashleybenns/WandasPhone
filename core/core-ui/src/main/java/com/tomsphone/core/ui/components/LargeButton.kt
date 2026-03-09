@@ -37,10 +37,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -370,41 +372,56 @@ fun HangUpButton(
 
 /**
  * Button shown when a call is being placed (dialing)
- * Fades to black, shows "Calling [name]"
+ * Fades to black - text stays visible (white, same size and position)
+ * Button does not change size or position - fillMaxHeight matches ConfigurableButton
  * Uses scaled dimensions based on user text size setting
  */
 @Composable
 fun CallingStateButton(
     contactName: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    textAlignment: ListTextAlignment = ListTextAlignment.CENTER,
+    initialBackgroundColor: Color = MaterialTheme.wandasColors.primaryButton
 ) {
-    // Use scaled dimensions
-    val buttonHeight = ScaledDimensions.contactButtonHeight
     val textSize = ScaledDimensions.contactNameTextSize
-    
+    var animateToBlack by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { animateToBlack = true }
     val backgroundColor by animateColorAsState(
-        targetValue = Color.Black,
-        animationSpec = tween(durationMillis = 300),
+        targetValue = if (animateToBlack) Color.Black else initialBackgroundColor,
+        animationSpec = tween(300),
         label = "calling_fade"
     )
-    
+
+    val boxAlignment = when (textAlignment) {
+        ListTextAlignment.LEFT -> Alignment.CenterStart
+        ListTextAlignment.CENTER -> Alignment.Center
+    }
+    val textAlign = when (textAlignment) {
+        ListTextAlignment.LEFT -> TextAlign.Start
+        ListTextAlignment.CENTER -> TextAlign.Center
+    }
+
     Box(
         modifier = modifier
-            .height(buttonHeight)
+            .fillMaxHeight()
+            .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+            .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
             .background(
                 color = backgroundColor,
                 shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
             ),
-        contentAlignment = Alignment.Center
+        contentAlignment = boxAlignment
     ) {
         Text(
             text = contactName,
             style = TextStyle(
                 fontSize = textSize,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = textSize
             ),
             color = Color.White,
-            textAlign = TextAlign.Center
+            textAlign = textAlign,
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
     }
 }

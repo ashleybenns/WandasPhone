@@ -35,6 +35,7 @@ dependencies {
     implementation(project(":core:core-config"))
     implementation(project(":core:core-data"))
     implementation(project(":core:core-tts"))
+    implementation(project(":core:core-analytics"))
     
     // AndroidX
     implementation(libs.androidx.core.ktx)

@@ -30,7 +30,8 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
 fun CarerMainMenuScreen(
     onNavigateToTomsPhoneDescription: () -> Unit,
     onNavigateToUserProfile: () -> Unit,
-    onNavigateToContacts: () -> Unit,
+    onNavigateToAssistants: () -> Unit,
+    onNavigateToFriends: () -> Unit,
     onNavigateToCallHandling: () -> Unit,
     onNavigateToTouchResponse: () -> Unit,
     onNavigateToAppearance: () -> Unit,
@@ -64,7 +65,7 @@ fun CarerMainMenuScreen(
             
             // Breadcrumb / title
             CarerBreadcrumb(
-                title = "Carer Settings",
+                title = "Assistant Settings",
                 onBack = onBack
             )
             
@@ -92,11 +93,19 @@ fun CarerMainMenuScreen(
                     currentLevel = featureLevel
                 )
                 
-                // Contacts - always visible
+                // Assistants - home screen buttons, reorder, colors
                 CarerMenuButton(
-                    title = "Contacts",
-                    description = "Manage carers, button colors",
-                    onClick = onNavigateToContacts,
+                    title = "Assistants",
+                    description = "Home screen buttons, reorder, colors",
+                    onClick = onNavigateToAssistants,
+                    currentLevel = featureLevel
+                )
+
+                // Friends - answer-only contacts
+                CarerMenuButton(
+                    title = "Friends",
+                    description = "Answer-only contacts, call back from lists",
+                    onClick = onNavigateToFriends,
                     currentLevel = featureLevel
                 )
                 
@@ -198,7 +207,7 @@ fun CarerMainMenuScreen(
                 }
                 
                 Text(
-                    text = "Unpin and close the app (carer escape)",
+                    text = "Unpin and close the app (assistant escape)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.padding(top = 4.dp)

@@ -45,6 +45,7 @@ dependencies {
     implementation(project(":core:core-config"))
     implementation(project(":core:core-data"))
     implementation(project(":core:core-telecom"))
+    implementation(project(":core:core-analytics"))
     
     // Compose
     implementation(platform(libs.compose.bom))

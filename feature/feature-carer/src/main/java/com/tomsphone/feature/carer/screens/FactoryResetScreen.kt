@@ -58,7 +58,7 @@ fun FactoryResetScreen(
             // Breadcrumb
             CarerBreadcrumb(
                 title = "Factory Reset",
-                parentTitle = "Settings",
+                parentTitle = "Assistant Settings",
                 onBack = onBack
             )
             

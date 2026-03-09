@@ -17,6 +17,8 @@ object CarerRoutes {
     const val USER_PROFILE = "carer_user_profile"
     const val PHOTO_CAPTURE = "carer_photo_capture"
     const val CONTACTS = "carer_contacts"
+    const val CONTACTS_ASSISTANTS = "carer_contacts_assistants"
+    const val CONTACTS_FRIENDS = "carer_contacts_friends"
     const val CONTACT_EDIT = "carer_contact_edit/{contactId}/{contactType}"
     const val CALL_HANDLING = "carer_call_handling"
     const val TOUCH_RESPONSE = "carer_touch_response"
@@ -55,7 +57,8 @@ fun CarerNavigation(
             CarerMainMenuScreen(
                 onNavigateToTomsPhoneDescription = { navController.navigate(CarerRoutes.TOMS_PHONE_DESCRIPTION) },
                 onNavigateToUserProfile = { navController.navigate(CarerRoutes.USER_PROFILE) },
-                onNavigateToContacts = { navController.navigate(CarerRoutes.CONTACTS) },
+                onNavigateToAssistants = { navController.navigate(CarerRoutes.CONTACTS_ASSISTANTS) },
+                onNavigateToFriends = { navController.navigate(CarerRoutes.CONTACTS_FRIENDS) },
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
                 onNavigateToTouchResponse = { navController.navigate(CarerRoutes.TOUCH_RESPONSE) },
                 onNavigateToAppearance = { navController.navigate(CarerRoutes.APPEARANCE) },
@@ -95,10 +98,22 @@ fun CarerNavigation(
             )
         }
         
-        // Contacts List
-        composable(CarerRoutes.CONTACTS) {
+        // Assistants list
+        composable(CarerRoutes.CONTACTS_ASSISTANTS) {
             ContactsScreen(
-                onNavigateToContactEdit = { contactId, contactType -> 
+                contactTypeFilter = ContactType.CARER,
+                onNavigateToContactEdit = { contactId, contactType ->
+                    navController.navigate(CarerRoutes.contactEdit(contactId, contactType))
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Friends list
+        composable(CarerRoutes.CONTACTS_FRIENDS) {
+            ContactsScreen(
+                contactTypeFilter = ContactType.GREY_LIST,
+                onNavigateToContactEdit = { contactId, contactType ->
                     navController.navigate(CarerRoutes.contactEdit(contactId, contactType))
                 },
                 onBack = { navController.popBackStack() }

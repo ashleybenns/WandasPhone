@@ -12,7 +12,7 @@ import com.tomsphone.core.data.local.entity.ContactEntity
         ContactEntity::class,
         CallLogEntity::class
     ],
-    version = 2,
+    version = 4,  // v4: notifyBatteryAlerts on contacts
     exportSchema = true
 )
 abstract class WandasDatabase : RoomDatabase() {

@@ -37,6 +37,9 @@ android {
 }
 
 dependencies {
+    // Core modules
+    implementation(project(":core:core-config"))
+    
     // Compose
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     
+    <!-- SMS for battery alerts to assistants -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
     <!-- Camera for ID photo -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

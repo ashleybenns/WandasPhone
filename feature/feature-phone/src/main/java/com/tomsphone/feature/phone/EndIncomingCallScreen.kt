@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * End Incoming Call Screen - GREEN background
+ * End Incoming Call Screen - WHITE background
  * 
  * Shown when an incoming call has been ANSWERED.
  * 
@@ -90,11 +90,11 @@ fun EndIncomingCallScreen(
         }
     }
     
-    // Green background
+    // White background
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF4CAF50)) // Green
+            .background(Color.White)
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -117,7 +117,7 @@ fun EndIncomingCallScreen(
                             fontWeight = FontWeight.Medium,
                             lineHeight = ScaledDimensions.statusTextSize * 1.2f
                         ),
-                        color = Color.White,
+                        color = Color.Black,
                         textAlign = TextAlign.Center,
                         maxLines = 3
                     )
@@ -131,7 +131,7 @@ fun EndIncomingCallScreen(
                                 fontSize = ScaledDimensions.statusTextSize * 0.7f,
                                 fontWeight = FontWeight.Normal
                             ),
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = Color.Black.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
                         )
                     }
@@ -169,7 +169,7 @@ fun EndIncomingCallScreen(
                                     fontWeight = FontWeight.Medium,
                                     lineHeight = ScaledDimensions.statusTextSize * 1.2f
                                 ),
-                                color = Color.White.copy(alpha = 0.8f),
+                                color = Color.Black.copy(alpha = 0.7f),
                                 textAlign = TextAlign.Center,
                                 maxLines = 2
                             )
@@ -203,7 +203,7 @@ fun EndIncomingCallScreen(
                                 Text(
                                     text = "End",
                                     style = TextStyle(
-                                        fontSize = ScaledDimensions.buttonTextSize,
+                                        fontSize = ScaledDimensions.contactNameTextSize,
                                         fontWeight = FontWeight.Bold
                                     ),
                                     color = Color.White
@@ -242,10 +242,10 @@ fun EndIncomingCallScreen(
                             Text(
                                 text = if (isSpeakerOn) "Speaker on," else "Speaker off,",
                                 style = TextStyle(
-                                    fontSize = ScaledDimensions.buttonTextSize,
+                                    fontSize = ScaledDimensions.contactNameTextSize,
                                     fontWeight = FontWeight.Bold
                                 ),
-                                color = Color.White,
+                                color = Color.Black,
                                 textAlign = TextAlign.Center
                             )
                             
@@ -258,7 +258,7 @@ fun EndIncomingCallScreen(
                                     fontSize = ScaledDimensions.statusTextSize,
                                     fontWeight = FontWeight.Medium
                                 ),
-                                color = if (speakerConfirmPending) Color.Red else Color.White.copy(alpha = 0.8f),
+                                color = if (speakerConfirmPending) Color.Red else Color.Black.copy(alpha = 0.7f),
                                 textAlign = TextAlign.Center
                             )
                             
@@ -269,7 +269,7 @@ fun EndIncomingCallScreen(
                                 imageVector = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
                                 contentDescription = if (isSpeakerOn) "Speaker on" else "Speaker off",
                                 modifier = Modifier.size(ScaledDimensions.endCallButtonSize * 0.7f),
-                                tint = Color.White
+                                tint = Color.Black
                             )
                         }
                     }

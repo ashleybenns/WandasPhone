@@ -23,18 +23,14 @@ import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.*
 
 /**
- * Contacts list screen.
- * 
- * Shows all contacts with ability to:
- * - View/edit existing contacts
- * - Add new contacts
- * - Set primary contact
- */
-/**
- * @param onNavigateToContactEdit (contactId, contactType) - contactId 0 for new, type for new contacts
+ * Contacts list screen — shows one category (Assistants or Friends) or both.
+ *
+ * @param contactTypeFilter When set, show only that type (Assistants or Friends). When null, show both (legacy).
+ * @param onNavigateToContactEdit (contactId, contactType) — contactId 0 for new, type for new contacts
  */
 @Composable
 fun ContactsScreen(
+    contactTypeFilter: ContactType? = null,
     onNavigateToContactEdit: (Long, ContactType) -> Unit,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
@@ -42,17 +38,22 @@ fun ContactsScreen(
     val settings by viewModel.settings.collectAsState()
     val featureLevel = settings.featureLevel
     val contacts by viewModel.contacts.collectAsState()
-    
-    // Max carers based on feature level
-    val maxCarers = when (featureLevel) {
-        FeatureLevel.MINIMAL -> 4  // Up to 4 carers at Level 1 (4 contact rows)
-        FeatureLevel.BASIC -> 5    // Up to 5 carers at Level 2 (5 contacts + Screen Off = 6 rows)
-        FeatureLevel.STANDARD -> 12
-        FeatureLevel.EXTENDED -> Int.MAX_VALUE
+
+    val showAssistants = contactTypeFilter == null || contactTypeFilter == ContactType.CARER
+    val showFriends = contactTypeFilter == null || contactTypeFilter == ContactType.GREY_LIST
+    val breadcrumbTitle = when (contactTypeFilter) {
+        ContactType.CARER -> "Assistants"
+        ContactType.GREY_LIST -> "Friends"
+        null -> "Contacts"
     }
-    val carerCount = contacts.count { it.contactType == ContactType.CARER }
-    val canAddMoreCarers = carerCount < maxCarers
-    
+
+    val maxAssistants = when (featureLevel) {
+        FeatureLevel.MINIMAL -> 4
+        FeatureLevel.BASIC -> 5
+    }
+    val assistantCount = contacts.count { it.contactType == ContactType.CARER }
+    val canAddMoreAssistants = assistantCount < maxAssistants
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.wandasColors.background
@@ -60,139 +61,130 @@ fun ContactsScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Dev level indicator
             DevLevelIndicator(level = featureLevel)
-            
-            // Breadcrumb
             CarerBreadcrumb(
-                title = "Contacts",
-                parentTitle = "Settings",
+                title = breadcrumbTitle,
+                parentTitle = "Assistant Settings",
                 onBack = onBack
             )
-            
-            // Content
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(WandasDimensions.SpacingMedium),
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingSmall)
             ) {
-                // ========== CARERS SECTION ==========
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Carers",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.wandasColors.onSurface
-                        )
-                        
-                        // Show limit
-                        if (maxCarers != Int.MAX_VALUE) {
+                // ========== ASSISTANTS ==========
+                if (showAssistants) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "$carerCount / $maxCarers",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (canAddMoreCarers) 
-                                    MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
-                                else 
-                                    MaterialTheme.colorScheme.error
+                                text = "Assistants",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.wandasColors.onSurface
                             )
+                            if (maxAssistants != Int.MAX_VALUE) {
+                                Text(
+                                    text = "$assistantCount / $maxAssistants",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (canAddMoreAssistants)
+                                        MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                                    else
+                                        MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+
+                    val assistants = contacts.filter { it.contactType == ContactType.CARER }
+                        .sortedBy { it.buttonPosition }
+                    items(assistants, key = { it.id }) { contact ->
+                        val index = assistants.indexOf(contact)
+                        ContactListItem(
+                            contact = contact,
+                            onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
+                            showReorderButtons = true,
+                            isFirst = index == 0,
+                            isLast = index == assistants.size - 1,
+                            onMoveUp = { viewModel.moveContactUp(contact, assistants) },
+                            onMoveDown = { viewModel.moveContactDown(contact, assistants) }
+                        )
+                    }
+
+                    item {
+                        OutlinedButton(
+                            onClick = { onNavigateToContactEdit(0, ContactType.CARER) },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = canAddMoreAssistants
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (canAddMoreAssistants) "Add Assistant" else "$maxAssistants assistants is enough for this mode")
                         }
                     }
                 }
-                
-                val carers = contacts.filter { it.contactType == ContactType.CARER }
-                    .sortedBy { it.buttonPosition }
-                items(carers, key = { it.id }) { contact ->
-                    val index = carers.indexOf(contact)
-                    ContactListItem(
-                        contact = contact,
-                        onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
-                        showReorderButtons = true,
-                        isFirst = index == 0,
-                        isLast = index == carers.size - 1,
-                        onMoveUp = { viewModel.moveContactUp(contact, carers) },
-                        onMoveDown = { viewModel.moveContactDown(contact, carers) }
-                    )
-                }
-                
-                // Add Carer button
-                item {
-                    OutlinedButton(
-                        onClick = { onNavigateToContactEdit(0, ContactType.CARER) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = canAddMoreCarers
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
+
+                // ========== FRIENDS ==========
+                if (showFriends) {
+                    item {
+                        Spacer(modifier = Modifier.height(if (showAssistants) 24.dp else 0.dp))
+                        Text(
+                            text = "Friends",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.wandasColors.onSurface
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (canAddMoreCarers) "Add Carer" else "$maxCarers carers is enough for this mode")
-                    }
-                }
-                
-                // ========== GREY LIST SECTION ==========
-                // Grey list available at all levels - allows calls without home button
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Text(
-                        text = "Grey List",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.wandasColors.onSurface
-                    )
-                    
-                    // Description varies by level
-                    val greyListDescription = if (featureLevel.level >= 2) {
-                        "Can answer calls but no home screen button. At Level 2+, use 'Other Contacts' and 'Missed Calls' buttons in Appearance settings to allow calling back."
-                    } else {
-                        "Can answer calls only. No home screen button, no way to call back."
-                    }
-                    
-                    Text(
-                        text = greyListDescription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-                
-                val greyList = contacts.filter { it.contactType == ContactType.GREY_LIST }
-                    .sortedBy { it.buttonPosition }
-                items(greyList, key = { it.id }) { contact ->
-                    val index = greyList.indexOf(contact)
-                    ContactListItem(
-                        contact = contact,
-                        onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
-                        showReorderButtons = true,
-                        isFirst = index == 0,
-                        isLast = index == greyList.size - 1,
-                        onMoveUp = { viewModel.moveContactUp(contact, greyList) },
-                        onMoveDown = { viewModel.moveContactDown(contact, greyList) }
-                    )
-                }
-                
-                // Add to Grey List button (always enabled - no limit)
-                item {
-                    OutlinedButton(
-                        onClick = { onNavigateToContactEdit(0, ContactType.GREY_LIST) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
+                        val friendsDescription = if (featureLevel.level >= 2) {
+                            "Can answer calls but no home screen button. At Level 2+, use 'Other Contacts' and 'Missed Calls' in Appearance to allow calling back."
+                        } else {
+                            "Can answer calls only. No home screen button, no way to call back."
+                        }
+                        Text(
+                            text = friendsDescription,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 4.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Add to Grey List")
+                    }
+
+                    val friends = contacts.filter { it.contactType == ContactType.GREY_LIST }
+                        .sortedBy { it.buttonPosition }
+                    items(friends, key = { it.id }) { contact ->
+                        val index = friends.indexOf(contact)
+                        ContactListItem(
+                            contact = contact,
+                            onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
+                            showReorderButtons = true,
+                            isFirst = index == 0,
+                            isLast = index == friends.size - 1,
+                            onMoveUp = { viewModel.moveContactUp(contact, friends) },
+                            onMoveDown = { viewModel.moveContactDown(contact, friends) }
+                        )
+                    }
+
+                    item {
+                        OutlinedButton(
+                            onClick = { onNavigateToContactEdit(0, ContactType.GREY_LIST) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Add to Friends")
+                        }
                     }
                 }
-                
+
                 item {
                     Spacer(modifier = Modifier.height(32.dp))
                 }
@@ -290,22 +282,6 @@ private fun ContactListItem(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.wandasColors.onSurface
                     )
-                    
-                    if (contact.isPrimary) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.wandasColors.primaryButton.copy(alpha = 0.2f)
-                        ) {
-                            Text(
-                                text = "PRIMARY",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.wandasColors.primaryButton,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
                     
                     if (contact.autoAnswerEnabled) {
                         Spacer(modifier = Modifier.width(4.dp))

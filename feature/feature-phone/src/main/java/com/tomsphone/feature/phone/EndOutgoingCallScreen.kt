@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * End Outgoing Call Screen - YELLOW background
+ * End Outgoing Call Screen - WHITE background
  * 
  * Layout:
  * - Status text at top (same position as HomeScreen)
@@ -88,11 +88,11 @@ fun EndOutgoingCallScreen(
         }
     }
     
-    // Yellow background
+    // White background
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFFFC107)) // Amber/Yellow
+            .background(Color.White)
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -185,7 +185,7 @@ fun EndOutgoingCallScreen(
                                 Text(
                                     text = "End",
                                     style = TextStyle(
-                                        fontSize = ScaledDimensions.buttonTextSize,
+                                        fontSize = ScaledDimensions.contactNameTextSize,
                                         fontWeight = FontWeight.Bold
                                     ),
                                     color = Color.White
@@ -226,7 +226,7 @@ fun EndOutgoingCallScreen(
                             Text(
                                 text = if (isSpeakerOn) "Speaker on," else "Speaker off,",
                                 style = TextStyle(
-                                    fontSize = ScaledDimensions.buttonTextSize,
+                                    fontSize = ScaledDimensions.contactNameTextSize,
                                     fontWeight = FontWeight.Bold
                                 ),
                                 color = Color.Black,

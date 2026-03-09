@@ -254,15 +254,10 @@ class MissedCallNagManager @Inject constructor(
     }
     
     /**
-     * Normalize phone number for comparison (UK format)
+     * Normalize phone number for comparison (E.164; default region GB for national format).
      */
     private fun normalizePhoneNumber(phone: String): String {
-        var digits = phone.replace(Regex("[^0-9]"), "")
-        // Handle UK +44 prefix -> 0
-        if (digits.startsWith("44") && digits.length > 10) {
-            digits = "0" + digits.substring(2)
-        }
-        return digits
+        return com.tomsphone.core.data.util.PhoneNumberUtils.normalizeToE164(phone, "GB")
     }
     
     /**

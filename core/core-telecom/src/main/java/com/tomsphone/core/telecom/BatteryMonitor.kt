@@ -7,12 +7,15 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
 import com.tomsphone.core.config.SettingsRepository
+import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.tts.WandasTTS
 import com.tomsphone.core.tts.TTSScripts
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,18 +32,27 @@ private const val TAG = "BatteryMonitor"
  * Features:
  * - Visual warning on home screen when battery is low
  * - TTS announcement when battery drops below threshold
- * - Only announces once per threshold crossing (not repeatedly)
+ * - REPEATING TTS announcements while in low battery (not charging)
+ * - TTS announcement when charging resumes AFTER low battery
+ * - Screen should turn off in low battery mode to conserve power
  */
 @Singleton
 class BatteryMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val tts: dagger.Lazy<WandasTTS>,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val ringtonePlayer: RingtonePlayer,
+    private val contactRepository: ContactRepository,
+    private val batteryAlertSmsSender: BatteryAlertSmsSender
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    
     companion object {
-        const val LOW_BATTERY_THRESHOLD = 20
+        // TODO: set back to 20 for production
+        const val LOW_BATTERY_THRESHOLD = 90  // 90% for testing
         const val CRITICAL_BATTERY_THRESHOLD = 10
+        const val LOW_BATTERY_REPEAT_INTERVAL_MS = 120_000L  // 2 minutes
+        const val LOW_BATTERY_SCREEN_OFF_DELAY_MS = 10_000L  // 10 seconds before screen off
     }
     
     private val _batteryLevel = MutableStateFlow(100)
@@ -52,9 +64,19 @@ class BatteryMonitor @Inject constructor(
     private val _isLowBattery = MutableStateFlow(false)
     val isLowBattery: StateFlow<Boolean> = _isLowBattery.asStateFlow()
     
-    private var hasAnnouncedLowBattery = false
-    private var hasAnnouncedCriticalBattery = false
-    private var hasAnnouncedCharging = false
+    // Request screen off when in low battery mode (not charging)
+    // MainActivity should observe this and turn off screen
+    private val _shouldTurnOffScreen = MutableStateFlow(false)
+    val shouldTurnOffScreen: StateFlow<Boolean> = _shouldTurnOffScreen.asStateFlow()
+    
+    // Track if we were in low battery state (for charging announcement)
+    private var wasInLowBatteryState = false
+    
+    // Job for repeating low battery announcements
+    private var lowBatteryRepeatJob: Job? = null
+    
+    // Job for screen off delay
+    private var screenOffJob: Job? = null
     
     private var isRegistered = false
     
@@ -76,13 +98,11 @@ class BatteryMonitor @Inject constructor(
                 }
                 Intent.ACTION_POWER_CONNECTED -> {
                     Log.d(TAG, "Power connected")
-                    _isCharging.value = true
-                    announceCharging()
+                    handlePowerConnected()
                 }
                 Intent.ACTION_POWER_DISCONNECTED -> {
                     Log.d(TAG, "Power disconnected")
                     _isCharging.value = false
-                    hasAnnouncedCharging = false
                 }
             }
         }
@@ -116,9 +136,17 @@ class BatteryMonitor @Inject constructor(
             
             _batteryLevel.value = batteryPct
             _isCharging.value = charging
-            _isLowBattery.value = batteryPct <= LOW_BATTERY_THRESHOLD && !charging
             
-            Log.d(TAG, "Initial battery: $batteryPct%, charging: $charging")
+            val isLow = batteryPct <= LOW_BATTERY_THRESHOLD && !charging
+            _isLowBattery.value = isLow
+            
+            // If starting in low battery state, begin repeating announcements
+            if (isLow) {
+                wasInLowBatteryState = true
+                startLowBatteryMode()
+            }
+            
+            Log.d(TAG, "Initial battery: $batteryPct%, charging: $charging, lowBattery: $isLow")
         }
     }
     
@@ -128,6 +156,9 @@ class BatteryMonitor @Inject constructor(
     fun stopMonitoring() {
         if (!isRegistered) return
         
+        lowBatteryRepeatJob?.cancel()
+        screenOffJob?.cancel()
+        
         try {
             context.unregisterReceiver(batteryReceiver)
             isRegistered = false
@@ -136,51 +167,131 @@ class BatteryMonitor @Inject constructor(
         }
     }
     
+    /**
+     * Called when user interacts with screen during low battery mode.
+     * Resets the screen off timer.
+     */
+    fun onUserInteraction() {
+        if (_isLowBattery.value && !_isCharging.value) {
+            // Reset screen off timer
+            _shouldTurnOffScreen.value = false
+            startScreenOffTimer()
+        }
+    }
+    
+    private fun handlePowerConnected() {
+        _isCharging.value = true
+        
+        // Stop low battery mode
+        stopLowBatteryMode()
+        
+        // Only announce charging if we were in low battery state
+        if (wasInLowBatteryState) {
+            Log.d(TAG, "Charging after low battery - announcing")
+            announceCharging()
+            sendDeviceConnectedSms()
+            wasInLowBatteryState = false
+        } else {
+            Log.d(TAG, "Charging connected (not from low battery) - no announcement")
+        }
+    }
+    
     private fun updateBatteryState(level: Int, charging: Boolean) {
-        val previousLevel = _batteryLevel.value
-        val wasCharging = _isCharging.value
+        val wasLow = _isLowBattery.value
         
         _batteryLevel.value = level
         _isCharging.value = charging
-        _isLowBattery.value = level <= LOW_BATTERY_THRESHOLD && !charging
         
-        Log.d(TAG, "Battery: $level%, charging: $charging")
+        val isLow = level <= LOW_BATTERY_THRESHOLD && !charging
+        _isLowBattery.value = isLow
         
-        // Reset announcement flags when battery rises above thresholds
-        if (level > LOW_BATTERY_THRESHOLD) {
-            hasAnnouncedLowBattery = false
+        Log.d(TAG, "Battery: $level%, charging: $charging, lowBattery: $isLow")
+        
+        // Entered low battery mode
+        if (isLow && !wasLow) {
+            Log.d(TAG, "Entering low battery mode")
+            wasInLowBatteryState = true
+            startLowBatteryMode()
         }
-        if (level > CRITICAL_BATTERY_THRESHOLD) {
-            hasAnnouncedCriticalBattery = false
-        }
         
-        // Announce low battery (once per threshold crossing)
-        if (!charging) {
-            when {
-                level <= CRITICAL_BATTERY_THRESHOLD && !hasAnnouncedCriticalBattery -> {
-                    announceLowBattery(level, critical = true)
-                    hasAnnouncedCriticalBattery = true
-                    hasAnnouncedLowBattery = true
+        // Exited low battery mode (either by charging or battery rising)
+        if (!isLow && wasLow) {
+            Log.d(TAG, "Exiting low battery mode")
+            stopLowBatteryMode()
+            
+            // If exited because battery rose above threshold (not charging), clear flag
+            if (!charging && level > LOW_BATTERY_THRESHOLD) {
+                wasInLowBatteryState = false
+            }
+        }
+    }
+    
+    private fun startLowBatteryMode() {
+        // Send low-battery SMS once (if enabled and we have permission)
+        scope.launch {
+            try {
+                val settings = settingsRepository.getSettings().first()
+                if (settings.batteryAlertSmsEnabled) {
+                    val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+                    val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
+                    if (numbers.isNotEmpty()) {
+                        batteryAlertSmsSender.sendLowBatteryAlert(numbers, settings.userName)
+                    }
                 }
-                level <= LOW_BATTERY_THRESHOLD && !hasAnnouncedLowBattery -> {
-                    announceLowBattery(level, critical = false)
-                    hasAnnouncedLowBattery = true
+            } catch (e: Exception) {
+                Log.e(TAG, "Battery alert SMS error: ${e.message}")
+            }
+        }
+        // Start repeating TTS announcements
+        lowBatteryRepeatJob?.cancel()
+        lowBatteryRepeatJob = scope.launch {
+            while (true) {
+                announceLowBattery()
+                delay(LOW_BATTERY_REPEAT_INTERVAL_MS)
+                
+                // Check if we should stop
+                if (!_isLowBattery.value || _isCharging.value) {
+                    break
                 }
             }
         }
         
-        // NOTE: Do NOT announce charging here - use ACTION_POWER_CONNECTED instead
-        // The BATTERY_CHANGED intent can have stale data that races with POWER_DISCONNECTED,
-        // causing false "charging" announcements when unplugging the device.
+        // Start screen off timer
+        startScreenOffTimer()
     }
     
-    private fun announceLowBattery(level: Int, critical: Boolean) {
-        Log.d(TAG, "Announcing ${if (critical) "critical" else "low"} battery: $level%")
+    private fun stopLowBatteryMode() {
+        lowBatteryRepeatJob?.cancel()
+        lowBatteryRepeatJob = null
+        
+        screenOffJob?.cancel()
+        screenOffJob = null
+        
+        _shouldTurnOffScreen.value = false
+    }
+    
+    private fun startScreenOffTimer() {
+        screenOffJob?.cancel()
+        screenOffJob = scope.launch {
+            delay(LOW_BATTERY_SCREEN_OFF_DELAY_MS)
+            if (_isLowBattery.value && !_isCharging.value) {
+                Log.d(TAG, "Low battery: requesting screen off")
+                _shouldTurnOffScreen.value = true
+            }
+        }
+    }
+    
+    private fun announceLowBattery() {
+        val level = _batteryLevel.value
+        Log.d(TAG, "Announcing low battery: $level%")
         scope.launch {
             try {
                 val settings = settingsRepository.getSettings().first()
                 if (settings.ttsAnnouncementsEnabled) {
-                    tts.get().speak(TTSScripts.batteryLow(level))
+                    // Play Tannoy bing-bong attention sound first
+                    ringtonePlayer.playAndWait(RingtonePlayer.Ringtone.TANNOY_SHORT)
+                    // Then announce with user's name
+                    tts.get().speak(TTSScripts.batteryLow(settings.userName))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "TTS error: ${e.message}")
@@ -189,10 +300,7 @@ class BatteryMonitor @Inject constructor(
     }
     
     private fun announceCharging() {
-        if (hasAnnouncedCharging) return
-        hasAnnouncedCharging = true
-        
-        Log.d(TAG, "Announcing charging")
+        Log.d(TAG, "Announcing charging (after low battery)")
         scope.launch {
             try {
                 val settings = settingsRepository.getSettings().first()
@@ -201,6 +309,23 @@ class BatteryMonitor @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "TTS error: ${e.message}")
+            }
+        }
+    }
+
+    private fun sendDeviceConnectedSms() {
+        scope.launch {
+            try {
+                val settings = settingsRepository.getSettings().first()
+                if (settings.batteryAlertSmsEnabled) {
+                    val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+                    val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
+                    if (numbers.isNotEmpty()) {
+                        batteryAlertSmsSender.sendDeviceConnectedAlert(numbers, settings.userName)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Device connected SMS error: ${e.message}")
             }
         }
     }

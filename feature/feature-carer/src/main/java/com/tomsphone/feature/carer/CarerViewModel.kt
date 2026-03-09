@@ -1,6 +1,7 @@
 package com.tomsphone.feature.carer
 
 import android.content.Context
+import android.media.AudioManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.CarerSettings
@@ -10,12 +11,21 @@ import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.config.ThemeOption
+import com.tomsphone.core.analytics.AnalyticsManager
+import com.tomsphone.core.analytics.AnalyticsEvent
+import com.tomsphone.core.analytics.RemoteConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import javax.inject.Inject
+
+/**
+ * When true, carer settings are shown without requiring PIN entry.
+ * Set to false to re-enable PIN protection.
+ */
+private const val BYPASS_PIN = true
 
 /**
  * ViewModel for carer configuration
@@ -32,7 +42,9 @@ import javax.inject.Inject
 class CarerSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
-    private val contactRepository: ContactRepository
+    private val contactRepository: ContactRepository,
+    private val analytics: AnalyticsManager,
+    private val remoteConfig: RemoteConfigManager
 ) : ViewModel() {
     
     // Current settings
@@ -53,11 +65,41 @@ class CarerSettingsViewModel @Inject constructor(
     
     // PIN verification state
     private val _isPinVerified = MutableStateFlow(false)
-    val isPinVerified: StateFlow<Boolean> = _isPinVerified.asStateFlow()
+    val isPinVerified: StateFlow<Boolean> = if (BYPASS_PIN) {
+        MutableStateFlow(true).asStateFlow()
+    } else {
+        _isPinVerified.asStateFlow()
+    }
     
     // UI state
     private val _showPinDialog = MutableStateFlow(true)
-    val showPinDialog: StateFlow<Boolean> = _showPinDialog.asStateFlow()
+    val showPinDialog: StateFlow<Boolean> = if (BYPASS_PIN) {
+        MutableStateFlow(false).asStateFlow()
+    } else {
+        _showPinDialog.asStateFlow()
+    }
+    
+    /**
+     * Get onboarding tip for a setting.
+     * Returns null if no tip available.
+     */
+    fun getOnboardingTip(settingId: String): String? {
+        return remoteConfig.getOnboardingTip(settingId)
+    }
+    
+    /**
+     * Get setting description from Remote Config.
+     */
+    fun getSettingDescription(settingId: String): String? {
+        return remoteConfig.getSettingDescription(settingId)
+    }
+    
+    /**
+     * Track when a tip is viewed.
+     */
+    fun onTipViewed(tipId: String) {
+        analytics.logEvent(AnalyticsEvent.OnboardingTipViewed(tipId = tipId))
+    }
     
     /**
      * Verify PIN entry
@@ -73,12 +115,16 @@ class CarerSettingsViewModel @Inject constructor(
                     settingsRepository.setPin(hashedPin)
                     _isPinVerified.value = true
                     _showPinDialog.value = false
+                    // Track carer settings opened
+                    analytics.logEvent(AnalyticsEvent.CarerSettingsOpened)
                 }
             } else {
                 // Verify against stored PIN
                 if (settingsRepository.verifyPin(hashedPin)) {
                     _isPinVerified.value = true
                     _showPinDialog.value = false
+                    // Track carer settings opened
+                    analytics.logEvent(AnalyticsEvent.CarerSettingsOpened)
                 }
             }
         }
@@ -89,7 +135,13 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun setFeatureLevel(level: FeatureLevel) {
         viewModelScope.launch {
+            val currentLevel = settings.first().featureLevel
             settingsRepository.setFeatureLevel(level)
+            // Track feature level change
+            analytics.logEvent(AnalyticsEvent.FeatureLevelChanged(
+                fromLevel = currentLevel.level,
+                toLevel = level.level
+            ))
         }
     }
     
@@ -226,39 +278,36 @@ class CarerSettingsViewModel @Inject constructor(
      */
     fun saveContact(contact: Contact) {
         viewModelScope.launch {
+            val contactType = if (contact.contactType == ContactType.CARER) "carer" else "grey_list"
             if (contact.id == 0L) {
                 // For new contacts, assign next buttonPosition within their contact type
                 val contactsOfSameType = contacts.first().filter { it.contactType == contact.contactType }
                 val maxPosition = contactsOfSameType.maxOfOrNull { it.buttonPosition } ?: -1
                 val contactToSave = contact.copy(buttonPosition = maxPosition + 1)
                 contactRepository.addContact(contactToSave)
+                // Track contact added
+                analytics.logEvent(AnalyticsEvent.ContactAdded(contactType = contactType))
             } else {
                 contactRepository.updateContact(contact)
+                // Track contact edited
+                analytics.logEvent(AnalyticsEvent.ContactEdited(contactType = contactType))
             }
         }
     }
     
     /**
      * Delete contact
-     * Also clears primaryContactId if this was the primary contact
      */
     fun deleteContact(id: Long) {
         viewModelScope.launch {
-            // Check if this is the primary contact and clear it
-            val settings = settingsRepository.getSettings().first()
-            if (settings.primaryContactId == id) {
-                settingsRepository.updateSettings(settings.copy(primaryContactId = null))
-            }
+            // Get the contact to determine its type for analytics
+            val contact = contacts.first().find { it.id == id }
+            val contactType = if (contact?.contactType == ContactType.CARER) "carer" else "grey_list"
+            
             contactRepository.removeContact(id)
-        }
-    }
-    
-    /**
-     * Set primary contact
-     */
-    fun setPrimaryContact(id: Long) {
-        viewModelScope.launch {
-            contactRepository.setPrimaryContact(id)
+            
+            // Track contact deleted
+            analytics.logEvent(AnalyticsEvent.ContactDeleted(contactType = contactType))
         }
     }
     
@@ -345,7 +394,75 @@ class CarerSettingsViewModel @Inject constructor(
             settingsRepository.updateSettings(current.copy(rejectUnknownCalls = enabled))
         }
     }
+
+    /**
+     * Toggle battery alert SMS (low battery and device connected after low battery).
+     * Carers must have "Notify for battery alerts" enabled on their contact.
+     */
+    fun setBatteryAlertSmsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(batteryAlertSmsEnabled = enabled))
+        }
+    }
     
+    /**
+     * Set default call volume (0-100 percent).
+     * Restored when call ends; used as preset when call starts.
+     * Also applies to device immediately so carers can set without leaving the app.
+     */
+    fun setSpeakerVolume(percent: Int) {
+        viewModelScope.launch {
+            val pct = percent.coerceIn(0, 100)
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(speakerVolume = pct))
+            applyCallVolumeToDevice(pct)
+        }
+    }
+
+    /**
+     * Set ringtone volume (0-100 percent).
+     * Applied to device immediately so carers can set without leaving the app.
+     */
+    fun setRingtoneVolume(percent: Int) {
+        viewModelScope.launch {
+            val pct = percent.coerceIn(0, 100)
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(ringtoneVolume = pct))
+            applyRingtoneVolumeToDevice(pct)
+        }
+    }
+
+    private fun applyRingtoneVolumeToDevice(volumePercent: Int) {
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_RING)
+            val targetVolume = (maxVolume * (volumePercent / 100f)).toInt().coerceIn(0, maxVolume)
+            audioManager.setStreamVolume(AudioManager.STREAM_RING, targetVolume, 0)
+        } catch (_: Exception) { /* ignore */ }
+    }
+
+    private fun applyCallVolumeToDevice(volumePercent: Int) {
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+            val targetVolume = (maxVolume * (volumePercent / 100f)).toInt().coerceIn(0, maxVolume)
+            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, targetVolume, 0)
+        } catch (_: Exception) { /* ignore */ }
+    }
+
+    /**
+     * Apply saved ringtone and call volumes to the device.
+     * Call when opening Volume/Call Handling so the device matches saved settings.
+     */
+    fun syncVolumesToDevice() {
+        viewModelScope.launch {
+            val s = settings.first()
+            applyRingtoneVolumeToDevice(s.ringtoneVolume)
+            applyCallVolumeToDevice(s.speakerVolume)
+        }
+    }
+
     /**
      * Toggle speakerphone always on
      */

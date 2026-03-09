@@ -17,6 +17,8 @@ import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.telecom.MissedCallNagManager
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
+import com.tomsphone.core.analytics.AnalyticsManager
+import com.tomsphone.core.analytics.AnalyticsEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -46,7 +48,8 @@ class HomeViewModel @Inject constructor(
     private val callLogRepository: CallLogRepository,
     private val callManager: CallManager,
     private val missedCallNagManager: MissedCallNagManager,
-    private val tts: WandasTTS
+    private val tts: WandasTTS,
+    private val analytics: AnalyticsManager
 ) : ViewModel() {
     
     companion object {
@@ -290,8 +293,6 @@ class HomeViewModel @Inject constructor(
         val maxByLevel = when (settings.featureLevel) {
             FeatureLevel.MINIMAL -> if (missedCallReturnEnabled) 3 else 4  // L1: 3-4 carers
             FeatureLevel.BASIC -> 5    // L2: 5 carers + list buttons + Screen Off
-            FeatureLevel.STANDARD -> 5 // L3: Same carers + menu buttons
-            FeatureLevel.EXTENDED -> 6 // L4: Full 6 carers + all buttons
         }
         val callableContacts = contacts
             .filter { it.canCallOut }
@@ -478,9 +479,20 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             // Get settings directly from repository to ensure we have the real values
             val settings = settingsRepository.getSettings().first()
+            val contacts = contactRepository.getContacts(100).first()
+            
+            // Track app launch
+            analytics.logEvent(AnalyticsEvent.AppLaunched(
+                featureLevel = settings.featureLevel.level,
+                contactCount = contacts.size
+            ))
+            analytics.setCrashlyticsKey("feature_level", settings.featureLevel.level)
+            analytics.setCrashlyticsKey("contact_count", contacts.size)
+            
             if (settings.ttsAnnouncementsEnabled) {
                 val name = settingsRepository.getUserName().first()
                 tts.speak(TTSScripts.greeting(name))
+                analytics.logEvent(AnalyticsEvent.TtsAnnouncement(announcementType = "greeting"))
             }
         }
         
@@ -607,6 +619,9 @@ class HomeViewModel @Inject constructor(
     fun onContactButtonTap(button: HomeButtonConfig.ContactButton) {
         Log.d(TAG, "onContactButtonTap: ${button.name}")
         
+        // Track button tap
+        analytics.logEvent(AnalyticsEvent.CallInitiated(contactType = "carer"))
+        
         // Create a minimal Contact for the calling animation
         // (we only need name and phoneNumber for the call)
         val contact = Contact(
@@ -615,7 +630,6 @@ class HomeViewModel @Inject constructor(
             phoneNumber = button.phoneNumber,
             photoUri = null,
             priority = 0,
-            isPrimary = false,
             contactType = com.tomsphone.core.data.model.ContactType.CARER,
             createdAt = 0,
             updatedAt = 0,
@@ -680,7 +694,6 @@ class HomeViewModel @Inject constructor(
             phoneNumber = phoneNumber,
             photoUri = null,
             priority = 0,
-            isPrimary = false,
             contactType = com.tomsphone.core.data.model.ContactType.GREY_LIST,
             createdAt = 0,
             updatedAt = 0
@@ -752,29 +765,12 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * Emergency button tapped - requires multiple taps to activate
-     * After required taps, shows confirm screen
+     * Emergency button tapped - navigates to emergency screen on single tap.
+     * The 3-tap confirmation happens on the emergency screen itself.
      */
     fun onEmergencyButtonTap() {
-        _emergencyTapCount.value += 1
-        
-        viewModelScope.launch {
-            val settings = settingsRepository.getSettings().first()
-            val requiredTaps = settings.emergencyTapCount
-            
-            Log.d(TAG, "Emergency tap ${_emergencyTapCount.value}/$requiredTaps")
-            
-            if (_emergencyTapCount.value >= requiredTaps) {
-                _showEmergencyConfirm.value = true
-                _emergencyTapCount.value = 0
-            }
-        }
-        
-        // Reset tap count after 3 seconds of no taps
-        viewModelScope.launch {
-            delay(3000)
-            _emergencyTapCount.value = 0
-        }
+        Log.d(TAG, "Emergency button tapped - navigating to emergency screen")
+        _showEmergencyConfirm.value = true
     }
     
     /**

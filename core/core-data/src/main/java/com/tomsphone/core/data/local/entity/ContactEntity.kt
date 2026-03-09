@@ -19,7 +19,6 @@ data class ContactEntity(
     val phoneNumber: String,
     val photoUri: String?,
     val priority: Int,
-    val isPrimary: Boolean,
     val contactType: String,  // "CARER" or "GREY_LIST"
     val createdAt: Long,
     val updatedAt: Long,
@@ -32,6 +31,9 @@ data class ContactEntity(
     
     /** Whether this contact has auto-answer enabled */
     val autoAnswerEnabled: Boolean = false,
+    
+    /** Whether to send this carer SMS for low battery and device connected after low battery */
+    val notifyBatteryAlerts: Boolean = false,
     
     /** Position on home screen (0 = top, higher = lower) */
     val buttonPosition: Int = 0,
