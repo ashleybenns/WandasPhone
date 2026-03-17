@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -155,7 +156,7 @@ fun ContactEditScreen(
                         )
                     }
                     
-                    // Phone Number (country selector + national number)
+                    // Phone Number: country on one row, number on the next (full width each so field is editable and country doesn't wrap)
                     val selectedCountry = remember(selectedRegionCode, countries) {
                         countries.find { it.regionCode == selectedRegionCode }
                             ?: countries.firstOrNull { it.regionCode == defaultRegion }
@@ -170,76 +171,71 @@ fun ContactEditScreen(
                     var countryDropdownExpanded by remember { mutableStateOf(false) }
                     
                     SettingCard(title = "Phone Number") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.Bottom
+                        // Country row only – full width, single line so it doesn't take 2 lines
+                        ExposedDropdownMenuBox(
+                            expanded = countryDropdownExpanded,
+                            onExpandedChange = { countryDropdownExpanded = it },
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            ExposedDropdownMenuBox(
+                            OutlinedTextField(
+                                value = selectedCountry?.let { "${it.callingCodeDisplay} ${it.displayName}" } ?: "",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Country") },
+                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                                singleLine = true,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+                            ExposedDropdownMenu(
                                 expanded = countryDropdownExpanded,
-                                onExpandedChange = { countryDropdownExpanded = it }
+                                onDismissRequest = { countryDropdownExpanded = false }
                             ) {
-                                OutlinedTextField(
-                                    value = selectedCountry?.let { "${it.callingCodeDisplay} ${it.displayName}" } ?: "",
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Country") },
-                                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                                    modifier = Modifier
-                                        .widthIn(min = 140.dp)
-                                        .menuAnchor()
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = countryDropdownExpanded,
-                                    onDismissRequest = { countryDropdownExpanded = false }
-                                ) {
-                                    countries.forEach { country ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = "${country.callingCodeDisplay} ${country.displayName}",
-                                                    style = MaterialTheme.typography.bodyLarge
+                                countries.forEach { country ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "${country.callingCodeDisplay} ${country.displayName}",
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedRegionCode = country.regionCode
+                                            countryDropdownExpanded = false
+                                            if (!isNewContact && validateAndToE164(nationalNumber, country.regionCode) != null) {
+                                                saveContact(
+                                                    viewModel, existingContact, name,
+                                                    validateAndToE164(nationalNumber, country.regionCode)!!,
+                                                    effectiveContactType, autoAnswerEnabled, notifyBatteryAlerts, selectedColor
                                                 )
-                                            },
-                                            onClick = {
-                                                selectedRegionCode = country.regionCode
-                                                countryDropdownExpanded = false
-                                                if (!isNewContact && validateAndToE164(nationalNumber, country.regionCode) != null) {
-                                                    saveContact(
-                                                        viewModel, existingContact, name,
-                                                        validateAndToE164(nationalNumber, country.regionCode)!!,
-                                                        effectiveContactType, autoAnswerEnabled, notifyBatteryAlerts, selectedColor
-                                                    )
-                                                    saveToastState.show("$name's phone saved")
-                                                }
+                                                saveToastState.show("$name's phone saved")
                                             }
-                                        )
-                                    }
+                                        }
+                                    )
                                 }
                             }
-                            OutlinedTextField(
-                                value = nationalNumber,
-                                onValueChange = { newVal ->
-                                    val filtered = newVal.filter { it.isDigit() || it.isWhitespace() }
-                                    nationalNumber = filtered.replace(" ", "")
-                                    if (!isNewContact && validateAndToE164(filtered.replace(" ", ""), selectedRegionCode) != null) {
-                                        saveContact(
-                                            viewModel, existingContact, name,
-                                            validateAndToE164(filtered.replace(" ", ""), selectedRegionCode)!!,
-                                            effectiveContactType, autoAnswerEnabled, notifyBatteryAlerts, selectedColor
-                                        )
-                                        saveToastState.show("$name's phone saved")
-                                    }
-                                },
-                                label = { Text("Number") },
-                                placeholder = { Text(selectedCountry?.let { if (it.regionCode == "GB") "7911 123456" else "Number" } ?: "Number") },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                isError = phoneError != null,
-                                supportingText = phoneError?.let { { Text(it) } },
-                                modifier = Modifier.weight(1f)
-                            )
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        // Number row only – full width so you can edit and move cursor normally (no per-keystroke save to avoid reset)
+                        OutlinedTextField(
+                            value = nationalNumber,
+                            onValueChange = { newVal ->
+                                val digitsOnly = newVal.filter { it.isDigit() }
+                                nationalNumber = digitsOnly
+                            },
+                            label = { Text("Number") },
+                            placeholder = { Text("e.g. 7911123456") },
+                            singleLine = true,
+                            maxLines = 1,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            isError = phoneError != null,
+                            supportingText = phoneError?.let { { Text(it) } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     
                     // Show contact type (read-only info)

@@ -11,6 +11,7 @@ import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.config.ThemeOption
+import com.tomsphone.core.telecom.BatteryAlertSmsSender
 import com.tomsphone.core.analytics.AnalyticsManager
 import com.tomsphone.core.analytics.AnalyticsEvent
 import com.tomsphone.core.analytics.RemoteConfigManager
@@ -43,6 +44,7 @@ class CarerSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val contactRepository: ContactRepository,
+    private val batteryAlertSmsSender: BatteryAlertSmsSender,
     private val analytics: AnalyticsManager,
     private val remoteConfig: RemoteConfigManager
 ) : ViewModel() {
@@ -403,6 +405,35 @@ class CarerSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(batteryAlertSmsEnabled = enabled))
+        }
+    }
+
+    /** On-screen status for battery alert card: (SMS permission granted, number of recipients with valid number). */
+    private val _batteryAlertStatus = MutableStateFlow(Pair(false, 0))
+    val batteryAlertStatus: StateFlow<Pair<Boolean, Int>> = _batteryAlertStatus.asStateFlow()
+
+    /** Refresh permission and recipient count for the battery alert card. Call when the card is shown. */
+    fun refreshBatteryAlertStatus() {
+        viewModelScope.launch {
+            val hasPermission = batteryAlertSmsSender.hasSmsPermission()
+            val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+            val count = recipients.count { it.phoneNumber.isNotBlank() }
+            _batteryAlertStatus.value = hasPermission to count
+        }
+    }
+
+    /**
+     * Send a test battery alert SMS to all assistants with "Notify for battery alerts" enabled.
+     * Returns a result message for the UI (success or failure reason).
+     */
+    fun sendTestBatteryAlertSms(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val settings = settingsRepository.getSettings().first()
+            val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+            val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
+            val message = batteryAlertSmsSender.sendTestBatteryAlert(numbers, settings.userName)
+            onResult(message)
+            refreshBatteryAlertStatus()
         }
     }
     

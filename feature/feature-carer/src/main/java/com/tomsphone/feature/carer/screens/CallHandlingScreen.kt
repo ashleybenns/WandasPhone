@@ -370,6 +370,17 @@ private fun BatteryAlertSmsCard(
     saveToastState: SaveToastState
 ) {
     val smsPermissionState = rememberPermissionState(Manifest.permission.SEND_SMS)
+    val batteryAlertStatus by viewModel.batteryAlertStatus.collectAsState()
+    val (hasSmsPermission, recipientCount) = batteryAlertStatus
+    var testSending by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshBatteryAlertStatus()
+    }
+    LaunchedEffect(smsPermissionState.status) {
+        viewModel.refreshBatteryAlertStatus()
+    }
+
     SettingCard(title = "Battery alert texts") {
         Text(
             text = "Send a text to assistants when battery is low or when the device is plugged in after low battery. Turn on \"Notify for battery alerts\" for each assistant in Assistants.",
@@ -392,5 +403,32 @@ private fun BatteryAlertSmsCard(
                 }
             }
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "SMS permission: ${if (hasSmsPermission) "granted" else "denied"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (hasSmsPermission) MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f) else Color(0xFFB00020),
+            modifier = Modifier.padding(bottom = 2.dp)
+        )
+        Text(
+            text = "Battery alert recipients: $recipientCount",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f),
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Button(
+            onClick = {
+                if (testSending) return@Button
+                testSending = true
+                viewModel.sendTestBatteryAlertSms { message ->
+                    saveToastState.show(message)
+                    testSending = false
+                }
+            },
+            enabled = !testSending,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (testSending) "Sending…" else "Send test text")
+        }
     }
 }

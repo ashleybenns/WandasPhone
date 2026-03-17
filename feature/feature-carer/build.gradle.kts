@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":core:core-tts"))
     implementation(project(":core:core-config"))
     implementation(project(":core:core-data"))
+    implementation(project(":core:core-telecom"))
     implementation(project(":core:core-analytics"))
     implementation(libs.datastore.preferences)
     

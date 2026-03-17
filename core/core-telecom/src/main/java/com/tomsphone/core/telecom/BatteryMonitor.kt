@@ -48,8 +48,7 @@ class BatteryMonitor @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     companion object {
-        // TODO: set back to 20 for production
-        const val LOW_BATTERY_THRESHOLD = 90  // 90% for testing
+        const val LOW_BATTERY_THRESHOLD = 20
         const val CRITICAL_BATTERY_THRESHOLD = 10
         const val LOW_BATTERY_REPEAT_INTERVAL_MS = 120_000L  // 2 minutes
         const val LOW_BATTERY_SCREEN_OFF_DELAY_MS = 10_000L  // 10 seconds before screen off
@@ -231,15 +230,24 @@ class BatteryMonitor @Inject constructor(
         scope.launch {
             try {
                 val settings = settingsRepository.getSettings().first()
-                if (settings.batteryAlertSmsEnabled) {
-                    val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
-                    val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
-                    if (numbers.isNotEmpty()) {
-                        batteryAlertSmsSender.sendLowBatteryAlert(numbers, settings.userName)
-                    }
+                if (!settings.batteryAlertSmsEnabled) {
+                    Log.d(TAG, "Low battery: SMS alerts disabled in settings")
+                    return@launch
                 }
+                if (!batteryAlertSmsSender.hasSmsPermission()) {
+                    Log.w(TAG, "Low battery: SMS permission not granted - alerts not sent")
+                    return@launch
+                }
+                val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+                val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
+                if (numbers.isEmpty()) {
+                    Log.w(TAG, "Low battery: no assistants with battery alerts / valid numbers - SMS not sent")
+                    return@launch
+                }
+                Log.d(TAG, "Sending low battery alert to ${numbers.size} assistant(s) using stored numbers")
+                batteryAlertSmsSender.sendLowBatteryAlert(numbers, settings.userName)
             } catch (e: Exception) {
-                Log.e(TAG, "Battery alert SMS error: ${e.message}")
+                Log.e(TAG, "Battery alert SMS error: ${e.message}", e)
             }
         }
         // Start repeating TTS announcements
@@ -321,6 +329,7 @@ class BatteryMonitor @Inject constructor(
                     val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
                     val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
                     if (numbers.isNotEmpty()) {
+                        Log.d(TAG, "Sending device connected alert to ${numbers.size} assistant(s) using stored numbers")
                         batteryAlertSmsSender.sendDeviceConnectedAlert(numbers, settings.userName)
                     }
                 }
