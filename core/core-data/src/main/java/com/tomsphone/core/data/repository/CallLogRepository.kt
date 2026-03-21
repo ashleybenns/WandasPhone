@@ -4,11 +4,16 @@ import com.tomsphone.core.data.model.CallLogEntry
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository interface for call logs
+ * Repository interface for call logs.
+ *
+ * All rows are stored in Room (`call_logs`) for on-device history and future remote sync.
  */
 interface CallLogRepository {
     
     fun getMissedCalls(limit: Int): Flow<List<CallLogEntry>>
+
+    /** Unread missed + user-declined; used for carer missed-call nag only. */
+    fun getCallsForNagReminder(limit: Int): Flow<List<CallLogEntry>>
     
     fun getRecentCalls(limit: Int): Flow<List<CallLogEntry>>
     

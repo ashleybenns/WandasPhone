@@ -105,19 +105,21 @@ fun ListScreenLayout(
                 )
             }
             
-            // Title
-            Text(
-                text = if (isEmpty) emptyMessage else title,
-                style = TextStyle(
-                    fontSize = headerTextSize,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = Color.Black,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp)
-            )
+            // Title (only show if not empty)
+            if (title.isNotEmpty()) {
+                Text(
+                    text = if (isEmpty) emptyMessage else title,
+                    style = TextStyle(
+                        fontSize = headerTextSize,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            }
             
             // Content area (scrollable)
             Column(

@@ -7,6 +7,7 @@ import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.CarerSettings
 import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.HomeButtonConfig
+import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
@@ -175,20 +176,6 @@ class HomeViewModel @Inject constructor(
             initialValue = false
         )
     
-    // Count of unread missed calls (for button label)
-    private val missedCallsCount: StateFlow<Int> = callLogRepository.getMissedCalls(100)
-        .map { calls -> 
-            // Filter out empty phone numbers and count unique callers
-            calls.filter { it.phoneNumber.isNotBlank() }
-                .distinctBy { it.phoneNumber }
-                .size
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0
-        )
-    
     // Grey list contacts (for filtering missed calls)
     private val greyListContacts: StateFlow<List<Contact>> = contactRepository.getGreyListContacts(100)
         .stateIn(
@@ -257,10 +244,9 @@ class HomeViewModel @Inject constructor(
     val homeButtons: StateFlow<List<HomeButtonConfig>> = combine(
         contacts,
         settings,
-        missedCallsCount,
         mostRecentGreyListMissedCall
-    ) { contactList, carerSettings, missedCount, greyListMissed ->
-        buildHomeButtons(contactList, carerSettings, missedCount, greyListMissed)
+    ) { contactList, carerSettings, greyListMissed ->
+        buildHomeButtons(contactList, carerSettings, greyListMissed)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -269,36 +255,113 @@ class HomeViewModel @Inject constructor(
     
     /**
      * Build the list of buttons for the home screen.
-     * 
-     * Order:
-     * 1. Contact buttons (sorted by buttonPosition)
-     * 2. Missed Call Return button (Level 1, if enabled)
-     * 3. Menu buttons (if Level 2+)
-     * 4. Emergency button (if enabled)
+     * If [CarerSettings.homeSlotAssignments] has 7 entries, order and content come from that list.
+     * Otherwise uses legacy toggles and contact order.
      */
     private fun buildHomeButtons(
         contacts: List<Contact>,
         settings: CarerSettings,
-        missedCallsCount: Int,
+        greyListMissedCall: GreyListMissedCall?
+    ): List<HomeButtonConfig> {
+        val slots = settings.homeSlotAssignments
+        // Validate slots: must be exactly SLOT_COUNT, otherwise use legacy mode
+        if (slots.size == HomeSlotAssignments.SLOT_COUNT) {
+            return try {
+                buildHomeButtonsFromSlots(contacts, settings, greyListMissedCall, slots)
+            } catch (e: Exception) {
+                // If building from slots fails, fall back to legacy mode
+                android.util.Log.e("HomeViewModel", "Error building buttons from slots, using legacy mode", e)
+                buildHomeButtonsLegacy(contacts, settings, greyListMissedCall)
+            }
+        }
+        return buildHomeButtonsLegacy(contacts, settings, greyListMissedCall)
+    }
+
+    private fun buildHomeButtonsFromSlots(
+        contacts: List<Contact>,
+        settings: CarerSettings,
+        greyListMissedCall: GreyListMissedCall?,
+        slotAssignments: List<String>
+    ): List<HomeButtonConfig> {
+        val buttons = mutableListOf<HomeButtonConfig>()
+        val contactById = contacts.associateBy { it.id }
+        // Ensure we only process exactly SLOT_COUNT items
+        val safeSlots = slotAssignments.take(HomeSlotAssignments.SLOT_COUNT)
+        for (value in safeSlots) {
+            when {
+                value.isEmpty() -> { /* empty slot */ }
+                HomeSlotAssignments.isContact(value) -> {
+                    val id = HomeSlotAssignments.parseContactId(value) ?: continue
+                    val contact = contactById[id] ?: continue
+                    if (!contact.canCallOut) continue
+                    buttons.add(
+                        HomeButtonConfig.ContactButton(
+                            contactId = contact.id,
+                            name = contact.name,
+                            phoneNumber = contact.phoneNumber,
+                            color = contact.buttonColor,
+                            showAutoAnswerWarning = settings.autoAnswerEnabled && contact.autoAnswerEnabled,
+                            isHalfWidth = contact.isHalfWidth
+                        )
+                    )
+                }
+                value == HomeSlotAssignments.MISSED_CALL_RETURN -> {
+                    buttons.add(
+                        HomeButtonConfig.MissedCallReturnButton(
+                            callerName = greyListMissedCall?.callerName,
+                            phoneNumber = greyListMissedCall?.phoneNumber
+                        )
+                    )
+                }
+                value == HomeSlotAssignments.MISSED_CALLS_LIST -> {
+                    val label = "Recent calls"
+                    buttons.add(
+                        HomeButtonConfig.MenuButton(
+                            id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
+                            label = label,
+                            color = settings.homeMissedCallsButtonColor,
+                            isHalfWidth = false
+                        )
+                    )
+                }
+                value == HomeSlotAssignments.OTHER_CONTACTS -> {
+                    buttons.add(
+                        HomeButtonConfig.MenuButton(
+                            id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
+                            label = "Other Contacts",
+                            color = settings.homeContactsListButtonColor,
+                            isHalfWidth = false
+                        )
+                    )
+                }
+                value == HomeSlotAssignments.SCREEN_OFF -> {
+                    buttons.add(HomeButtonConfig.DisplayOffButton())
+                }
+            }
+        }
+        if (settings.homeShowEmergencyButton) {
+            buttons.add(HomeButtonConfig.EmergencyButton())
+        }
+        return buttons
+    }
+
+    private fun buildHomeButtonsLegacy(
+        contacts: List<Contact>,
+        settings: CarerSettings,
         greyListMissedCall: GreyListMissedCall?
     ): List<HomeButtonConfig> {
         val buttons = mutableListOf<HomeButtonConfig>()
-        
-        // Check if Level 1 missed call return button is enabled
         val missedCallReturnEnabled = settings.homeShowMissedCallReturnButton
-        
-        // 1. Contact buttons - only CARER contacts that can call out
-        // Level determines max contacts (list buttons take remaining space)
-        // If missed call return button is enabled at Level 1, reduce max by 1
-        val maxByLevel = when (settings.featureLevel) {
-            FeatureLevel.MINIMAL -> if (missedCallReturnEnabled) 3 else 4  // L1: 3-4 carers
-            FeatureLevel.BASIC -> 5    // L2: 5 carers + list buttons + Screen Off
-        }
+        val slotsForOthers = (if (missedCallReturnEnabled) 1 else 0) +
+            (if (settings.homeShowMissedCallsButton) 1 else 0) +
+            (if (settings.homeShowContactsListButton) 1 else 0) +
+            (if (settings.showDisplayOffButton) 1 else 0)
+        val maxContactSlots = (6 - slotsForOthers).coerceAtLeast(0)
         val callableContacts = contacts
             .filter { it.canCallOut }
             .sortedBy { it.buttonPosition }
-            .take(maxByLevel)
-        
+            .take(maxContactSlots)
+
         callableContacts.forEach { contact ->
             buttons.add(
                 HomeButtonConfig.ContactButton(
@@ -306,15 +369,11 @@ class HomeViewModel @Inject constructor(
                     name = contact.name,
                     phoneNumber = contact.phoneNumber,
                     color = contact.buttonColor,
-                    // Only show warning if BOTH global and per-contact auto-answer are enabled
                     showAutoAnswerWarning = settings.autoAnswerEnabled && contact.autoAnswerEnabled,
                     isHalfWidth = contact.isHalfWidth
                 )
             )
         }
-        
-        // 2. Missed Call Return button (Level 1, if enabled)
-        // Simple one-button solution for returning grey list missed calls
         if (missedCallReturnEnabled) {
             buttons.add(
                 HomeButtonConfig.MissedCallReturnButton(
@@ -323,49 +382,50 @@ class HomeViewModel @Inject constructor(
                 )
             )
         }
-        
-        // 3. List buttons (Level 2+) - full-width, below carers
-        if (settings.featureLevel.level >= 2) {
-            if (settings.homeShowMissedCallsButton) {
-                // Build label with count: "No Missed Calls", "1 Missed Call", "3 Missed Calls"
-                val missedCallsLabel = when (missedCallsCount) {
-                    0 -> "No Missed Calls"
-                    1 -> "1 Missed Call"
-                    else -> "$missedCallsCount Missed Calls"
-                }
-                buttons.add(
-                    HomeButtonConfig.MenuButton(
-                        id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
-                        label = missedCallsLabel,
-                        color = settings.homeMissedCallsButtonColor,
-                        isHalfWidth = false  // List buttons are full-width
-                    )
+        if (settings.homeShowMissedCallsButton) {
+            val missedCallsLabel = "Recent calls"
+            buttons.add(
+                HomeButtonConfig.MenuButton(
+                    id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
+                    label = missedCallsLabel,
+                    color = settings.homeMissedCallsButtonColor,
+                    isHalfWidth = false
                 )
-            }
-            
-            if (settings.homeShowContactsListButton) {
-                buttons.add(
-                    HomeButtonConfig.MenuButton(
-                        id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
-                        label = "Other Contacts",
-                        color = settings.homeContactsListButtonColor,
-                        isHalfWidth = false  // List buttons are full-width
-                    )
-                )
-            }
-            
-            // Display Off button (Level 2+, if enabled)
-            if (settings.showDisplayOffButton) {
-                buttons.add(HomeButtonConfig.DisplayOffButton())
-            }
+            )
         }
-        
-        // 3. Emergency button (always last, if enabled)
+        if (settings.homeShowContactsListButton) {
+            buttons.add(
+                HomeButtonConfig.MenuButton(
+                    id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
+                    label = "Other Contacts",
+                    color = settings.homeContactsListButtonColor,
+                    isHalfWidth = false
+                )
+            )
+        }
+        if (settings.showDisplayOffButton) {
+            buttons.add(HomeButtonConfig.DisplayOffButton())
+        }
         if (settings.homeShowEmergencyButton) {
             buttons.add(HomeButtonConfig.EmergencyButton())
         }
-        
         return buttons
+    }
+
+    /**
+     * Build legacy 7-slot list from current settings and contacts (for migration).
+     * Order: contacts by buttonPosition, then mcr, mcl, oc, so; pad to 7 with "".
+     */
+    private fun buildLegacySlotAssignments(contacts: List<Contact>, settings: CarerSettings): List<String> {
+        val list = mutableListOf<String>()
+        val callable = contacts.filter { it.canCallOut }.sortedBy { it.buttonPosition }.take(7)
+        callable.forEach { list.add(HomeSlotAssignments.contactSlot(it.id)) }
+        if (settings.homeShowMissedCallReturnButton) list.add(HomeSlotAssignments.MISSED_CALL_RETURN)
+        if (settings.homeShowMissedCallsButton) list.add(HomeSlotAssignments.MISSED_CALLS_LIST)
+        if (settings.homeShowContactsListButton) list.add(HomeSlotAssignments.OTHER_CONTACTS)
+        if (settings.showDisplayOffButton) list.add(HomeSlotAssignments.SCREEN_OFF)
+        while (list.size < HomeSlotAssignments.SLOT_COUNT) list.add(HomeSlotAssignments.EMPTY)
+        return list.take(HomeSlotAssignments.SLOT_COUNT)
     }
     
     // Status messages with priority levels to prevent race conditions
@@ -414,10 +474,9 @@ class HomeViewModel @Inject constructor(
         initialValue = "Tom's phone"
     )
     
-    // Display Off button enabled (Level 2+, setting on) - controls space reservation
-    // Button always takes space when enabled, so other buttons don't move
+    // Display Off button enabled when setting on (controls space reservation)
     val displayOffButtonEnabled: StateFlow<Boolean> = settings
-        .map { it.featureLevel.level >= 2 && it.showDisplayOffButton }
+        .map { it.showDisplayOffButton }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

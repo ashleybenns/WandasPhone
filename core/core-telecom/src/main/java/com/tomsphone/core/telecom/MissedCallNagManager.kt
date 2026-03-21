@@ -54,11 +54,6 @@ class MissedCallNagManager @Inject constructor(
     // Track if a call is in progress - completely suppress nag while calling
     private var callInProgress: Boolean = false
     
-    // Deduplication: track recently logged missed calls to prevent duplicates
-    // Maps phone number to timestamp of last logged missed call
-    private val recentlyLoggedCalls = mutableMapOf<String, Long>()
-    private val DEDUP_WINDOW_MS = 5000L  // 5 second window to prevent duplicates
-    
     // Auto-expire: missed calls older than 7 days are automatically deleted
     private val MISSED_CALL_EXPIRY_DAYS = 7
     
@@ -74,12 +69,12 @@ class MissedCallNagManager @Inject constructor(
             }
         }
         
-        // Monitor for new missed calls - only nag for CARER contacts
+        // Monitor unread missed + declined; only nag for CARER contacts
         scope.launch {
-            callLogRepository.getMissedCalls(10)
+            callLogRepository.getCallsForNagReminder(10)
                 .map { calls -> calls.filter { !it.isRead } }
                 .collect { missedCalls ->
-                    Log.d(TAG, "getMissedCalls returned ${missedCalls.size} unread calls: ${missedCalls.map { "${it.id}:${it.contactName}" }}")
+                    Log.d(TAG, "getCallsForNagReminder returned ${missedCalls.size} unread calls: ${missedCalls.map { "${it.id}:${it.contactName}" }}")
                     // Filter to only carer contacts for nagging
                     val carerMissedCalls = missedCalls.filter { call ->
                         val contact = call.contactId?.let { id ->
@@ -308,31 +303,14 @@ class MissedCallNagManager @Inject constructor(
     }
     
     /**
-     * Log a missed call and optionally trigger nag
-     * 
-     * All missed calls are logged (carers, grey list, unknown) for the missed calls list.
+     * Log a missed call and optionally trigger nag.
+     *
+     * One database row per event (no deduplication) so repeat callers show multiple entries.
      * Only CARER contacts trigger the nagging reminder.
-     * 
-     * Includes deduplication to prevent the same call being logged twice
-     * (can happen due to multiple code paths in InCallService)
      */
     fun onMissedCall(phoneNumber: String, contactName: String?) {
         scope.launch {
             val now = System.currentTimeMillis()
-            
-            // Deduplication check - prevent logging same number twice within window
-            val lastLogged = recentlyLoggedCalls[phoneNumber]
-            if (lastLogged != null && (now - lastLogged) < DEDUP_WINDOW_MS) {
-                Log.d(TAG, "Skipping duplicate missed call from $phoneNumber (logged ${now - lastLogged}ms ago)")
-                return@launch
-            }
-            
-            // Mark as recently logged before actually logging (to catch concurrent calls)
-            recentlyLoggedCalls[phoneNumber] = now
-            
-            // Clean up old entries (older than 1 minute)
-            recentlyLoggedCalls.entries.removeIf { now - it.value > 60_000 }
-            
             // Look up contact (may be null for unknown callers)
             val contact = contactRepository.getContactByPhone(phoneNumber).first()
             

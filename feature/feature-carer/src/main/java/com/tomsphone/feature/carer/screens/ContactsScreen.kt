@@ -47,10 +47,7 @@ fun ContactsScreen(
         null -> "Contacts"
     }
 
-    val maxAssistants = when (featureLevel) {
-        FeatureLevel.MINIMAL -> 4
-        FeatureLevel.BASIC -> 5
-    }
+    val maxAssistants = 7  // Production: up to 7 home screen slots (call + two-touch share them)
     val assistantCount = contacts.count { it.contactType == ContactType.CARER }
     val canAddMoreAssistants = assistantCount < maxAssistants
 
@@ -141,11 +138,7 @@ fun ContactsScreen(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.wandasColors.onSurface
                         )
-                        val friendsDescription = if (featureLevel.level >= 2) {
-                            "Can answer calls but no home screen button. At Level 2+, use 'Other Contacts' and 'Missed Calls' in Appearance to allow calling back."
-                        } else {
-                            "Can answer calls only. No home screen button, no way to call back."
-                        }
+                        val friendsDescription = "Can answer calls but no home screen button. Use 'Other Contacts' and 'Missed Calls' in Appearance to allow calling back."
                         Text(
                             text = friendsDescription,
                             style = MaterialTheme.typography.bodySmall,

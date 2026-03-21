@@ -23,12 +23,14 @@ object CarerRoutes {
     const val CALL_HANDLING = "carer_call_handling"
     const val TOUCH_RESPONSE = "carer_touch_response"
     const val APPEARANCE = "carer_appearance"
+    const val HOME_LAYOUT = "carer_home_layout"
     const val FEATURE_LEVEL = "carer_feature_level"
     const val ALWAYS_ON = "carer_always_on"
     const val FACTORY_RESET = "carer_factory_reset"
     const val SUPPORT_SUGGESTIONS = "carer_support_suggestions"
     const val SUPPORT_THREAD = "carer_support_thread/{threadId}"
     const val SUPPORT_NEW = "carer_support_new"
+    const val RECENT_CALLS = "carer_recent_calls"
 
     fun supportThread(threadId: String) = "carer_support_thread/$threadId"
 
@@ -62,10 +64,12 @@ fun CarerNavigation(
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
                 onNavigateToTouchResponse = { navController.navigate(CarerRoutes.TOUCH_RESPONSE) },
                 onNavigateToAppearance = { navController.navigate(CarerRoutes.APPEARANCE) },
+                onNavigateToHomeLayout = { navController.navigate(CarerRoutes.HOME_LAYOUT) },
                 onNavigateToFeatureLevel = { navController.navigate(CarerRoutes.FEATURE_LEVEL) },
                 onNavigateToAlwaysOn = { navController.navigate(CarerRoutes.ALWAYS_ON) },
                 onNavigateToFactoryReset = { navController.navigate(CarerRoutes.FACTORY_RESET) },
                 onNavigateToSupportSuggestions = { navController.navigate(CarerRoutes.SUPPORT_SUGGESTIONS) },
+                onNavigateToRecentCalls = { navController.navigate(CarerRoutes.RECENT_CALLS) },
                 onExitApp = onExitApp,
                 onBack = onExitCarerSettings
             )
@@ -153,6 +157,20 @@ fun CarerNavigation(
         // Appearance
         composable(CarerRoutes.APPEARANCE) {
             AppearanceScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Home screen layout (7 assignable slots + Emergency)
+        composable(CarerRoutes.HOME_LAYOUT) {
+            HomeScreenLayoutScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Recent calls (read-only, same DB as user list; for carer review / future sync)
+        composable(CarerRoutes.RECENT_CALLS) {
+            CarerRecentCallsScreen(
                 onBack = { navController.popBackStack() }
             )
         }

@@ -13,7 +13,7 @@ data class CallLogEntity(
     val contactId: Long?,
     val phoneNumber: String,
     val contactName: String?,
-    val type: String,  // INCOMING, OUTGOING, MISSED, REJECTED
+    val type: String,  // INCOMING, OUTGOING, MISSED, REJECTED, BLOCKED
     val timestamp: Long,
     val duration: Long,
     val isRead: Boolean

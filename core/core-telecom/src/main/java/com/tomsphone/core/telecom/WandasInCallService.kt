@@ -232,12 +232,16 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                 }
             }
         } else if (wasIncomingCall && lastIncomingPhoneNumber != null) {
-            // Incoming call was NOT answered → trigger missed call nag
-            Log.d(TAG, "Unanswered incoming call from ${lastIncomingContactName ?: lastIncomingPhoneNumber} - triggering nag")
-            missedCallNagManager.get().onMissedCall(
-                lastIncomingPhoneNumber!!,
-                lastIncomingContactName
-            )
+            if (callManager.consumeIncomingRingingDeclinedByUser()) {
+                Log.d(TAG, "Incoming declined by user — REJECTED already logged, skip MISSED")
+            } else {
+                // Incoming call was NOT answered → log missed + nag for carers
+                Log.d(TAG, "Unanswered incoming from ${lastIncomingContactName ?: lastIncomingPhoneNumber}")
+                missedCallNagManager.get().onMissedCall(
+                    lastIncomingPhoneNumber!!,
+                    lastIncomingContactName
+                )
+            }
         }
         
         // Reset state

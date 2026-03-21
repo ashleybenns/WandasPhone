@@ -15,9 +15,15 @@ data class CallLogEntry(
 )
 
 enum class CallType {
+    /** Answered incoming call */
     INCOMING,
+    /** Outgoing call (placed from the app) */
     OUTGOING,
+    /** Not answered (rang through / no pickup) */
     MISSED,
-    REJECTED
+    /** User declined the call from the incoming screen */
+    REJECTED,
+    /** Blocked by call screening (e.g. unknown caller when reject-unknown is on) */
+    BLOCKED
 }
 

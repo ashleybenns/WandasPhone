@@ -1,53 +1,16 @@
 package com.tomsphone.feature.carer.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tomsphone.core.config.FeatureLevel
 
 /**
- * Development indicator showing current feature level.
- * 
- * Displayed at the top of every carer settings screen during development
- * to make it clear which level we're testing/building for.
- * 
- * TODO: Hide in production builds or make toggleable
+ * Level indicator - hidden for production (level system kept in code but not shown in UI).
  */
 @Composable
 fun DevLevelIndicator(
     level: FeatureLevel,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = when (level) {
-        FeatureLevel.MINIMAL -> Color(0xFF2196F3)   // Blue
-        FeatureLevel.BASIC -> Color(0xFF4CAF50)     // Green
-    }
-    
-    val levelName = when (level) {
-        FeatureLevel.MINIMAL -> "Level 1"
-        FeatureLevel.BASIC -> "Level 2"
-    }
-    
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(backgroundColor)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = levelName,
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
+    // No-op: level system hidden for first production version
 }

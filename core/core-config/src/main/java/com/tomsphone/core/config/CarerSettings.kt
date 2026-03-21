@@ -27,8 +27,8 @@ data class CarerSettings(
     // ========== USER IDENTITY ==========
     // Default: Generic name, carer should personalize
     val userName: String = "User",
-    // Default: Minimal features for safety
-    val featureLevel: FeatureLevel = FeatureLevel.MINIMAL,
+    // Production: single tier with all features (level system kept but hidden in UI)
+    val featureLevel: FeatureLevel = FeatureLevel.BASIC,
     
     // ========== HOME SCREEN LAYOUT ==========
     // Each setting is discrete for individual remote sync and paywall gating
@@ -44,7 +44,10 @@ data class CarerSettings(
     // Actual number of contacts configured (updated when contacts change)
     // Used for screen-first layout scaling
     val homeContactCount: Int = 2,                  // Number of contact buttons on home screen
-    
+    // Ordered slot assignments for 7 home slots (slot 8 = Emergency fixed). Empty list = use legacy toggles.
+    // Values: "" empty, "c:123" contact id, "mcr" missed call return, "mcl" missed calls list, "oc" other contacts, "so" screen off
+    val homeSlotAssignments: List<String> = emptyList(),
+
     // ========== CALL HANDLING ==========
     // SECURITY CRITICAL: Auto-answer MUST default to false
     // If enabled, anyone could listen without user consent
@@ -420,20 +423,11 @@ enum class MissedCallNagInterval(
  */
 val CarerSettings.homeButtonRowCount: Int
     get() {
-        var rows = homeContactCount.coerceAtLeast(1)  // At least 1 contact row
-        
-        // Display Off button (Level 2+)
-        if (featureLevel.level >= 2 && showDisplayOffButton) {
-            rows += 1
-        }
-        
-        // Menu buttons (Level 2+) - paired into rows
-        if (featureLevel.level >= 2) {
-            var menuButtons = 0
-            if (homeShowMissedCallsButton) menuButtons++
-            if (homeShowContactsListButton) menuButtons++
-            rows += (menuButtons + 1) / 2  // Round up for pairing
-        }
-        
+        var rows = homeContactCount.coerceAtLeast(1)
+        if (showDisplayOffButton) rows += 1
+        var menuButtons = 0
+        if (homeShowMissedCallsButton) menuButtons++
+        if (homeShowContactsListButton) menuButtons++
+        rows += (menuButtons + 1) / 2  // Pair into rows
         return rows
     }

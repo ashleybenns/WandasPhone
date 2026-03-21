@@ -300,7 +300,7 @@ class EndIncomingCallViewModel @Inject constructor(
     
     // Speaker toggle visibility - based on new showSpeakerButton setting (Level 2+)
     val showSpeakerToggle: StateFlow<Boolean> = settingsRepository.getSettings()
-        .map { it.featureLevel.level >= 2 && it.showSpeakerButton }
+        .map { it.showSpeakerButton }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     
     // Speaker state

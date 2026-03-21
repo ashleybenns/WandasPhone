@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,6 +79,9 @@ class CallManagerImpl @Inject constructor(
     // Emergency mode - when true, unknown calls bypass screening
     private val _isEmergencyMode = MutableStateFlow(false)
     override val isEmergencyMode: StateFlow<Boolean> = _isEmergencyMode
+
+    /** User tapped Decline while incoming was ringing; avoids duplicate MISSED vs REJECTED log. */
+    private val incomingRingingDeclinedByUser = AtomicBoolean(false)
     
     override fun setEmergencyMode(enabled: Boolean) {
         Log.d(TAG, "setEmergencyMode: $enabled")
@@ -162,6 +166,13 @@ class CallManagerImpl @Inject constructor(
         }
     }
     
+    override fun markIncomingRingingDeclinedByUser() {
+        incomingRingingDeclinedByUser.set(true)
+    }
+
+    override fun consumeIncomingRingingDeclinedByUser(): Boolean =
+        incomingRingingDeclinedByUser.getAndSet(false)
+
     override fun rejectCall(): Result<Unit> {
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

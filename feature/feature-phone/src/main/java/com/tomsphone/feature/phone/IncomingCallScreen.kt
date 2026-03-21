@@ -24,10 +24,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.ButtonActivationPreset
+import com.tomsphone.core.data.model.CallLogEntry
+import com.tomsphone.core.data.model.CallType
 import com.tomsphone.core.data.model.ContactType
+import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.telecom.CallManager
-import com.tomsphone.core.telecom.MissedCallNagManager
 import com.tomsphone.core.telecom.RingtonePlayer
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
@@ -222,7 +224,7 @@ class IncomingCallViewModel @Inject constructor(
     private val tts: WandasTTS,
     private val ringtonePlayer: RingtonePlayer,
     private val contactRepository: ContactRepository,
-    private val missedCallNagManager: MissedCallNagManager,
+    private val callLogRepository: CallLogRepository,
     private val settingsRepository: com.tomsphone.core.config.SettingsRepository
 ) : ViewModel() {
     
@@ -360,22 +362,29 @@ class IncomingCallViewModel @Inject constructor(
     fun rejectCall() {
         Log.d(TAG, "Rejecting call")
         stopRingtone()
+        callManager.markIncomingRingingDeclinedByUser()
         callManager.endCall()
         
-        // Check if this is a CARER contact - if so, trigger missed call nag
+        // One log row per decline; carer nag observes REJECTED + MISSED via getCallsForNagReminder
         viewModelScope.launch {
             try {
                 val number = phoneNumber.value ?: return@launch
                 val contact = contactRepository.getContactByPhone(number).first()
-                
-                if (contact?.contactType == ContactType.CARER) {
-                    Log.d(TAG, "Rejected call from CARER ${contact.name} - triggering nag")
-                    missedCallNagManager.onMissedCall(number, contact.name)
-                } else {
-                    Log.d(TAG, "Rejected call from non-carer - no nag needed")
-                }
+                callLogRepository.logCall(
+                    CallLogEntry(
+                        id = 0,
+                        contactId = contact?.id,
+                        phoneNumber = number,
+                        contactName = contact?.name ?: _callerName.value,
+                        type = CallType.REJECTED,
+                        timestamp = System.currentTimeMillis(),
+                        duration = 0,
+                        isRead = false
+                    )
+                )
+                Log.d(TAG, "Logged declined call from ${contact?.name ?: number}")
             } catch (e: Exception) {
-                Log.e(TAG, "Error checking contact type: ${e.message}")
+                Log.e(TAG, "Error logging declined call: ${e.message}")
             }
         }
     }

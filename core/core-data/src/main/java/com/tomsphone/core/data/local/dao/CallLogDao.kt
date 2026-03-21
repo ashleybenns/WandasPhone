@@ -7,8 +7,16 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface CallLogDao {
     
+    /** True missed only (not user-declined). Used for grey-list “missed return” and similar. */
     @Query("SELECT * FROM call_logs WHERE type = 'MISSED' AND isRead = 0 ORDER BY timestamp DESC LIMIT :limit")
     fun getMissedCalls(limit: Int): Flow<List<CallLogEntity>>
+
+    /** Unread missed + user-declined; carer nag listens to this flow. */
+    @Query(
+        "SELECT * FROM call_logs WHERE type IN ('MISSED', 'REJECTED') AND isRead = 0 " +
+            "ORDER BY timestamp DESC LIMIT :limit"
+    )
+    fun getCallsForNagReminder(limit: Int): Flow<List<CallLogEntity>>
     
     @Query("SELECT * FROM call_logs ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentCalls(limit: Int): Flow<List<CallLogEntity>>
@@ -22,10 +30,12 @@ interface CallLogDao {
     @Query("UPDATE call_logs SET isRead = 1 WHERE id = :id")
     suspend fun markAsRead(id: Long)
     
-    @Query("UPDATE call_logs SET isRead = 1 WHERE phoneNumber = :phoneNumber AND type = 'MISSED'")
+    @Query(
+        "UPDATE call_logs SET isRead = 1 WHERE phoneNumber = :phoneNumber AND type IN ('MISSED', 'REJECTED')"
+    )
     suspend fun markMissedCallsFromNumberAsRead(phoneNumber: String)
     
-    @Query("UPDATE call_logs SET isRead = 1 WHERE type = 'MISSED'")
+    @Query("UPDATE call_logs SET isRead = 1 WHERE type IN ('MISSED', 'REJECTED')")
     suspend fun markAllMissedAsRead()
     
     @Query("DELETE FROM call_logs WHERE timestamp < :timestamp")

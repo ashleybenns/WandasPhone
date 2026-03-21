@@ -105,11 +105,9 @@ class SettingsRepositoryImpl @Inject constructor(
     }
     
     override fun getMaxContacts(): Flow<Int> {
-        return getFeatureLevel().map { level ->
-            when (level) {
-                FeatureLevel.MINIMAL -> 4  // Up to 4 carers at Level 1
-                FeatureLevel.BASIC -> 5    // Up to 5 carers at Level 2 (+ list buttons + Screen Off)
-            }
+        // Production: up to 7 home screen slots (call buttons + two-touch buttons share the 7)
+        return getFeatureLevel().map { _ ->
+            7
         }
     }
     

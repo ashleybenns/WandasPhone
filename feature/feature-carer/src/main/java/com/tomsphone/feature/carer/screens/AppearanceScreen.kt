@@ -156,11 +156,10 @@ fun AppearanceScreen(
                         )
                     }
                     
-                    // Missed Call Return Button (Level 1)
-                    // Simple one-button solution for returning grey list missed calls
+                    // Missed Call Return Button
                     SettingCard(title = "Missed Call Button") {
                         Text(
-                            text = "Add a button to call back missed calls from friends or other contacts not on the home screen. Uses one of the 4 button slots.",
+                            text = "Add a button to call back missed calls from friends or other contacts not on the home screen. Uses one of the 7 button slots.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -173,29 +172,29 @@ fun AppearanceScreen(
                             onCheckedChange = { enabled ->
                                 viewModel.setShowMissedCallReturnButton(enabled)
                                 saveToastState.show(
-                                    if (enabled) "Missed Call button enabled (max 3 assistant buttons)"
-                                    else "Missed Call button disabled (max 4 assistant buttons)"
+                                    if (enabled) "Missed Call button enabled"
+                                    else "Missed Call button disabled"
                                 )
                             }
                         )
                     }
                     
-                    // Screen Off Button (Level 2+)
-                    // List Buttons (Level 2+)
-                    LevelGatedContent(
-                        minLevel = FeatureLevel.BASIC,
-                        currentLevel = featureLevel
-                    ) {
-                        SettingCard(title = "Home Screen Buttons") {
-                            Text(
-                                text = "Add buttons for quick access to lists. Each button uses one row on the home screen.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            
-                            SettingToggle(
-                                title = "Missed Calls Button",
+                    // Two-touch features: list buttons and screen off (each uses one of the 7 home slots)
+                    SettingCard(title = "Home Screen Buttons") {
+                        Text(
+                            text = "Two-touch features (tap once to open list or screen, then tap again to choose): Missed Calls List, Other Contacts List, Screen off. Speaker toggle is available during calls (Call Handling). Each home button uses one of 7 slots.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = "Add buttons below. Each uses one slot on the home screen (max 7 total including call buttons).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        SettingToggle(
+                            title = "Missed Calls Button",
                                 description = "Shows list of missed calls to return",
                                 checked = settings.homeShowMissedCallsButton,
                                 onCheckedChange = { enabled ->
@@ -206,9 +205,8 @@ fun AppearanceScreen(
                                     )
                                 }
                             )
-                            
-                            SettingToggle(
-                                title = "Other Contacts Button",
+                        SettingToggle(
+                            title = "Other Contacts Button",
                                 description = "Shows friends and other contacts not on home screen",
                                 checked = settings.homeShowContactsListButton,
                                 onCheckedChange = { enabled ->
@@ -219,7 +217,6 @@ fun AppearanceScreen(
                                     )
                                 }
                             )
-                            
                             // Sub-option: Grey List Only (only visible when contacts button enabled)
                             if (settings.homeShowContactsListButton) {
                                 SettingToggle(
@@ -235,7 +232,6 @@ fun AppearanceScreen(
                                     }
                                 )
                             }
-                            
                             SettingToggle(
                                 title = "Screen Off Button",
                                 description = "Turn off display, any touch wakes",
@@ -249,7 +245,6 @@ fun AppearanceScreen(
                                 }
                             )
                         }
-                    }
                     
                     Spacer(modifier = Modifier.height(32.dp))
                 }

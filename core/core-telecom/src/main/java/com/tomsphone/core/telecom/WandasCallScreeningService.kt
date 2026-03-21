@@ -125,6 +125,14 @@ class WandasCallScreeningService : CallScreeningService() {
         
         return if (shouldReject) {
             Log.d(TAG, ">>> REJECTING unknown call")
+            // Log one BLOCKED row per screened rejection (async; screening already returned)
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    logBlockedCall(phoneNumber, contact?.name)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to log blocked call", e)
+                }
+            }
             CallScreeningService.CallResponse.Builder()
                 .setRejectCall(true)
                 .setSkipCallLog(false)
@@ -140,20 +148,18 @@ class WandasCallScreeningService : CallScreeningService() {
         }
     }
     
-    private suspend fun logMissedCall(phoneNumber: String, contactName: String?) {
+    private suspend fun logBlockedCall(phoneNumber: String, contactName: String?) {
         val contact = contactRepository.getContactByPhone(phoneNumber).first()
-        
         val entry = CallLogEntry(
             id = 0,
             contactId = contact?.id,
             phoneNumber = phoneNumber,
             contactName = contactName ?: contact?.name,
-            type = CallType.REJECTED,
+            type = CallType.BLOCKED,
             timestamp = System.currentTimeMillis(),
             duration = 0,
-            isRead = false
+            isRead = true
         )
-        
         callLogRepository.logCall(entry)
     }
     

@@ -21,6 +21,12 @@ class LocalCallLogRepository @Inject constructor(
             list.map { it.toCallLogEntry() }
         }
     }
+
+    override fun getCallsForNagReminder(limit: Int): Flow<List<CallLogEntry>> {
+        return callLogDao.getCallsForNagReminder(limit).map { list ->
+            list.map { it.toCallLogEntry() }
+        }
+    }
     
     override fun getRecentCalls(limit: Int): Flow<List<CallLogEntry>> {
         return callLogDao.getRecentCalls(limit).map { list ->

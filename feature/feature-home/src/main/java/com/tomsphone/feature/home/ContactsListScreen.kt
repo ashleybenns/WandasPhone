@@ -4,6 +4,8 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +20,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.components.activationGesture
+import com.tomsphone.core.ui.components.ConfigurableButton
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.data.model.Contact
@@ -49,6 +52,7 @@ fun ContactsListScreen(
     val contacts by viewModel.contacts.collectAsState()
     val screenTitle by viewModel.screenTitle.collectAsState()
     val emptyMessage by viewModel.emptyMessage.collectAsState()
+    val hasNextPage by viewModel.hasNextPage.collectAsState()
     val listTextAlignment by viewModel.listTextAlignment.collectAsState()
     val buttonActivation by viewModel.buttonActivation.collectAsState()
     val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
@@ -73,58 +77,57 @@ fun ContactsListScreen(
         accumulatedTimeoutMs = accumulatedTimeoutMs
     ) {
         contacts.forEach { contact ->
-            ContactButton(
-                contact = contact,
+            // Use ConfigurableButton to match home screen style exactly
+            ConfigurableButton(
+                label = contact.name,
+                onClick = {
+                    onCallContact(contact.name, contact.phoneNumber)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = contact.buttonColor?.let { Color(it) }
+                    ?: MaterialTheme.wandasColors.primaryButton,
+                textColor = MaterialTheme.wandasColors.onPrimaryButton,
+                warningText = null,
                 textAlignment = listTextAlignment,
                 activationPreset = buttonActivation,
                 debounceMs = touchDebounceMs,
                 accumulatedThresholdMs = accumulatedThresholdMs,
+                accumulatedTimeoutMs = accumulatedTimeoutMs
+            )
+        }
+        
+        // Next page button (matches Back button style)
+        if (hasNextPage) {
+            NextPageButton(
+                activationPreset = buttonActivation,
+                debounceMs = touchDebounceMs,
+                accumulatedThresholdMs = accumulatedThresholdMs,
                 accumulatedTimeoutMs = accumulatedTimeoutMs,
-                onClick = {
-                    onCallContact(contact.name, contact.phoneNumber)
-                }
+                onClick = { viewModel.nextPage() }
             )
         }
     }
 }
 
 /**
- * Contact button - matches home screen call button style
- * Uses custom activation gesture for consistent touch response
+ * Next page button - matches Back button style from ListScreenLayout
  */
 @Composable
-private fun ContactButton(
-    contact: Contact,
-    textAlignment: ListTextAlignment,
+private fun NextPageButton(
     activationPreset: ButtonActivationPreset,
     debounceMs: Int,
     accumulatedThresholdMs: Int,
     accumulatedTimeoutMs: Int,
     onClick: () -> Unit
 ) {
-    val textSize = ScaledDimensions.buttonTextSize
-    val buttonColor = contact.buttonColor?.let { Color(it) }
-        ?: MaterialTheme.wandasColors.primaryButton
+    val headerTextSize = ScaledDimensions.contactNameTextSize
+    val iconSize = headerTextSize.value.dp * 1.2f
     
-    // Convert setting to Compose alignment
-    val alignment = when (textAlignment) {
-        ListTextAlignment.LEFT -> Alignment.CenterStart
-        ListTextAlignment.CENTER -> Alignment.Center
-    }
-    val textAlign = when (textAlignment) {
-        ListTextAlignment.LEFT -> TextAlign.Start
-        ListTextAlignment.CENTER -> TextAlign.Center
-    }
-    
-    // Interaction source for ripple effect
     val interactionSource = remember { MutableInteractionSource() }
     
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentHeight()
-            .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-            .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
             .indication(interactionSource, rememberRipple())
             .activationGesture(
                 preset = activationPreset,
@@ -133,25 +136,25 @@ private fun ContactButton(
                 accumulatedTimeoutMs = accumulatedTimeoutMs,
                 onActivate = onClick,
                 interactionSource = interactionSource
-            ),
-        color = buttonColor,
-        shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            contentAlignment = alignment
-        ) {
-            Text(
-                text = contact.name,
-                style = TextStyle(
-                    fontSize = textSize,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = MaterialTheme.wandasColors.onPrimaryButton,
-                textAlign = textAlign
             )
-        }
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Next",
+            style = TextStyle(
+                fontSize = headerTextSize,
+                fontWeight = FontWeight.Bold
+            ),
+            color = Color.Black
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = "Next",
+            tint = Color.Black,
+            modifier = Modifier.size(iconSize)
+        )
     }
 }

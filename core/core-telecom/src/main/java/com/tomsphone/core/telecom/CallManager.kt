@@ -56,6 +56,17 @@ interface CallManager {
     fun rejectCall(): Result<Unit>
     
     /**
+     * Call immediately before [endCall] when the user taps Decline on the incoming screen.
+     * Prevents a duplicate MISSED row (REJECTED is logged in the UI layer).
+     */
+    fun markIncomingRingingDeclinedByUser()
+    
+    /**
+     * Used by InCallService: if true, skip logging MISSED for this removal (user already declined).
+     */
+    fun consumeIncomingRingingDeclinedByUser(): Boolean
+    
+    /**
      * End the current call
      */
     fun endCall(): Result<Unit>

@@ -35,10 +35,12 @@ fun CarerMainMenuScreen(
     onNavigateToCallHandling: () -> Unit,
     onNavigateToTouchResponse: () -> Unit,
     onNavigateToAppearance: () -> Unit,
+    onNavigateToHomeLayout: () -> Unit,
     onNavigateToFeatureLevel: () -> Unit,
     onNavigateToAlwaysOn: () -> Unit,
     onNavigateToFactoryReset: () -> Unit,
     onNavigateToSupportSuggestions: () -> Unit,
+    onNavigateToRecentCalls: () -> Unit,
     onExitApp: () -> Unit,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel(),
@@ -128,16 +130,24 @@ fun CarerMainMenuScreen(
                 // Appearance - always visible (accessibility is essential)
                 CarerMenuButton(
                     title = "Appearance",
-                    description = "Theme, text size, list alignment",
+                    description = "Theme, text size, list alignment, two-touch buttons",
                     onClick = onNavigateToAppearance,
                     currentLevel = featureLevel
                 )
-                
-                // Feature Level - always visible (how else would they upgrade?)
+
+                // Home screen layout - assign and reorder the 7 slots + Emergency
                 CarerMenuButton(
-                    title = "Feature Level",
-                    description = "Choose plan, see what's available",
-                    onClick = onNavigateToFeatureLevel,
+                    title = "Home screen layout",
+                    description = "Assign and reorder buttons (slots 1–7, Emergency always 8)",
+                    onClick = onNavigateToHomeLayout,
+                    currentLevel = featureLevel
+                )
+
+                // Recent calls - same on-device log as the user list (optional home button)
+                CarerMenuButton(
+                    title = "Recent calls",
+                    description = "Full call history: answered, missed, declined, blocked (repeat callers visible)",
+                    onClick = onNavigateToRecentCalls,
                     currentLevel = featureLevel
                 )
                 

@@ -14,11 +14,18 @@ fun CallLogEntity.toCallLogEntry(): CallLogEntry {
         contactId = contactId,
         phoneNumber = phoneNumber,
         contactName = contactName,
-        type = CallType.valueOf(type),
+        type = type.toCallTypeSafe(),
         timestamp = timestamp,
         duration = duration,
         isRead = isRead
     )
+}
+
+/** Tolerate unknown enum strings from older DB rows or future migrations. */
+private fun String.toCallTypeSafe(): CallType = try {
+    CallType.valueOf(this)
+} catch (_: IllegalArgumentException) {
+    CallType.MISSED
 }
 
 fun CallLogEntry.toEntity(): CallLogEntity {

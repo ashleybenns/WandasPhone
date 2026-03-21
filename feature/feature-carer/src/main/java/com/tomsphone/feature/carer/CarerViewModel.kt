@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.CarerSettings
 import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
@@ -59,6 +60,15 @@ class CarerSettingsViewModel @Inject constructor(
     
     // All contacts
     val contacts: StateFlow<List<Contact>> = contactRepository.getContacts(100)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    /** Home screen slot assignments (size 7). Empty list = use legacy toggles until migration. */
+    val homeSlotAssignments: StateFlow<List<String>> = settings
+        .map { it.homeSlotAssignments }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -350,6 +360,83 @@ class CarerSettingsViewModel @Inject constructor(
                     belowContact.id to currentIndex
                 )
             )
+        }
+    }
+
+    // ========== HOME SCREEN LAYOUT (7 assignable slots + Emergency) ==========
+
+    /**
+     * Build legacy 7-slot list from current settings and carer contacts (for migration).
+     * Order: carer contacts by buttonPosition, then mcr, mcl, oc, so; pad to 7.
+     */
+    private fun buildLegacySlotAssignments(contactsList: List<Contact>, current: CarerSettings): List<String> {
+        val list = mutableListOf<String>()
+        val carerCallable = contactsList
+            .filter { it.contactType == ContactType.CARER && it.canCallOut }
+            .sortedBy { it.buttonPosition }
+            .take(HomeSlotAssignments.SLOT_COUNT)
+        carerCallable.forEach { list.add(HomeSlotAssignments.contactSlot(it.id)) }
+        if (current.homeShowMissedCallReturnButton) list.add(HomeSlotAssignments.MISSED_CALL_RETURN)
+        if (current.homeShowMissedCallsButton) list.add(HomeSlotAssignments.MISSED_CALLS_LIST)
+        if (current.homeShowContactsListButton) list.add(HomeSlotAssignments.OTHER_CONTACTS)
+        if (current.showDisplayOffButton) list.add(HomeSlotAssignments.SCREEN_OFF)
+        while (list.size < HomeSlotAssignments.SLOT_COUNT) list.add(HomeSlotAssignments.EMPTY)
+        return list.take(HomeSlotAssignments.SLOT_COUNT)
+    }
+
+    /**
+     * Run migration when opening Home Screen Layout: if homeSlotAssignments is empty or size != 7,
+     * build from current contacts + toggles and save.
+     */
+    fun ensureMigrationOnLayoutOpen() {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            val list = current.homeSlotAssignments
+            if (list.size != HomeSlotAssignments.SLOT_COUNT) {
+                val contactsList = contacts.first()
+                val migrated = buildLegacySlotAssignments(contactsList, current)
+                settingsRepository.updateSettings(current.withSlotsSynced(migrated))
+            }
+        }
+    }
+
+    fun setHomeSlotAt(index: Int, value: String) {
+        if (index !in 0 until HomeSlotAssignments.SLOT_COUNT) return
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            val list = current.homeSlotAssignments.toMutableList()
+            // Ensure list is exactly SLOT_COUNT items
+            while (list.size < HomeSlotAssignments.SLOT_COUNT) list.add(HomeSlotAssignments.EMPTY)
+            // Trim to exactly SLOT_COUNT if it's larger
+            val trimmedList = list.take(HomeSlotAssignments.SLOT_COUNT).toMutableList()
+            trimmedList[index] = value
+            settingsRepository.updateSettings(current.withSlotsSynced(trimmedList))
+        }
+    }
+
+    fun moveHomeSlotUp(index: Int) {
+        if (index <= 0 || index >= HomeSlotAssignments.SLOT_COUNT) return
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            val list = current.homeSlotAssignments.toMutableList()
+            // Ensure list is exactly SLOT_COUNT items
+            while (list.size < HomeSlotAssignments.SLOT_COUNT) list.add(HomeSlotAssignments.EMPTY)
+            val trimmedList = list.take(HomeSlotAssignments.SLOT_COUNT).toMutableList()
+            trimmedList[index] = trimmedList[index - 1].also { trimmedList[index - 1] = trimmedList[index] }
+            settingsRepository.updateSettings(current.withSlotsSynced(trimmedList))
+        }
+    }
+
+    fun moveHomeSlotDown(index: Int) {
+        if (index < 0 || index >= HomeSlotAssignments.SLOT_COUNT - 1) return
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            val list = current.homeSlotAssignments.toMutableList()
+            // Ensure list is exactly SLOT_COUNT items
+            while (list.size < HomeSlotAssignments.SLOT_COUNT) list.add(HomeSlotAssignments.EMPTY)
+            val trimmedList = list.take(HomeSlotAssignments.SLOT_COUNT).toMutableList()
+            trimmedList[index] = trimmedList[index + 1].also { trimmedList[index + 1] = trimmedList[index] }
+            settingsRepository.updateSettings(current.withSlotsSynced(trimmedList))
         }
     }
     
@@ -743,3 +830,12 @@ class CarerSettingsViewModel @Inject constructor(
     }
 }
 
+/** Sync legacy toggles and homeContactCount from slot list when saving homeSlotAssignments. */
+private fun CarerSettings.withSlotsSynced(slots: List<String>): CarerSettings = copy(
+    homeSlotAssignments = slots,
+    homeContactCount = slots.count { HomeSlotAssignments.isContact(it) },
+    homeShowMissedCallReturnButton = slots.contains(HomeSlotAssignments.MISSED_CALL_RETURN),
+    homeShowMissedCallsButton = slots.contains(HomeSlotAssignments.MISSED_CALLS_LIST),
+    homeShowContactsListButton = slots.contains(HomeSlotAssignments.OTHER_CONTACTS),
+    showDisplayOffButton = slots.contains(HomeSlotAssignments.SCREEN_OFF)
+)

@@ -9,7 +9,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.ContactsContract
 import android.util.Log
+import android.widget.Toast
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
@@ -23,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import com.tomsphone.core.ui.theme.UserScalingProvider
 import androidx.core.view.WindowInsetsCompat
@@ -510,23 +513,16 @@ fun WandasPhoneApp(
         }
     }
     
-    // Calculate button row count ONCE based on home screen layout
-    // This ensures consistent text sizing across ALL screens
+    // Button row count from home layout (max 7 slots: call + two-touch + emergency)
     val homeButtonRowCount = run {
-        val currentSettings = settings
-        val contactRows = when (currentSettings?.featureLevel?.level ?: 1) {
-            1 -> 4  // Level 1: 4 contacts
-            else -> 5  // Level 2: 5 contacts
-        }.coerceAtMost(6)
-        val displayOffRow = if (currentSettings?.featureLevel?.level ?: 1 >= 2 && 
-                                currentSettings?.showDisplayOffButton == true) 1 else 0
-        val menuRows = if (currentSettings?.featureLevel?.level ?: 1 >= 2) {
-            var count = 0
-            if (currentSettings?.homeShowMissedCallsButton == true) count++
-            if (currentSettings?.homeShowContactsListButton == true) count++
-            (count + 1) / 2  // Pair into rows
-        } else 0
-        (contactRows + displayOffRow + menuRows).coerceIn(2, 6)
+        val s = settings ?: return@run 4
+        var rows = s.homeContactCount.coerceAtLeast(1)
+        if (s.showDisplayOffButton) rows += 1
+        var menuButtons = 0
+        if (s.homeShowMissedCallsButton) menuButtons++
+        if (s.homeShowContactsListButton) menuButtons++
+        rows += (menuButtons + 1) / 2
+        rows.coerceIn(2, 6)
     }
     
     WandasPhoneTheme(themeOption = ThemeOption.HIGH_CONTRAST_LIGHT) {
@@ -575,6 +571,7 @@ fun WandasPhoneApp(
                     buttonRowCount = homeButtonRowCount,
                     userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
                 ) {
+                    val addContactContext = LocalContext.current
                     com.tomsphone.feature.home.MissedCallsListScreen(
                         onBack = {
                             // #region agent log
@@ -587,6 +584,22 @@ fun WandasPhoneApp(
                             navController.popBackStack()
                             scope.launch {
                                 callManager.placeCall(phoneNumber)
+                            }
+                        },
+                        onAddToContacts = { phoneNumber ->
+                            val intent = Intent(Intent.ACTION_INSERT).apply {
+                                type = ContactsContract.Contacts.CONTENT_TYPE
+                                putExtra(ContactsContract.Intents.Insert.PHONE, phoneNumber)
+                            }
+                            try {
+                                addContactContext.startActivity(intent)
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Add to contacts failed", e)
+                                Toast.makeText(
+                                    addContactContext,
+                                    "Could not open contacts app",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         }
                     )
