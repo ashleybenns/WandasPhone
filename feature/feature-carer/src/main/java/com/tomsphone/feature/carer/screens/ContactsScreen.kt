@@ -42,9 +42,13 @@ fun ContactsScreen(
     val showAssistants = contactTypeFilter == null || contactTypeFilter == ContactType.CARER
     val showFriends = contactTypeFilter == null || contactTypeFilter == ContactType.GREY_LIST
     val breadcrumbTitle = when (contactTypeFilter) {
-        ContactType.CARER -> "Assistants"
+        ContactType.CARER -> "Assistant contacts"
         ContactType.GREY_LIST -> "Friends"
         null -> "Contacts"
+    }
+    val breadcrumbParent = when (contactTypeFilter) {
+        ContactType.CARER -> "Assistants"
+        else -> "Assistant Settings"
     }
 
     val maxAssistants = 7  // Production: up to 7 home screen slots (call + two-touch share them)
@@ -61,7 +65,7 @@ fun ContactsScreen(
             DevLevelIndicator(level = featureLevel)
             CarerBreadcrumb(
                 title = breadcrumbTitle,
-                parentTitle = "Assistant Settings",
+                parentTitle = breadcrumbParent,
                 onBack = onBack
             )
 

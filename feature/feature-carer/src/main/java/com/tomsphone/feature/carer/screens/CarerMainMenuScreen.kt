@@ -40,7 +40,6 @@ fun CarerMainMenuScreen(
     onNavigateToAlwaysOn: () -> Unit,
     onNavigateToFactoryReset: () -> Unit,
     onNavigateToSupportSuggestions: () -> Unit,
-    onNavigateToRecentCalls: () -> Unit,
     onExitApp: () -> Unit,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel(),
@@ -95,10 +94,10 @@ fun CarerMainMenuScreen(
                     currentLevel = featureLevel
                 )
                 
-                // Assistants - home screen buttons, reorder, colors
+                // Assistants — hub: contacts + recent calls
                 CarerMenuButton(
                     title = "Assistants",
-                    description = "Home screen buttons, reorder, colors",
+                    description = "Assistant contacts, recent calls",
                     onClick = onNavigateToAssistants,
                     currentLevel = featureLevel
                 )
@@ -143,14 +142,6 @@ fun CarerMainMenuScreen(
                     currentLevel = featureLevel
                 )
 
-                // Recent calls - same on-device log as the user list (optional home button)
-                CarerMenuButton(
-                    title = "Recent calls",
-                    description = "Full call history: answered, missed, declined, blocked (repeat callers visible)",
-                    onClick = onNavigateToRecentCalls,
-                    currentLevel = featureLevel
-                )
-                
                 // Always On Mode - always visible
                 CarerMenuButton(
                     title = "Always On Mode",

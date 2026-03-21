@@ -17,6 +17,7 @@ object CarerRoutes {
     const val USER_PROFILE = "carer_user_profile"
     const val PHOTO_CAPTURE = "carer_photo_capture"
     const val CONTACTS = "carer_contacts"
+    const val ASSISTANTS_HUB = "carer_assistants_hub"
     const val CONTACTS_ASSISTANTS = "carer_contacts_assistants"
     const val CONTACTS_FRIENDS = "carer_contacts_friends"
     const val CONTACT_EDIT = "carer_contact_edit/{contactId}/{contactType}"
@@ -59,7 +60,7 @@ fun CarerNavigation(
             CarerMainMenuScreen(
                 onNavigateToTomsPhoneDescription = { navController.navigate(CarerRoutes.TOMS_PHONE_DESCRIPTION) },
                 onNavigateToUserProfile = { navController.navigate(CarerRoutes.USER_PROFILE) },
-                onNavigateToAssistants = { navController.navigate(CarerRoutes.CONTACTS_ASSISTANTS) },
+                onNavigateToAssistants = { navController.navigate(CarerRoutes.ASSISTANTS_HUB) },
                 onNavigateToFriends = { navController.navigate(CarerRoutes.CONTACTS_FRIENDS) },
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
                 onNavigateToTouchResponse = { navController.navigate(CarerRoutes.TOUCH_RESPONSE) },
@@ -69,7 +70,6 @@ fun CarerNavigation(
                 onNavigateToAlwaysOn = { navController.navigate(CarerRoutes.ALWAYS_ON) },
                 onNavigateToFactoryReset = { navController.navigate(CarerRoutes.FACTORY_RESET) },
                 onNavigateToSupportSuggestions = { navController.navigate(CarerRoutes.SUPPORT_SUGGESTIONS) },
-                onNavigateToRecentCalls = { navController.navigate(CarerRoutes.RECENT_CALLS) },
                 onExitApp = onExitApp,
                 onBack = onExitCarerSettings
             )
@@ -102,7 +102,16 @@ fun CarerNavigation(
             )
         }
         
-        // Assistants list
+        // Assistants: hub (contacts vs recent calls)
+        composable(CarerRoutes.ASSISTANTS_HUB) {
+            AssistantsSettingsHubScreen(
+                onNavigateToAssistantContacts = { navController.navigate(CarerRoutes.CONTACTS_ASSISTANTS) },
+                onNavigateToRecentCalls = { navController.navigate(CarerRoutes.RECENT_CALLS) },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Assistants — contact list
         composable(CarerRoutes.CONTACTS_ASSISTANTS) {
             ContactsScreen(
                 contactTypeFilter = ContactType.CARER,

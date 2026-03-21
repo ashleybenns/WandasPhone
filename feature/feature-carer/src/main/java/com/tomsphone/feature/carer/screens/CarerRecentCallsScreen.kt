@@ -47,7 +47,7 @@ fun CarerRecentCallsScreen(
             DevLevelIndicator(level = settings.featureLevel)
             CarerBreadcrumb(
                 title = "Recent calls",
-                parentTitle = "Assistant Settings",
+                parentTitle = "Assistants",
                 onBack = onBack
             )
             Text(
