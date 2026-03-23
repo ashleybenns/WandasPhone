@@ -11,13 +11,24 @@ interface CallLogDao {
     @Query("SELECT * FROM call_logs WHERE type = 'MISSED' AND isRead = 0 ORDER BY timestamp DESC LIMIT :limit")
     fun getMissedCalls(limit: Int): Flow<List<CallLogEntity>>
 
-    /** Unread missed + user-declined; carer nag listens to this flow. */
+    /**
+     * Missed + declined rows (read and unread). Prefer [getUnreadMissedAndRejected] for outstanding list.
+     */
+    @Query(
+        "SELECT * FROM call_logs WHERE type IN ('MISSED', 'REJECTED') " +
+            "ORDER BY timestamp DESC LIMIT :limit"
+    )
+    fun getMissedCallsList(limit: Int): Flow<List<CallLogEntity>>
+
+    /**
+     * Unread missed + declined, newest first. Large [limit] supports deduping to unique callers in code.
+     */
     @Query(
         "SELECT * FROM call_logs WHERE type IN ('MISSED', 'REJECTED') AND isRead = 0 " +
             "ORDER BY timestamp DESC LIMIT :limit"
     )
-    fun getCallsForNagReminder(limit: Int): Flow<List<CallLogEntity>>
-    
+    fun getUnreadMissedAndRejected(limit: Int): Flow<List<CallLogEntity>>
+
     @Query("SELECT * FROM call_logs ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentCalls(limit: Int): Flow<List<CallLogEntity>>
     

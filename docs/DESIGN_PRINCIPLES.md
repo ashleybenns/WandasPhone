@@ -147,7 +147,7 @@ Everything from Level 1, plus **binary controls** (on/off).
 Everything from Level 2, plus **simple sequences**.
 
 - Tap "Contacts" → see list → tap contact
-- Tap "Missed Calls" → see list → tap to call back
+- Tap "Recent calls" → see list → tap to call back
 
 **Best for**: Can follow "go here, then do that" instructions
 

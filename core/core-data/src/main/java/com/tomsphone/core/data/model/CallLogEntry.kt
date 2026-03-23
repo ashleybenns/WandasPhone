@@ -17,8 +17,10 @@ data class CallLogEntry(
 enum class CallType {
     /** Answered incoming call */
     INCOMING,
-    /** Outgoing call (placed from the app) */
+    /** Outgoing call that connected (other party or voicemail picked up) */
     OUTGOING,
+    /** Outgoing dial that never connected (no answer, busy, hung up while ringing, etc.) */
+    OUTGOING_UNANSWERED,
     /** Not answered (rang through / no pickup) */
     MISSED,
     /** User declined the call from the incoming screen */

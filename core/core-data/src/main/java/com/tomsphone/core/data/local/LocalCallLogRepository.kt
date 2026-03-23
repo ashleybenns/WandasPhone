@@ -5,6 +5,7 @@ import com.tomsphone.core.data.local.mapper.toCallLogEntry
 import com.tomsphone.core.data.local.mapper.toEntity
 import com.tomsphone.core.data.model.CallLogEntry
 import com.tomsphone.core.data.repository.CallLogRepository
+import com.tomsphone.core.data.repository.dedupeOutstandingMissedCalls
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -22,8 +23,22 @@ class LocalCallLogRepository @Inject constructor(
         }
     }
 
+    override fun getMissedCallsList(limit: Int): Flow<List<CallLogEntry>> {
+        return callLogDao.getMissedCallsList(limit).map { list ->
+            list.map { it.toCallLogEntry() }
+        }
+    }
+
+    override fun getOutstandingMissedCallsPerCaller(maxUniqueCallers: Int): Flow<List<CallLogEntry>> {
+        val fetchLimit = (maxUniqueCallers * 50).coerceIn(200, 3000)
+        return callLogDao.getUnreadMissedAndRejected(fetchLimit).map { list ->
+            val entries = list.map { it.toCallLogEntry() }
+            dedupeOutstandingMissedCalls(entries, maxUniqueCallers)
+        }
+    }
+
     override fun getCallsForNagReminder(limit: Int): Flow<List<CallLogEntry>> {
-        return callLogDao.getCallsForNagReminder(limit).map { list ->
+        return callLogDao.getUnreadMissedAndRejected(limit).map { list ->
             list.map { it.toCallLogEntry() }
         }
     }

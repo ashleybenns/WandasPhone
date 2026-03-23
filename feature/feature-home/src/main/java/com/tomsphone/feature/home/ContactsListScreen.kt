@@ -34,14 +34,12 @@ import kotlinx.coroutines.delay
 private const val INACTIVITY_TIMEOUT_MS = 30_000L
 
 /**
- * Contacts List Screen (Level 2+)
- * 
- * Shows list of all carer contacts for the user to call.
- * Tap a contact to call them.
- * 
- * Design: Matches home screen with pastel yellow background,
- * inert gutters, and home-style call buttons.
- * This allows calling carers that don't fit on the home screen.
+ * Contacts list (Level 2+)
+ *
+ * Shows assistants and answer-only contacts (unless carer enabled “answer-only only”).
+ * Tap a row to call.
+ *
+ * Design: Pastel yellow background, inert gutters, home-style call buttons.
  */
 @Composable
 fun ContactsListScreen(

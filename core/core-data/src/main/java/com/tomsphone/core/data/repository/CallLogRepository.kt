@@ -12,6 +12,15 @@ interface CallLogRepository {
     
     fun getMissedCalls(limit: Int): Flow<List<CallLogEntry>>
 
+    /** Missed + declined for the assistant “Missed calls” screen (read and unread). */
+    fun getMissedCallsList(limit: Int): Flow<List<CallLogEntry>>
+
+    /**
+     * Outstanding missed/declined: **unread only**, **one row per caller** (latest time each).
+     * Cleared when the user returns the call ([markMissedCallsFromNumberAsRead]).
+     */
+    fun getOutstandingMissedCallsPerCaller(maxUniqueCallers: Int): Flow<List<CallLogEntry>>
+
     /** Unread missed + user-declined; used for carer missed-call nag only. */
     fun getCallsForNagReminder(limit: Int): Flow<List<CallLogEntry>>
     

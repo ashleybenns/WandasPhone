@@ -7,7 +7,11 @@ import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.util.Log
 import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
+import com.tomsphone.core.data.model.CallLogEntry
+import com.tomsphone.core.data.model.CallType
+import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
@@ -16,11 +20,11 @@ import com.tomsphone.core.analytics.AnalyticsEvent
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -56,6 +60,9 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     
     @Inject
     lateinit var missedCallNagManager: dagger.Lazy<MissedCallNagManager>
+
+    @Inject
+    lateinit var callLogRepository: dagger.Lazy<CallLogRepository>
     
     @Inject
     lateinit var ringtonePlayer: RingtonePlayer
@@ -69,6 +76,8 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     private var isSpeakerOn = false
     private var isMuted = false
     private var wasCallActive = false  // Track if call was ever connected
+    /** Wall clock when we first entered ACTIVE; used for log duration */
+    private var connectedAtMillis: Long = 0L
     private var wasIncomingCall = false  // Track if this was an incoming call
     private var wasAutoAnswered = false  // Track if call was auto-answered
     private var lastIncomingPhoneNumber: String? = null  // For missed call nag
@@ -186,6 +195,7 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         currentCall = call
         call.registerCallback(callCallback)
         wasCallActive = false  // Reset for new call
+        connectedAtMillis = 0L
         wasAutoAnswered = false  // Reset for new call
         wasIncomingCall = isIncoming
         lastIncomingPhoneNumber = if (isIncoming) phoneNumber else null
@@ -209,6 +219,12 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         Log.d(TAG, "Call removed, wasActive: $wasCallActive, wasIncoming: $wasIncomingCall")
+        
+        val phoneForLog = call.details.handle?.schemeSpecificPart?.takeIf { it.isNotBlank() }
+        val wasIn = wasIncomingCall
+        val wasAct = wasCallActive
+        val nameHintForLog = currentContactName ?: lastIncomingContactName
+        val connectedAtForLog = connectedAtMillis
         
         call.unregisterCallback(callCallback)
         if (currentCall == call) {
@@ -244,8 +260,30 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
             }
         }
         
+        // Recent calls log: answered incoming + all user-placed outgoing (answered or not)
+        if (phoneForLog != null && phoneForLog != "Unknown") {
+            val shouldLog = wasIn && wasAct || !wasIn
+            if (shouldLog) {
+                serviceScope.launch(Dispatchers.IO) {
+                    try {
+                        logCompletedCallToRecentCalls(
+                            call = call,
+                            phoneNumber = phoneForLog,
+                            wasIncoming = wasIn,
+                            wasActive = wasAct,
+                            nameHint = nameHintForLog,
+                            connectedAtMs = connectedAtForLog
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Recent calls log failed: ${e.message}", e)
+                    }
+                }
+            }
+        }
+        
         // Reset state
         wasCallActive = false
+        connectedAtMillis = 0L
         wasAutoAnswered = false
         wasIncomingCall = false
         lastIncomingPhoneNumber = null
@@ -394,14 +432,19 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                     Log.d(TAG, "Auto-answer: disabled for contact ${contact.name}")
                     return@launch
                 }
-                
-                // Get delay from settings
+
                 val settings = settingsRepository.getSettings().first()
+                val onHome = contact.id in HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+                if (!onHome) {
+                    Log.d(TAG, "Auto-answer: contact not on a home button slot ${contact.name}")
+                    return@launch
+                }
+
                 val delaySeconds = settings.autoAnswerDelaySeconds
                 Log.d(TAG, "Auto-answer: starting ${delaySeconds}s delay for ${contact.name}")
                 
                 // Start delayed auto-answer
-                autoAnswerJob = serviceScope.launch {
+                autoAnswerJob = serviceScope.launch answerDelay@{
                     // Wait for the configured delay
                     delay(delaySeconds * 1000L)
                     
@@ -409,7 +452,7 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                     val call = currentCall
                     if (call == null || call.state != Call.STATE_RINGING) {
                         Log.d(TAG, "Auto-answer: call no longer ringing, cancelling")
-                        return@launch
+                        return@answerDelay
                     }
                     
                     Log.d(TAG, "Auto-answer: triggering for ${contact.name}")
@@ -422,7 +465,7 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                     // Final check - still ringing?
                     if (currentCall?.state != Call.STATE_RINGING) {
                         Log.d(TAG, "Auto-answer: call ended during notification, cancelling")
-                        return@launch
+                        return@answerDelay
                     }
                     
                     // Answer the call
@@ -513,11 +556,61 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
         // When call becomes active, ensure speaker is set correctly
         // No "answered" announcement needed - carer is talking or voicemail is playing
         if (wandasState == CallState.ACTIVE) {
+            if (!wasCallActive) {
+                connectedAtMillis = System.currentTimeMillis()
+            }
             wasCallActive = true
             serviceScope.launch {
                 enableSpeakerBasedOnSettings()
             }
         }
+    }
+    
+    /**
+     * Persist completed calls for Recent calls (user + carer).
+     * Incoming unanswered → [MissedCallNagManager.onMissedCall] / reject paths; not here.
+     */
+    private suspend fun logCompletedCallToRecentCalls(
+        call: Call,
+        phoneNumber: String,
+        wasIncoming: Boolean,
+        wasActive: Boolean,
+        nameHint: String?,
+        connectedAtMs: Long
+    ) {
+        val type: CallType = when {
+            wasIncoming && wasActive -> CallType.INCOMING
+            wasIncoming && !wasActive -> return
+            !wasIncoming && wasActive -> CallType.OUTGOING
+            else -> CallType.OUTGOING_UNANSWERED
+        }
+        val endWallClock = System.currentTimeMillis()
+        val durationMs = if (wasActive && connectedAtMs > 0L) {
+            (endWallClock - connectedAtMs).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        val timestamp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val created = call.details.creationTimeMillis
+            if (created > 0L) created else endWallClock
+        } else {
+            endWallClock
+        }
+        var resolvedContact = contactRepository.getContactByPhone(phoneNumber).first()
+        if (resolvedContact == null) {
+            resolvedContact = contactRepository.getContactByPhone(normalizePhoneNumber(phoneNumber)).first()
+        }
+        val entry = CallLogEntry(
+            id = 0L,
+            contactId = resolvedContact?.id,
+            phoneNumber = phoneNumber,
+            contactName = resolvedContact?.name ?: nameHint,
+            type = type,
+            timestamp = timestamp,
+            duration = durationMs,
+            isRead = true
+        )
+        callLogRepository.get().logCall(entry)
     }
     
     /**

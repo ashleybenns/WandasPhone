@@ -30,8 +30,7 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
 fun CarerMainMenuScreen(
     onNavigateToTomsPhoneDescription: () -> Unit,
     onNavigateToUserProfile: () -> Unit,
-    onNavigateToAssistants: () -> Unit,
-    onNavigateToFriends: () -> Unit,
+    onNavigateToContactsHub: () -> Unit,
     onNavigateToCallHandling: () -> Unit,
     onNavigateToTouchResponse: () -> Unit,
     onNavigateToAppearance: () -> Unit,
@@ -94,19 +93,11 @@ fun CarerMainMenuScreen(
                     currentLevel = featureLevel
                 )
                 
-                // Assistants — hub: contacts + recent calls
+                // Contacts hub: everyone in one list + recent calls
                 CarerMenuButton(
-                    title = "Assistants",
-                    description = "Assistant contacts, recent calls",
-                    onClick = onNavigateToAssistants,
-                    currentLevel = featureLevel
-                )
-
-                // Friends - answer-only contacts
-                CarerMenuButton(
-                    title = "Friends",
-                    description = "Answer-only contacts, call back from lists",
-                    onClick = onNavigateToFriends,
+                    title = "Contacts",
+                    description = "All people in one list; home buttons from Home screen layout",
+                    onClick = onNavigateToContactsHub,
                     currentLevel = featureLevel
                 )
                 

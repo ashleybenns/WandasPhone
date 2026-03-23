@@ -22,6 +22,12 @@ interface ContactRepository {
      * Get carer contacts that have battery alert SMS enabled (for low battery / device connected notifications).
      */
     suspend fun getCarerContactsWithBatteryAlerts(): List<Contact>
+
+    /**
+     * All contacts with battery alerts toggled on. Caller should restrict to contacts
+     * that occupy a home screen slot (`HomeSlotAssignments.contactIdsOnHome`).
+     */
+    suspend fun getContactsWithBatteryAlertsEnabled(): List<Contact>
     
     /**
      * Get only GREY_LIST contacts (answer-only, not on home screen)

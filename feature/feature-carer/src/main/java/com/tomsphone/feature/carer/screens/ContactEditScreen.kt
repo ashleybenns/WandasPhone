@@ -18,6 +18,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.ButtonColor
 import com.tomsphone.core.data.util.PhoneNumberUtils
 import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import androidx.compose.foundation.background
@@ -54,12 +55,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 fun ContactEditScreen(
     contactId: Long,
     contactType: ContactType,  // Type is fixed - determined by entry point
+    /** If 0–6, assign this home slot after a new contact is saved (from Home screen layout). */
+    homeSlotPendingIndex: Int = -1,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
     val featureLevel = settings.featureLevel
     val contacts by viewModel.contacts.collectAsState()
+    val homeSlots by viewModel.homeSlotAssignments.collectAsState()
+    val onHomeIds = remember(homeSlots) { HomeSlotAssignments.contactIdsOnHome(homeSlots) }
     val saveToastState = rememberSaveToastState()
     
     val isNewContact = contactId == 0L
@@ -67,7 +72,14 @@ fun ContactEditScreen(
     
     // Use existing contact's type if editing, otherwise use passed type
     val effectiveContactType = existingContact?.contactType ?: contactType
-    
+
+    /** Auto-answer & battery: existing contact on a slot, or new contact being added for a layout slot. */
+    val showAssistantDeviceOptions = remember(isNewContact, existingContact, onHomeIds, homeSlotPendingIndex) {
+        (!isNewContact && existingContact != null && existingContact.id in onHomeIds) ||
+            (isNewContact && homeSlotPendingIndex >= 0)
+    }
+    val usesHomeButton = !isNewContact && existingContact != null && existingContact.id in onHomeIds
+
     val context = LocalContext.current
     val defaultRegion = remember(context) { getDefaultPhoneRegion(context) }
     val countries = remember { getPhoneCountries() }
@@ -121,7 +133,7 @@ fun ContactEditScreen(
                 // Breadcrumb
                 CarerBreadcrumb(
                     title = if (isNewContact) "Add Contact" else name.ifEmpty { "Edit Contact" },
-                    parentTitle = getContactTypeDisplayName(effectiveContactType),
+                    parentTitle = if (homeSlotPendingIndex >= 0) "Home screen layout" else "Contacts",
                     onBack = onBack
                 )
                 
@@ -220,12 +232,29 @@ fun ContactEditScreen(
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        // Number row only – full width so you can edit and move cursor normally (no per-keystroke save to avoid reset)
+                        // Number row – save when digits form a valid E.164 for the selected country (same as country change),
+                        // so we don't persist invalid partial numbers or spam saves on every keystroke while invalid.
                         OutlinedTextField(
                             value = nationalNumber,
                             onValueChange = { newVal ->
                                 val digitsOnly = newVal.filter { it.isDigit() }
                                 nationalNumber = digitsOnly
+                                if (!isNewContact && existingContact != null) {
+                                    val e164 = validateAndToE164(digitsOnly, selectedRegionCode)
+                                    if (e164 != null && e164 != existingContact.phoneNumber) {
+                                        saveContact(
+                                            viewModel,
+                                            existingContact,
+                                            name,
+                                            e164,
+                                            effectiveContactType,
+                                            autoAnswerEnabled,
+                                            notifyBatteryAlerts,
+                                            selectedColor
+                                        )
+                                        saveToastState.show("$name's phone saved")
+                                    }
+                                }
                             },
                             label = { Text("Number") },
                             placeholder = { Text("e.g. 7911123456") },
@@ -238,26 +267,27 @@ fun ContactEditScreen(
                         )
                     }
                     
-                    // Show contact type (read-only info)
-                    SettingCard(title = "Contact Type") {
+                    // Home button = assistant for this app (slot-based)
+                    SettingCard(title = "Home screen") {
                         Text(
-                            text = getContactTypeDisplayName(effectiveContactType),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.wandasColors.onSurface
-                        )
-                        Text(
-                            text = getContactTypeDescription(effectiveContactType),
+                            text = when {
+                                usesHomeButton ->
+                                    "This contact has a home call button. Assistant options (auto-answer, battery texts, missed-call reminders) apply while they stay on a slot."
+                                isNewContact && homeSlotPendingIndex >= 0 ->
+                                    "You're adding this person for home slot ${homeSlotPendingIndex + 1}. After you save, that slot will get their call button and the options below will apply."
+                                else ->
+                                    "No home slot yet — normal contact. Open Home screen layout and assign them to a slot for a large call button on the user’s phone; remove the slot to demote."
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(top = 4.dp)
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.85f)
                         )
                     }
                     
-                    // Button Color (Assistants: home screen; Friends: list screens)
                     SettingCard(title = "Button Color") {
-                        val colorDescription = when (effectiveContactType) {
-                            ContactType.CARER -> "Choose a color for this assistant's button on the home screen"
-                            ContactType.GREY_LIST -> "Choose a color for this friend in list screens"
+                        val colorDescription = when {
+                            usesHomeButton || isNewContact ->
+                                "Used on the home call button when they have a slot; also in on-phone contact lists"
+                            else -> "Shown in on-phone contact lists (and on home if you assign a slot later)"
                         }
                         Text(
                             text = colorDescription,
@@ -298,7 +328,7 @@ fun ContactEditScreen(
                         minLevel = FeatureLevel.MINIMAL,
                         currentLevel = featureLevel
                     ) {
-                        if (effectiveContactType == ContactType.CARER) {
+                        if (showAssistantDeviceOptions) {
                             SettingCard(title = "Auto-Answer") {
                                 SettingToggle(
                                     title = "Auto-Answer for this assistant",
@@ -336,8 +366,8 @@ saveContact(
                         }
                     }
 
-                    // Notify for battery alerts (Carers only, Level 1)
-                    if (effectiveContactType == ContactType.CARER) {
+                    // Notify for battery alerts (home-slot contacts only, Level 1)
+                    if (showAssistantDeviceOptions) {
                         SettingCard(title = "Battery alerts") {
                             SettingToggle(
                                 title = "Notify for battery alerts",
@@ -381,9 +411,16 @@ saveContact(
                                         buttonPosition = 0,
                                         isHalfWidth = false
                                     )
-                                    viewModel.saveContact(newContact)
-                                    saveToastState.show("$name added")
-                                    onBack()
+                                    viewModel.saveContact(newContact) { newId ->
+                                        if (homeSlotPendingIndex in 0 until HomeSlotAssignments.SLOT_COUNT) {
+                                            viewModel.setHomeSlotAt(
+                                                homeSlotPendingIndex,
+                                                HomeSlotAssignments.contactSlot(newId)
+                                            )
+                                        }
+                                        saveToastState.show("$name added")
+                                        onBack()
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -492,16 +529,3 @@ private fun ColorSwatch(
     }
 }
 
-private fun getContactTypeDisplayName(type: ContactType): String {
-    return when (type) {
-        ContactType.CARER -> "Assistant"
-        ContactType.GREY_LIST -> "Friends"
-    }
-}
-
-private fun getContactTypeDescription(type: ContactType): String {
-    return when (type) {
-        ContactType.CARER -> "Appears on home screen, triggers missed call reminders"
-        ContactType.GREY_LIST -> "Can answer calls. At Level 2+, enable list buttons in Appearance to call back."
-    }
-}

@@ -1,26 +1,16 @@
 package com.tomsphone.core.data.model
 
 /**
- * Contact relationship types
- * 
- * Determines call privileges and missed call behavior:
- * - CARER: Can call out, answer, triggers missed call nag
- * - GREY_LIST: Answer only, no outbound calls, no missed call nag
+ * Stored contact category (legacy ordering / analytics).
+ *
+ * Who has a home button and assistant features is determined by home screen **slot**
+ * assignments (`HomeSlotAssignments`), not this enum alone.
+ * New contacts default to [GREY_LIST]; assign a home slot to elevate.
  */
 enum class ContactType {
-    /**
-     * Primary caregivers (family or professional)
-     * - User CAN call them
-     * - Phone answers their calls
-     * - Missed calls trigger nagging reminders
-     */
+    /** Legacy / migration: historically “assistant” rows; same privileges as others once slotted. */
     CARER,
-    
-    /**
-     * Friends and family who know to contact carer if needed
-     * - User CANNOT call them (not shown in call-out UI)
-     * - Phone answers their calls
-     * - Missed calls do NOT trigger nag (they'll call carer if urgent)
-     */
+
+    /** Default for new contacts: normal contact until given a home screen slot. */
     GREY_LIST
 }

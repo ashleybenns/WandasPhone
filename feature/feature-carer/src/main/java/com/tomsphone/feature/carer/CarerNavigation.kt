@@ -2,9 +2,11 @@ package com.tomsphone.feature.carer
 
 import androidx.compose.runtime.*
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.feature.carer.screens.*
 
@@ -16,11 +18,10 @@ object CarerRoutes {
     const val TOMS_PHONE_DESCRIPTION = "carer_toms_phone_description"
     const val USER_PROFILE = "carer_user_profile"
     const val PHOTO_CAPTURE = "carer_photo_capture"
-    const val CONTACTS = "carer_contacts"
     const val ASSISTANTS_HUB = "carer_assistants_hub"
-    const val CONTACTS_ASSISTANTS = "carer_contacts_assistants"
-    const val CONTACTS_FRIENDS = "carer_contacts_friends"
-    const val CONTACT_EDIT = "carer_contact_edit/{contactId}/{contactType}"
+    /** Unified contacts list (all people; home slots define assistants). */
+    const val CONTACTS_LIST = "carer_contacts_list"
+    const val CONTACT_EDIT = "carer_contact_edit/{contactId}/{contactType}/{homeSlotPendingIndex}"
     const val CALL_HANDLING = "carer_call_handling"
     const val TOUCH_RESPONSE = "carer_touch_response"
     const val APPEARANCE = "carer_appearance"
@@ -35,8 +36,9 @@ object CarerRoutes {
 
     fun supportThread(threadId: String) = "carer_support_thread/$threadId"
 
-    fun contactEdit(contactId: Long, contactType: ContactType) = 
-        "carer_contact_edit/$contactId/${contactType.name}"
+    /** [homeSlotPendingIndex] 0–6 assigns that slot after a **new** contact is saved; -1 = normal flow. */
+    fun contactEdit(contactId: Long, contactType: ContactType, homeSlotPendingIndex: Int = -1) =
+        "carer_contact_edit/$contactId/${contactType.name}/$homeSlotPendingIndex"
 }
 
 /**
@@ -60,8 +62,7 @@ fun CarerNavigation(
             CarerMainMenuScreen(
                 onNavigateToTomsPhoneDescription = { navController.navigate(CarerRoutes.TOMS_PHONE_DESCRIPTION) },
                 onNavigateToUserProfile = { navController.navigate(CarerRoutes.USER_PROFILE) },
-                onNavigateToAssistants = { navController.navigate(CarerRoutes.ASSISTANTS_HUB) },
-                onNavigateToFriends = { navController.navigate(CarerRoutes.CONTACTS_FRIENDS) },
+                onNavigateToContactsHub = { navController.navigate(CarerRoutes.ASSISTANTS_HUB) },
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
                 onNavigateToTouchResponse = { navController.navigate(CarerRoutes.TOUCH_RESPONSE) },
                 onNavigateToAppearance = { navController.navigate(CarerRoutes.APPEARANCE) },
@@ -105,27 +106,15 @@ fun CarerNavigation(
         // Assistants: hub (contacts vs recent calls)
         composable(CarerRoutes.ASSISTANTS_HUB) {
             AssistantsSettingsHubScreen(
-                onNavigateToAssistantContacts = { navController.navigate(CarerRoutes.CONTACTS_ASSISTANTS) },
+                onNavigateToAllContacts = { navController.navigate(CarerRoutes.CONTACTS_LIST) },
                 onNavigateToRecentCalls = { navController.navigate(CarerRoutes.RECENT_CALLS) },
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // Assistants — contact list
-        composable(CarerRoutes.CONTACTS_ASSISTANTS) {
+        composable(CarerRoutes.CONTACTS_LIST) {
             ContactsScreen(
-                contactTypeFilter = ContactType.CARER,
-                onNavigateToContactEdit = { contactId, contactType ->
-                    navController.navigate(CarerRoutes.contactEdit(contactId, contactType))
-                },
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        // Friends list
-        composable(CarerRoutes.CONTACTS_FRIENDS) {
-            ContactsScreen(
-                contactTypeFilter = ContactType.GREY_LIST,
+                openedFromAssistantsHub = true,
                 onNavigateToContactEdit = { contactId, contactType ->
                     navController.navigate(CarerRoutes.contactEdit(contactId, contactType))
                 },
@@ -134,17 +123,29 @@ fun CarerNavigation(
         }
         
         // Contact Edit
-        composable(CarerRoutes.CONTACT_EDIT) { backStackEntry ->
-            val contactId = backStackEntry.arguments?.getString("contactId")?.toLongOrNull() ?: 0L
-            val contactTypeName = backStackEntry.arguments?.getString("contactType") ?: "CARER"
-            val contactType = try { 
-                ContactType.valueOf(contactTypeName) 
-            } catch (e: Exception) { 
-                ContactType.CARER 
+        composable(
+            route = CarerRoutes.CONTACT_EDIT,
+            arguments = listOf(
+                navArgument("contactId") { type = NavType.LongType },
+                navArgument("contactType") { type = NavType.StringType },
+                navArgument("homeSlotPendingIndex") {
+                    type = NavType.IntType
+                    defaultValue = -1
+                }
+            )
+        ) { backStackEntry ->
+            val contactId = backStackEntry.arguments?.getLong("contactId") ?: 0L
+            val contactTypeName = backStackEntry.arguments?.getString("contactType") ?: "GREY_LIST"
+            val contactType = try {
+                ContactType.valueOf(contactTypeName)
+            } catch (e: Exception) {
+                ContactType.GREY_LIST
             }
+            val homeSlotPendingIndex = backStackEntry.arguments?.getInt("homeSlotPendingIndex") ?: -1
             ContactEditScreen(
                 contactId = contactId,
                 contactType = contactType,
+                homeSlotPendingIndex = homeSlotPendingIndex,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -173,7 +174,15 @@ fun CarerNavigation(
         // Home screen layout (7 assignable slots + Emergency)
         composable(CarerRoutes.HOME_LAYOUT) {
             HomeScreenLayoutScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToContactAfterSlot = { id, type ->
+                    navController.navigate(CarerRoutes.contactEdit(id, type, homeSlotPendingIndex = -1))
+                },
+                onNavigateToNewContactForSlot = { slotIndex ->
+                    navController.navigate(
+                        CarerRoutes.contactEdit(0L, ContactType.GREY_LIST, homeSlotPendingIndex = slotIndex)
+                    )
+                }
             )
         }
 

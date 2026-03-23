@@ -2,7 +2,7 @@ package com.tomsphone.feature.carer.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -12,9 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.tomsphone.core.config.FeatureLevel
+import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -23,37 +24,27 @@ import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.*
 
 /**
- * Contacts list screen — shows one category (Assistants or Friends) or both.
- *
- * @param contactTypeFilter When set, show only that type (Assistants or Friends). When null, show both (legacy).
- * @param onNavigateToContactEdit (contactId, contactType) — contactId 0 for new, type for new contacts
+ * Single list of all contacts. Assistant vs normal is determined by **Home screen layout**:
+ * assign a slot to give a home call button and assistant features (nag, auto-answer options, battery SMS).
  */
 @Composable
 fun ContactsScreen(
-    contactTypeFilter: ContactType? = null,
     onNavigateToContactEdit: (Long, ContactType) -> Unit,
     onBack: () -> Unit,
+    /** When true, breadcrumb shows parent "Assistants" (opened from hub). */
+    openedFromAssistantsHub: Boolean = false,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
     val featureLevel = settings.featureLevel
     val contacts by viewModel.contacts.collectAsState()
+    val homeSlots by viewModel.homeSlotAssignments.collectAsState()
+    // Always derive from current slots (no remember) so home status can’t go stale after edits
+    val onHomeIds = HomeSlotAssignments.contactIdsOnHome(homeSlots)
 
-    val showAssistants = contactTypeFilter == null || contactTypeFilter == ContactType.CARER
-    val showFriends = contactTypeFilter == null || contactTypeFilter == ContactType.GREY_LIST
-    val breadcrumbTitle = when (contactTypeFilter) {
-        ContactType.CARER -> "Assistant contacts"
-        ContactType.GREY_LIST -> "Friends"
-        null -> "Contacts"
+    val sortedAll = remember(contacts) {
+        contacts.sortedWith(compareBy<Contact> { it.buttonPosition }.thenBy { it.name.lowercase() })
     }
-    val breadcrumbParent = when (contactTypeFilter) {
-        ContactType.CARER -> "Assistants"
-        else -> "Assistant Settings"
-    }
-
-    val maxAssistants = 7  // Production: up to 7 home screen slots (call + two-touch share them)
-    val assistantCount = contacts.count { it.contactType == ContactType.CARER }
-    val canAddMoreAssistants = assistantCount < maxAssistants
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -64,8 +55,8 @@ fun ContactsScreen(
         ) {
             DevLevelIndicator(level = featureLevel)
             CarerBreadcrumb(
-                title = breadcrumbTitle,
-                parentTitle = breadcrumbParent,
+                title = if (openedFromAssistantsHub) "All contacts" else "Contacts",
+                parentTitle = if (openedFromAssistantsHub) "Contacts" else "Assistant Settings",
                 onBack = onBack
             )
 
@@ -75,110 +66,46 @@ fun ContactsScreen(
                     .padding(WandasDimensions.SpacingMedium),
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingSmall)
             ) {
-                // ========== ASSISTANTS ==========
-                if (showAssistants) {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Assistants",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.wandasColors.onSurface
-                            )
-                            if (maxAssistants != Int.MAX_VALUE) {
-                                Text(
-                                    text = "$assistantCount / $maxAssistants",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (canAddMoreAssistants)
-                                        MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
-                                    else
-                                        MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-
-                    val assistants = contacts.filter { it.contactType == ContactType.CARER }
-                        .sortedBy { it.buttonPosition }
-                    items(assistants, key = { it.id }) { contact ->
-                        val index = assistants.indexOf(contact)
-                        ContactListItem(
-                            contact = contact,
-                            onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
-                            showReorderButtons = true,
-                            isFirst = index == 0,
-                            isLast = index == assistants.size - 1,
-                            onMoveUp = { viewModel.moveContactUp(contact, assistants) },
-                            onMoveDown = { viewModel.moveContactDown(contact, assistants) }
-                        )
-                    }
-
-                    item {
-                        OutlinedButton(
-                            onClick = { onNavigateToContactEdit(0, ContactType.CARER) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = canAddMoreAssistants
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (canAddMoreAssistants) "Add Assistant" else "$maxAssistants assistants is enough for this mode")
-                        }
-                    }
+                item {
+                    Text(
+                        text = "Everyone in one place",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.wandasColors.onSurface
+                    )
+                    Text(
+                        text = "Use Home screen layout to put someone on a home call button (assistant). " +
+                            "Without a slot they can still call in and appear in the on-phone Contacts list.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.65f),
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
                 }
 
-                // ========== FRIENDS ==========
-                if (showFriends) {
-                    item {
-                        Spacer(modifier = Modifier.height(if (showAssistants) 24.dp else 0.dp))
-                        Text(
-                            text = "Friends",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.wandasColors.onSurface
-                        )
-                        val friendsDescription = "Can answer calls but no home screen button. Use 'Other Contacts' and 'Missed Calls' in Appearance to allow calling back."
-                        Text(
-                            text = friendsDescription,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
+                itemsIndexed(sortedAll, key = { _, c -> c.id }) { index, contact ->
+                    ContactListItem(
+                        contact = contact,
+                        hasHomeButton = contact.id in onHomeIds,
+                        onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
+                        showReorderButtons = true,
+                        isFirst = index == 0,
+                        isLast = index == sortedAll.lastIndex,
+                        onMoveUp = { viewModel.moveContactUp(contact, sortedAll) },
+                        onMoveDown = { viewModel.moveContactDown(contact, sortedAll) }
+                    )
+                }
 
-                    val friends = contacts.filter { it.contactType == ContactType.GREY_LIST }
-                        .sortedBy { it.buttonPosition }
-                    items(friends, key = { it.id }) { contact ->
-                        val index = friends.indexOf(contact)
-                        ContactListItem(
-                            contact = contact,
-                            onClick = { onNavigateToContactEdit(contact.id, contact.contactType) },
-                            showReorderButtons = true,
-                            isFirst = index == 0,
-                            isLast = index == friends.size - 1,
-                            onMoveUp = { viewModel.moveContactUp(contact, friends) },
-                            onMoveDown = { viewModel.moveContactDown(contact, friends) }
+                item {
+                    OutlinedButton(
+                        onClick = { onNavigateToContactEdit(0, ContactType.GREY_LIST) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
                         )
-                    }
-
-                    item {
-                        OutlinedButton(
-                            onClick = { onNavigateToContactEdit(0, ContactType.GREY_LIST) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Add to Friends")
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add contact")
                     }
                 }
 
@@ -193,6 +120,7 @@ fun ContactsScreen(
 @Composable
 private fun ContactListItem(
     contact: Contact,
+    hasHomeButton: Boolean,
     onClick: () -> Unit,
     showReorderButtons: Boolean = false,
     isFirst: Boolean = false,
@@ -213,7 +141,6 @@ private fun ContactListItem(
                 .padding(WandasDimensions.SpacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Reorder buttons (left side)
             if (showReorderButtons) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -227,9 +154,9 @@ private fun ContactListItem(
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
                             contentDescription = "Move up",
-                            tint = if (isFirst) 
+                            tint = if (isFirst)
                                 MaterialTheme.wandasColors.onSurface.copy(alpha = 0.2f)
-                            else 
+                            else
                                 MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
                         )
                     }
@@ -241,21 +168,20 @@ private fun ContactListItem(
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = "Move down",
-                            tint = if (isLast) 
+                            tint = if (isLast)
                                 MaterialTheme.wandasColors.onSurface.copy(alpha = 0.2f)
-                            else 
+                            else
                                 MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
                         )
                     }
                 }
             }
-            
-            // Avatar placeholder
+
             Surface(
                 modifier = Modifier.size(48.dp),
                 shape = MaterialTheme.shapes.medium,
-                color = contact.buttonColor?.let { 
-                    androidx.compose.ui.graphics.Color(it) 
+                color = contact.buttonColor?.let {
+                    androidx.compose.ui.graphics.Color(it)
                 } ?: MaterialTheme.wandasColors.primaryButton.copy(alpha = 0.2f)
             ) {
                 Icon(
@@ -267,41 +193,60 @@ private fun ContactListItem(
                     tint = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.5f)
                 )
             }
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = contact.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.wandasColors.onSurface
-                    )
-                    
-                    if (contact.autoAnswerEnabled) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.wandasColors.warning.copy(alpha = 0.2f)
-                        ) {
-                            Text(
-                                text = "AUTO",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.wandasColors.warning,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-                
+                Text(
+                    text = contact.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.wandasColors.onSurface,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Text(
                     text = contact.phoneNumber,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(top = 2.dp)
                 )
+                if (hasHomeButton || contact.autoAnswerEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (hasHomeButton) {
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.wandasColors.primaryButton.copy(alpha = 0.28f)
+                            ) {
+                                Text(
+                                    text = "Home button",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.wandasColors.onSurface,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                        if (contact.autoAnswerEnabled) {
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.wandasColors.warning.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "AUTO",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.wandasColors.warning,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

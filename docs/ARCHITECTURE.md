@@ -413,7 +413,7 @@ class CloudContactRepository @Inject constructor(
 
 | Data | View | Modify | Notes |
 |------|:----:|:------:|-------|
-| **Missed Calls** | ✓ | - | Read-only log |
+| **Recent calls** | ✓ | - | Read-only log |
 | **Call History** | ✓ | - | Read-only log |
 | **Contacts** | ✓ | ✓ | Full management |
 | **Feature Level** | ✓ | ✓ | Change remotely |

@@ -722,7 +722,9 @@ private fun RenderMissedCallReturnButton(
         activationPreset = activationPreset,
         debounceMs = debounceMs,
         accumulatedThresholdMs = accumulatedThresholdMs,
-        accumulatedTimeoutMs = accumulatedTimeoutMs
+        accumulatedTimeoutMs = accumulatedTimeoutMs,
+        autoScaleLabelToFit = true,
+        autoScaleMaxLines = 2
     )
 }
 

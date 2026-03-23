@@ -156,24 +156,24 @@ fun AppearanceScreen(
                         )
                     }
                     
-                    // Missed Call Return Button
-                    SettingCard(title = "Missed Call Button") {
+                    // Missed call return (one-tap callback) — not the full recent-calls list
+                    SettingCard(title = "Missed call return") {
                         Text(
-                            text = "Add a button to call back missed calls from friends or other contacts not on the home screen. Uses one of the 7 button slots.",
+                            text = "One home button to call back the same top missed or declined caller as the missed-calls count (everyone, including assistants). Different from “Missed calls list”, which opens the two-tap list. Uses one of the 7 slots.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         
                         SettingToggle(
-                            title = "Enable Missed Call Button",
-                            description = "Shows caller name or 'No Missed Calls'. Tapping calls them back.",
+                            title = "Enable missed call return",
+                            description = "Shows caller name or “No Missed Calls”. Tapping places that call.",
                             checked = settings.homeShowMissedCallReturnButton,
                             onCheckedChange = { enabled ->
                                 viewModel.setShowMissedCallReturnButton(enabled)
                                 saveToastState.show(
-                                    if (enabled) "Missed Call button enabled"
-                                    else "Missed Call button disabled"
+                                    if (enabled) "Missed call return enabled"
+                                    else "Missed call return disabled"
                                 )
                             }
                         )
@@ -182,7 +182,7 @@ fun AppearanceScreen(
                     // Two-touch features: list buttons and screen off (each uses one of the 7 home slots)
                     SettingCard(title = "Home Screen Buttons") {
                         Text(
-                            text = "Two-touch features (tap once to open list or screen, then tap again to choose): Missed Calls List, Other Contacts List, Screen off. Speaker toggle is available during calls (Call Handling). Each home button uses one of 7 slots.",
+                            text = "Two-touch features (tap once to open list or screen, then tap again to choose): Missed calls list, Contacts (everyone), Screen off. Speaker toggle is available during calls (Call Handling). Each home button uses one of 7 slots.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -194,40 +194,40 @@ fun AppearanceScreen(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         SettingToggle(
-                            title = "Missed Calls Button",
-                                description = "Shows list of missed calls to return",
+                            title = "Missed calls list",
+                                description = "Two taps: missed and declined calls only (not answered or outgoing history)",
                                 checked = settings.homeShowMissedCallsButton,
                                 onCheckedChange = { enabled ->
                                     viewModel.setShowMissedCallsButton(enabled)
                                     saveToastState.show(
-                                        if (enabled) "Missed Calls button enabled"
-                                        else "Missed Calls button disabled"
+                                        if (enabled) "Missed calls list enabled"
+                                        else "Missed calls list disabled"
                                     )
                                 }
                             )
                         SettingToggle(
-                            title = "Other Contacts Button",
-                                description = "Shows friends and other contacts not on home screen",
+                            title = "Contacts button",
+                                description = "Opens Contacts list: everyone (same list as carer settings)",
                                 checked = settings.homeShowContactsListButton,
                                 onCheckedChange = { enabled ->
                                     viewModel.setShowContactsListButton(enabled)
                                     saveToastState.show(
-                                        if (enabled) "Other Contacts button enabled"
-                                        else "Other Contacts button disabled"
+                                        if (enabled) "Contacts button enabled"
+                                        else "Contacts button disabled"
                                     )
                                 }
                             )
-                            // Sub-option: Grey List Only (only visible when contacts button enabled)
+                            // Sub-option (only visible when contacts button enabled)
                             if (settings.homeShowContactsListButton) {
                                 SettingToggle(
-                                    title = "Friends Only",
-                                    description = "Only show answer-only contacts (not assistants)",
+                                    title = "Without home button only",
+                                    description = "On the Contacts list, hide people who have a home call button (slot)",
                                     checked = settings.homeContactsListShowGreyListOnly,
                                     onCheckedChange = { enabled ->
                                         viewModel.setContactsListShowGreyListOnly(enabled)
                                         saveToastState.show(
-                                            if (enabled) "Showing friends only"
-                                            else "Showing all contacts"
+                                            if (enabled) "Contacts list: no home button only"
+                                            else "Contacts list: everyone"
                                         )
                                     }
                                 )

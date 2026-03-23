@@ -105,10 +105,11 @@ private fun CarerRecentCallRow(call: CallLogEntry) {
             )
             Text(
                 text = formatCarerCallTime(call.timestamp) +
-                    if (call.duration > 0L && (call.type == CallType.INCOMING || call.type == CallType.OUTGOING)) {
-                        " · ${formatDurationShort(call.duration)}"
-                    } else {
-                        ""
+                    when {
+                        call.duration > 0L && (call.type == CallType.INCOMING || call.type == CallType.OUTGOING) ->
+                            " · ${formatDurationShort(call.duration)}"
+                        call.type == CallType.OUTGOING_UNANSWERED -> " · Did not connect"
+                        else -> ""
                     },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
@@ -119,7 +120,8 @@ private fun CarerRecentCallRow(call: CallLogEntry) {
 
 private fun carerCallTypeLabel(type: CallType): String = when (type) {
     CallType.INCOMING -> "Answered incoming"
-    CallType.OUTGOING -> "Outgoing"
+    CallType.OUTGOING -> "Outgoing (answered)"
+    CallType.OUTGOING_UNANSWERED -> "Outgoing (no answer)"
     CallType.MISSED -> "Missed"
     CallType.REJECTED -> "Declined"
     CallType.BLOCKED -> "Blocked"

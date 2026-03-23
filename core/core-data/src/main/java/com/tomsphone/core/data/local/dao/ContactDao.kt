@@ -15,6 +15,10 @@ interface ContactDao {
 
     @Query("SELECT * FROM contacts WHERE contactType = 'CARER' AND notifyBatteryAlerts = 1")
     suspend fun getCarerContactsWithBatteryAlerts(): List<ContactEntity>
+
+    /** All contacts with battery SMS enabled (filter to home-slot assistants in app layer). */
+    @Query("SELECT * FROM contacts WHERE notifyBatteryAlerts = 1")
+    suspend fun getContactsWithBatteryAlertsEnabled(): List<ContactEntity>
     
     @Query("SELECT * FROM contacts WHERE contactType = 'GREY_LIST' ORDER BY name ASC LIMIT :limit")
     fun getGreyListContacts(limit: Int): Flow<List<ContactEntity>>

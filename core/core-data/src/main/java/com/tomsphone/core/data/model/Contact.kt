@@ -32,13 +32,9 @@ data class Contact(
     val isHalfWidth: Boolean = false
 ) {
     /**
-     * Whether this contact can be called by the user
-     * (Only carers appear in the call-out UI)
+     * Legacy: stored category for carer UI (Assistant vs answer-only lists).
+     * Home call buttons, missed-call nag, auto-answer, and battery SMS are driven by
+     * whether the contact occupies a home screen slot — see `HomeSlotAssignments.contactIdsOnHome`.
      */
     val canCallOut: Boolean get() = contactType == ContactType.CARER
-    
-    /**
-     * Whether missed calls from this contact trigger nag reminders
-     */
-    val triggersMissedCallNag: Boolean get() = contactType == ContactType.CARER
 }

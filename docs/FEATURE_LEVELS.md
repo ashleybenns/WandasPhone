@@ -15,11 +15,11 @@ WandasPhone distinguishes between different relationship types:
 | Type | Description | Call Out | Answer | Missed Nag | L1 | L2 | L3 | L4 |
 |------|-------------|:--------:|:------:|:----------:|:--:|:--:|:--:|:--:|
 | **Carer** | Primary caregivers (family/professional) | ✓ | ✓ | ✓ | 2 | 4 | 6 | ∞ |
-| **Grey List** | Friends/family who know to contact carer | ✗ | ✓ | ✗ | 10 | 20 | ∞ | ∞ |
+| **Grey List** | Answer-only contacts (no home button; call back via Contacts list) | ✗ | ✓ | ✗ | 10 | 20 | ∞ | ∞ |
 | **Unknown** | Not in any list | ✗ | ✗ | ✗ | - | - | - | - |
 
 **Carer contacts**: Full privileges - user can call them, missed calls trigger nagging reminders
-**Grey list contacts**: Answer only - user can receive but not initiate, no missed call pressure
+**Grey list (answer-only) contacts**: Answer only — user can receive but not initiate from home; no missed call nag; call back via **Contacts** list
 **Unknown callers**: Silent rejection - phone doesn't ring, caller hears nothing or voicemail
 
 ---

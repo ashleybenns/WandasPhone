@@ -34,9 +34,9 @@ data class CarerSettings(
     // Each setting is discrete for individual remote sync and paywall gating
     val homeMaxButtons: Int = 6,                    // 1-6 contact buttons on home screen
     val homeShowEmergencyButton: Boolean = true,    // SAFE: Emergency always visible
-    val homeShowMissedCallsButton: Boolean = false, // Level 2+: Show missed calls list button
+    val homeShowMissedCallsButton: Boolean = false, // Level 2+: Two-tap “Missed calls” list (missed + declined)
     val homeShowContactsListButton: Boolean = false,// Level 2+: Show contacts list button
-    val homeContactsListShowGreyListOnly: Boolean = false, // Only show grey list contacts (not carers)
+    val homeContactsListShowGreyListOnly: Boolean = false, // Contacts list: answer-only only (hide assistants)
     val homeMissedCallsButtonColor: Long? = null,   // ARGB, null = theme default
     val homeContactsListButtonColor: Long? = null,  // ARGB, null = theme default
     // Level 1: Simple missed call return button (one button for most recent grey list missed call)
@@ -45,7 +45,7 @@ data class CarerSettings(
     // Used for screen-first layout scaling
     val homeContactCount: Int = 2,                  // Number of contact buttons on home screen
     // Ordered slot assignments for 7 home slots (slot 8 = Emergency fixed). Empty list = use legacy toggles.
-    // Values: "" empty, "c:123" contact id, "mcr" missed call return, "mcl" missed calls list, "oc" other contacts, "so" screen off
+    // Values: "" empty, "c:123" contact id, "mcr" missed call return, "mcl" missed calls list, "oc" contacts list, "so" screen off
     val homeSlotAssignments: List<String> = emptyList(),
 
     // ========== CALL HANDLING ==========
@@ -418,12 +418,14 @@ enum class MissedCallNagInterval(
  * 
  * Includes:
  * - Contact buttons (homeContactCount)
+ * - Missed call return row (if that slot / toggle is on)
  * - Display Off button (if enabled at Level 2+)
  * - Menu buttons paired into rows (if enabled at Level 2+)
  */
 val CarerSettings.homeButtonRowCount: Int
     get() {
         var rows = homeContactCount.coerceAtLeast(1)
+        if (homeShowMissedCallReturnButton) rows += 1
         if (showDisplayOffButton) rows += 1
         var menuButtons = 0
         if (homeShowMissedCallsButton) menuButtons++

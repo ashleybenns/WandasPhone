@@ -11,6 +11,7 @@ import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
+import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.telecom.CallManager
@@ -55,7 +56,20 @@ class HomeViewModel @Inject constructor(
     
     companion object {
         private const val TAG = "HomeViewModel"
+        private const val MISSED_CALLS_COUNT_QUERY_LIMIT = 500
+
+        /** Home menu button label for [HomeButtonConfig.MenuButton.ID_MISSED_CALLS]. */
+        fun missedCallsMenuButtonLabel(missedCallListCount: Int): String = when {
+            missedCallListCount <= 0 -> "No Missed Calls"
+            missedCallListCount == 1 -> "1 Missed Call"
+            else -> "$missedCallListCount Missed Calls"
+        }
     }
+
+    /** Count of **unique callers** with outstanding missed/declined (drives menu button text). */
+    private val missedCallsListCount: Flow<Int> = callLogRepository
+        .getOutstandingMissedCallsPerCaller(MISSED_CALLS_COUNT_QUERY_LIMIT)
+        .map { it.size }
     
     // Current feature level
     val featureLevel: StateFlow<FeatureLevel> = settingsRepository.getFeatureLevel()
@@ -71,14 +85,6 @@ class HomeViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = "Tom"
-        )
-    
-    // Maximum contacts based on level
-    private val maxContacts: StateFlow<Int> = settingsRepository.getMaxContacts()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 2
         )
     
     // Text alignment for buttons (center vs left)
@@ -135,11 +141,11 @@ class HomeViewModel @Inject constructor(
             initialValue = true
         )
     
-    // Contacts to display (only CARER contacts that can be called)
-    val contacts: StateFlow<List<Contact>> = maxContacts
-        .flatMapLatest { max ->
-            contactRepository.getCarerContacts(max)
-        }
+    /**
+     * All contacts (up to 200) for resolving home slot assignments.
+     * Slots may reference any contact; type alone does not define who has a home button.
+     */
+    val contacts: StateFlow<List<Contact>> = contactRepository.getContacts(200)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -176,57 +182,32 @@ class HomeViewModel @Inject constructor(
             initialValue = false
         )
     
-    // Grey list contacts (for filtering missed calls)
-    private val greyListContacts: StateFlow<List<Contact>> = contactRepository.getGreyListContacts(100)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-    
-    // Carer contacts (for filtering - we want missed calls NOT from carers)
-    private val carerContacts: StateFlow<List<Contact>> = contactRepository.getCarerContacts(100)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-    
-    // Most recent missed call from grey list (not a carer)
-    // Used for Level 1 simple missed call return button
-    data class GreyListMissedCall(
+    /**
+     * One-tap return target: same source as the missed-calls menu count (unread missed + declined,
+     * one row per caller, newest first). Includes assistants — aligns with nag and button label.
+     */
+    data class PrimaryMissedReturnCall(
         val callerName: String,
         val phoneNumber: String,
         val timestamp: Long
     )
-    
-    private val mostRecentGreyListMissedCall: StateFlow<GreyListMissedCall?> = combine(
-        callLogRepository.getMissedCalls(100),
-        carerContacts
-    ) { missedCalls, carers ->
-        // Get carer phone numbers to exclude
-        val carerPhoneNumbers = carers.map { it.phoneNumber.replace(Regex("[^0-9+]"), "") }.toSet()
-        
-        // Find most recent missed call NOT from a carer
-        missedCalls
-            .filter { it.phoneNumber.isNotBlank() }
-            .filter { call -> 
-                val normalizedNumber = call.phoneNumber.replace(Regex("[^0-9+]"), "")
-                !carerPhoneNumbers.contains(normalizedNumber)
+
+    private val primaryMissedReturnCall: StateFlow<PrimaryMissedReturnCall?> =
+        callLogRepository.getOutstandingMissedCallsPerCaller(MISSED_CALLS_COUNT_QUERY_LIMIT)
+            .map { outstanding ->
+                outstanding.firstOrNull()?.let { e ->
+                    PrimaryMissedReturnCall(
+                        callerName = e.contactName ?: e.phoneNumber,
+                        phoneNumber = e.phoneNumber,
+                        timestamp = e.timestamp
+                    )
+                }
             }
-            .maxByOrNull { it.timestamp }
-            ?.let { call ->
-                GreyListMissedCall(
-                    callerName = call.contactName ?: call.phoneNumber,
-                    phoneNumber = call.phoneNumber,
-                    timestamp = call.timestamp
-                )
-            }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = null
+            )
     
     // Display off state - screen should be dimmed
     private val _isDisplayOff = MutableStateFlow(false)
@@ -244,9 +225,15 @@ class HomeViewModel @Inject constructor(
     val homeButtons: StateFlow<List<HomeButtonConfig>> = combine(
         contacts,
         settings,
-        mostRecentGreyListMissedCall
-    ) { contactList, carerSettings, greyListMissed ->
-        buildHomeButtons(contactList, carerSettings, greyListMissed)
+        primaryMissedReturnCall,
+        missedCallsListCount
+    ) { contactList, carerSettings, primaryMissed, missedCount ->
+        buildHomeButtons(
+            contactList,
+            carerSettings,
+            primaryMissed,
+            missedCount
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -261,27 +248,35 @@ class HomeViewModel @Inject constructor(
     private fun buildHomeButtons(
         contacts: List<Contact>,
         settings: CarerSettings,
-        greyListMissedCall: GreyListMissedCall?
+        primaryMissedReturn: PrimaryMissedReturnCall?,
+        missedCallListCount: Int
     ): List<HomeButtonConfig> {
         val slots = settings.homeSlotAssignments
         // Validate slots: must be exactly SLOT_COUNT, otherwise use legacy mode
         if (slots.size == HomeSlotAssignments.SLOT_COUNT) {
             return try {
-                buildHomeButtonsFromSlots(contacts, settings, greyListMissedCall, slots)
+                buildHomeButtonsFromSlots(
+                    contacts,
+                    settings,
+                    primaryMissedReturn,
+                    slots,
+                    missedCallListCount
+                )
             } catch (e: Exception) {
                 // If building from slots fails, fall back to legacy mode
                 android.util.Log.e("HomeViewModel", "Error building buttons from slots, using legacy mode", e)
-                buildHomeButtonsLegacy(contacts, settings, greyListMissedCall)
+                buildHomeButtonsLegacy(contacts, settings, primaryMissedReturn, missedCallListCount)
             }
         }
-        return buildHomeButtonsLegacy(contacts, settings, greyListMissedCall)
+        return buildHomeButtonsLegacy(contacts, settings, primaryMissedReturn, missedCallListCount)
     }
 
     private fun buildHomeButtonsFromSlots(
         contacts: List<Contact>,
         settings: CarerSettings,
-        greyListMissedCall: GreyListMissedCall?,
-        slotAssignments: List<String>
+        primaryMissedReturn: PrimaryMissedReturnCall?,
+        slotAssignments: List<String>,
+        missedCallListCount: Int
     ): List<HomeButtonConfig> {
         val buttons = mutableListOf<HomeButtonConfig>()
         val contactById = contacts.associateBy { it.id }
@@ -293,7 +288,7 @@ class HomeViewModel @Inject constructor(
                 HomeSlotAssignments.isContact(value) -> {
                     val id = HomeSlotAssignments.parseContactId(value) ?: continue
                     val contact = contactById[id] ?: continue
-                    if (!contact.canCallOut) continue
+                    // Any contact may occupy a slot (elevated answer-only or assistant)
                     buttons.add(
                         HomeButtonConfig.ContactButton(
                             contactId = contact.id,
@@ -308,13 +303,13 @@ class HomeViewModel @Inject constructor(
                 value == HomeSlotAssignments.MISSED_CALL_RETURN -> {
                     buttons.add(
                         HomeButtonConfig.MissedCallReturnButton(
-                            callerName = greyListMissedCall?.callerName,
-                            phoneNumber = greyListMissedCall?.phoneNumber
+                            callerName = primaryMissedReturn?.callerName,
+                            phoneNumber = primaryMissedReturn?.phoneNumber
                         )
                     )
                 }
                 value == HomeSlotAssignments.MISSED_CALLS_LIST -> {
-                    val label = "Recent calls"
+                    val label = missedCallsMenuButtonLabel(missedCallListCount)
                     buttons.add(
                         HomeButtonConfig.MenuButton(
                             id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
@@ -328,7 +323,7 @@ class HomeViewModel @Inject constructor(
                     buttons.add(
                         HomeButtonConfig.MenuButton(
                             id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
-                            label = "Other Contacts",
+                            label = "Contacts",
                             color = settings.homeContactsListButtonColor,
                             isHalfWidth = false
                         )
@@ -348,7 +343,8 @@ class HomeViewModel @Inject constructor(
     private fun buildHomeButtonsLegacy(
         contacts: List<Contact>,
         settings: CarerSettings,
-        greyListMissedCall: GreyListMissedCall?
+        primaryMissedReturn: PrimaryMissedReturnCall?,
+        missedCallListCount: Int
     ): List<HomeButtonConfig> {
         val buttons = mutableListOf<HomeButtonConfig>()
         val missedCallReturnEnabled = settings.homeShowMissedCallReturnButton
@@ -358,7 +354,7 @@ class HomeViewModel @Inject constructor(
             (if (settings.showDisplayOffButton) 1 else 0)
         val maxContactSlots = (6 - slotsForOthers).coerceAtLeast(0)
         val callableContacts = contacts
-            .filter { it.canCallOut }
+            .filter { it.contactType == ContactType.CARER }
             .sortedBy { it.buttonPosition }
             .take(maxContactSlots)
 
@@ -377,13 +373,13 @@ class HomeViewModel @Inject constructor(
         if (missedCallReturnEnabled) {
             buttons.add(
                 HomeButtonConfig.MissedCallReturnButton(
-                    callerName = greyListMissedCall?.callerName,
-                    phoneNumber = greyListMissedCall?.phoneNumber
+                    callerName = primaryMissedReturn?.callerName,
+                    phoneNumber = primaryMissedReturn?.phoneNumber
                 )
             )
         }
         if (settings.homeShowMissedCallsButton) {
-            val missedCallsLabel = "Recent calls"
+            val missedCallsLabel = missedCallsMenuButtonLabel(missedCallListCount)
             buttons.add(
                 HomeButtonConfig.MenuButton(
                     id = HomeButtonConfig.MenuButton.ID_MISSED_CALLS,
@@ -397,7 +393,7 @@ class HomeViewModel @Inject constructor(
             buttons.add(
                 HomeButtonConfig.MenuButton(
                     id = HomeButtonConfig.MenuButton.ID_CONTACTS_LIST,
-                    label = "Other Contacts",
+                    label = "Contacts",
                     color = settings.homeContactsListButtonColor,
                     isHalfWidth = false
                 )
@@ -418,7 +414,7 @@ class HomeViewModel @Inject constructor(
      */
     private fun buildLegacySlotAssignments(contacts: List<Contact>, settings: CarerSettings): List<String> {
         val list = mutableListOf<String>()
-        val callable = contacts.filter { it.canCallOut }.sortedBy { it.buttonPosition }.take(7)
+        val callable = contacts.filter { it.contactType == ContactType.CARER }.sortedBy { it.buttonPosition }.take(7)
         callable.forEach { list.add(HomeSlotAssignments.contactSlot(it.id)) }
         if (settings.homeShowMissedCallReturnButton) list.add(HomeSlotAssignments.MISSED_CALL_RETURN)
         if (settings.homeShowMissedCallsButton) list.add(HomeSlotAssignments.MISSED_CALLS_LIST)
@@ -440,7 +436,7 @@ class HomeViewModel @Inject constructor(
         userName, 
         _callingStatus, 
         _missedCallStatus,
-        mostRecentGreyListMissedCall,
+        primaryMissedReturnCall,
         settings,
         currentTime
     ) { values ->
@@ -448,7 +444,7 @@ class HomeViewModel @Inject constructor(
         val callingMsg = values[1] as String?
         val carerMissedMsg = values[2] as String?
         @Suppress("UNCHECKED_CAST")
-        val greyListMissed = values[3] as GreyListMissedCall?
+        val primaryMissed = values[3] as PrimaryMissedReturnCall?
         val carerSettings = values[4] as CarerSettings
         val time = values[5] as String
         
@@ -456,9 +452,8 @@ class HomeViewModel @Inject constructor(
         val baseMessage = when {
             callingMsg != null -> callingMsg
             carerMissedMsg != null -> carerMissedMsg
-            // Show grey list missed call in status (no nag, just info)
-            greyListMissed != null && carerSettings.homeShowMissedCallReturnButton -> 
-                "Missed call from ${greyListMissed.callerName}"
+            primaryMissed != null && carerSettings.homeShowMissedCallReturnButton ->
+                "Missed call from ${primaryMissed.callerName}"
             else -> "$name's phone"
         }
         
@@ -718,15 +713,11 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * User tapped the Missed Call Return button (Level 1)
-     * Calls back the most recent grey list missed call
-     * 
-     * Note: We look up the current state directly rather than relying on button data
-     * to avoid any timing/recomposition issues between rendering and clicking.
+     * User tapped the Missed Call Return button (Level 1).
+     * Returns the top outstanding missed/declined caller (same ordering as the missed-calls count).
      */
     fun onMissedCallReturnButtonTap(button: HomeButtonConfig.MissedCallReturnButton) {
-        // Get current state directly - more reliable than button closure
-        val currentMissedCall = mostRecentGreyListMissedCall.value
+        val currentMissedCall = primaryMissedReturnCall.value
         
         val phoneNumber = currentMissedCall?.phoneNumber
         val callerName = currentMissedCall?.callerName
@@ -770,9 +761,9 @@ class HomeViewModel @Inject constructor(
                 delay(500)
             }
             
-            // Mark the missed call as read before placing call
-            callLogRepository.markMissedCallsFromNumberAsRead(phoneNumber)
-            
+            // Clear unread rows for this number, stop nag if it was this caller (count + menu update via Flow)
+            missedCallNagManager.markMissedCallsAsReadAndDismiss(phoneNumber)
+
             // Place the call
             val result = callManager.placeCall(phoneNumber)
             

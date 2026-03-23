@@ -26,7 +26,7 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
  */
 @Composable
 fun AssistantsSettingsHubScreen(
-    onNavigateToAssistantContacts: () -> Unit,
+    onNavigateToAllContacts: () -> Unit,
     onNavigateToRecentCalls: () -> Unit,
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
@@ -41,7 +41,7 @@ fun AssistantsSettingsHubScreen(
         Column(Modifier.fillMaxSize()) {
             DevLevelIndicator(level = featureLevel)
             CarerBreadcrumb(
-                title = "Assistants",
+                title = "Contacts",
                 parentTitle = "Assistant Settings",
                 onBack = onBack
             )
@@ -53,9 +53,9 @@ fun AssistantsSettingsHubScreen(
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
             ) {
                 CarerMenuButton(
-                    title = "Assistant contacts",
-                    description = "Home screen buttons, reorder, colors",
-                    onClick = onNavigateToAssistantContacts,
+                    title = "All contacts",
+                    description = "One list for everyone; assign home buttons in Home screen layout",
+                    onClick = onNavigateToAllContacts,
                     currentLevel = featureLevel
                 )
                 CarerMenuButton(

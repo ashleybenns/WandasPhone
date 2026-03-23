@@ -49,10 +49,9 @@ sealed class HomeButtonConfig {
     }
     
     /**
-     * Missed Call Return button - calls back the most recent grey list missed call
-     * Level 1 feature - simple one-button missed call return
-     * Shows "No Missed Calls" when no grey list missed calls
-     * Takes one of the 4 button slots (max 3 carer contacts when enabled)
+     * Missed Call Return — one tap to call back the **top** outstanding missed or declined caller
+     * (same ordering as the missed-calls menu count: unread, one row per number, newest first).
+     * Includes assistants so the button matches nag/status when they miss a call.
      */
     data class MissedCallReturnButton(
         /** Name of caller, or null if no missed call */

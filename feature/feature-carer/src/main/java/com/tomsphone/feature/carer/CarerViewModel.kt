@@ -285,23 +285,26 @@ class CarerSettingsViewModel @Inject constructor(
     }
     
     /**
-     * Add or update contact
-     * For new contacts, assigns next available buttonPosition within their type
+     * Add or update contact.
+     * For new contacts, [onNewContactSaved] is invoked with the new row id (e.g. to assign a home slot).
      */
-    fun saveContact(contact: Contact) {
+    fun saveContact(
+        contact: Contact,
+        onNewContactSaved: (Long) -> Unit = {}
+    ) {
         viewModelScope.launch {
             val contactType = if (contact.contactType == ContactType.CARER) "carer" else "grey_list"
             if (contact.id == 0L) {
-                // For new contacts, assign next buttonPosition within their contact type
-                val contactsOfSameType = contacts.first().filter { it.contactType == contact.contactType }
-                val maxPosition = contactsOfSameType.maxOfOrNull { it.buttonPosition } ?: -1
+                val maxPosition = contacts.first().maxOfOrNull { it.buttonPosition } ?: -1
                 val contactToSave = contact.copy(buttonPosition = maxPosition + 1)
-                contactRepository.addContact(contactToSave)
-                // Track contact added
-                analytics.logEvent(AnalyticsEvent.ContactAdded(contactType = contactType))
+                val result = contactRepository.addContact(contactToSave)
+                if (result.isSuccess) {
+                    val newId = result.getOrNull() ?: return@launch
+                    analytics.logEvent(AnalyticsEvent.ContactAdded(contactType = contactType))
+                    onNewContactSaved(newId)
+                }
             } else {
                 contactRepository.updateContact(contact)
-                // Track contact edited
                 analytics.logEvent(AnalyticsEvent.ContactEdited(contactType = contactType))
             }
         }
@@ -326,14 +329,13 @@ class CarerSettingsViewModel @Inject constructor(
     /**
      * Move a contact up in the list (decrease buttonPosition)
      */
-    fun moveContactUp(contact: Contact, allCarers: List<Contact>) {
-        val sortedCarers = allCarers.sortedBy { it.buttonPosition }
-        val currentIndex = sortedCarers.indexOfFirst { it.id == contact.id }
+    fun moveContactUp(contact: Contact, orderedContacts: List<Contact>) {
+        val sorted = orderedContacts.sortedBy { it.buttonPosition }
+        val currentIndex = sorted.indexOfFirst { it.id == contact.id }
         if (currentIndex <= 0) return // Already at top
-        
+
         viewModelScope.launch {
-            // Swap positions using index values (guarantees unique positions)
-            val aboveContact = sortedCarers[currentIndex - 1]
+            val aboveContact = sorted[currentIndex - 1]
             contactRepository.updateButtonPositions(
                 listOf(
                     contact.id to (currentIndex - 1),
@@ -342,18 +344,17 @@ class CarerSettingsViewModel @Inject constructor(
             )
         }
     }
-    
+
     /**
      * Move a contact down in the list (increase buttonPosition)
      */
-    fun moveContactDown(contact: Contact, allCarers: List<Contact>) {
-        val sortedCarers = allCarers.sortedBy { it.buttonPosition }
-        val currentIndex = sortedCarers.indexOfFirst { it.id == contact.id }
-        if (currentIndex < 0 || currentIndex >= sortedCarers.size - 1) return // Already at bottom
-        
+    fun moveContactDown(contact: Contact, orderedContacts: List<Contact>) {
+        val sorted = orderedContacts.sortedBy { it.buttonPosition }
+        val currentIndex = sorted.indexOfFirst { it.id == contact.id }
+        if (currentIndex < 0 || currentIndex >= sorted.size - 1) return // Already at bottom
+
         viewModelScope.launch {
-            // Swap positions using index values (guarantees unique positions)
-            val belowContact = sortedCarers[currentIndex + 1]
+            val belowContact = sorted[currentIndex + 1]
             contactRepository.updateButtonPositions(
                 listOf(
                     contact.id to (currentIndex + 1),
@@ -372,7 +373,7 @@ class CarerSettingsViewModel @Inject constructor(
     private fun buildLegacySlotAssignments(contactsList: List<Contact>, current: CarerSettings): List<String> {
         val list = mutableListOf<String>()
         val carerCallable = contactsList
-            .filter { it.contactType == ContactType.CARER && it.canCallOut }
+            .filter { it.contactType == ContactType.CARER }
             .sortedBy { it.buttonPosition }
             .take(HomeSlotAssignments.SLOT_COUNT)
         carerCallable.forEach { list.add(HomeSlotAssignments.contactSlot(it.id)) }
@@ -503,7 +504,10 @@ class CarerSettingsViewModel @Inject constructor(
     fun refreshBatteryAlertStatus() {
         viewModelScope.launch {
             val hasPermission = batteryAlertSmsSender.hasSmsPermission()
-            val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+            val settings = settingsRepository.getSettings().first()
+            val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+            val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
+                .filter { it.id in onHome }
             val count = recipients.count { it.phoneNumber.isNotBlank() }
             _batteryAlertStatus.value = hasPermission to count
         }
@@ -516,7 +520,9 @@ class CarerSettingsViewModel @Inject constructor(
     fun sendTestBatteryAlertSms(onResult: (String) -> Unit) {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings().first()
-            val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+            val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+            val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
+                .filter { it.id in onHome }
             val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
             val message = batteryAlertSmsSender.sendTestBatteryAlert(numbers, settings.userName)
             onResult(message)

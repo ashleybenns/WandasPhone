@@ -8,8 +8,8 @@ import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
+import com.tomsphone.core.config.HomeSlotAssignments
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.tomsphone.core.data.model.ContactType
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
@@ -23,7 +23,7 @@ import javax.inject.Singleton
  * Features:
  * - Tannoy-style bing-bong attention sound before TTS
  * - Repeating TTS reminders at configurable intervals
- * - **Only for CARER contacts** (grey list friends/family do NOT trigger nag)
+ * - **Only for contacts assigned a home call button** (home slots), not answer-only list contacts
  * - Stops when: user calls back, carer calls again, or carer dismisses
  * - Enabled by default with "Immediate and every minute" interval
  */
@@ -69,39 +69,42 @@ class MissedCallNagManager @Inject constructor(
             }
         }
         
-        // Monitor unread missed + declined; only nag for CARER contacts
+        // Monitor unread missed + declined; nag only for contacts with a home call slot
         scope.launch {
-            callLogRepository.getCallsForNagReminder(10)
-                .map { calls -> calls.filter { !it.isRead } }
-                .collect { missedCalls ->
+            combine(
+                callLogRepository.getCallsForNagReminder(10).map { calls -> calls.filter { !it.isRead } },
+                settingsRepository.getSettings()
+            ) { missedCalls, settings -> missedCalls to settings }
+                .collect { (missedCalls, settings) ->
                     Log.d(TAG, "getCallsForNagReminder returned ${missedCalls.size} unread calls: ${missedCalls.map { "${it.id}:${it.contactName}" }}")
-                    // Filter to only carer contacts for nagging
-                    val carerMissedCalls = missedCalls.filter { call ->
-                        val contact = call.contactId?.let { id ->
-                            contactRepository.getContactById(id).first()
+                    val onHomeIds = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+                    val assistantMissedCalls = mutableListOf<CallLogEntry>()
+                    for (call in missedCalls) {
+                        val contact = when {
+                            call.contactId != null -> contactRepository.getContactById(call.contactId!!).first()
+                            else -> contactRepository.getContactByPhone(call.phoneNumber).first()
                         }
-                        contact?.contactType == ContactType.CARER
+                        if (contact != null && contact.id in onHomeIds) {
+                            assistantMissedCalls.add(call)
+                        }
                     }
-                    
-                    _activeMissedCalls.value = carerMissedCalls
-                    
-                    // Check if nagging is enabled and not suppressed
-                    val settings = settingsRepository.getSettings().first()
+
+                    _activeMissedCalls.value = assistantMissedCalls
+
                     val now = System.currentTimeMillis()
-                    
-                    // Don't restart nag while a call is in progress
+
                     if (callInProgress) {
                         Log.d(TAG, "Nag suppressed - call in progress")
                         return@collect
                     }
-                    
+
                     if (now < nagSuppressedUntil) {
                         Log.d(TAG, "Nag suppressed for ${nagSuppressedUntil - now}ms more")
                         return@collect
                     }
-                    
-                    if (carerMissedCalls.isNotEmpty() && settings.missedCallNagEnabled) {
-                        startNagging(carerMissedCalls.first())
+
+                    if (assistantMissedCalls.isNotEmpty() && settings.missedCallNagEnabled) {
+                        startNagging(assistantMissedCalls.first())
                     } else {
                         stopNagging()
                     }
@@ -306,7 +309,7 @@ class MissedCallNagManager @Inject constructor(
      * Log a missed call and optionally trigger nag.
      *
      * One database row per event (no deduplication) so repeat callers show multiple entries.
-     * Only CARER contacts trigger the nagging reminder.
+     * Only contacts with a home call button trigger the nagging reminder.
      */
     fun onMissedCall(phoneNumber: String, contactName: String?) {
         scope.launch {
@@ -328,14 +331,15 @@ class MissedCallNagManager @Inject constructor(
             
             callLogRepository.logCall(entry)
             
-            // Only nag for CARER contacts - grey list and unknown don't trigger nag
-            if (contact?.contactType == ContactType.CARER) {
-                Log.d(TAG, "Logged missed call from carer ${contact.name} - nag will start")
+            val settings = settingsRepository.getSettings().first()
+            val onHome = contact != null && contact.id in HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+            if (onHome && contact != null) {
+                Log.d(TAG, "Logged missed call from home-slot contact ${contact.name} - nag will start")
             } else {
-                Log.d(TAG, "Logged missed call from ${contact?.name ?: phoneNumber} (non-carer) - no nag")
+                Log.d(TAG, "Logged missed call from ${contact?.name ?: phoneNumber} (no home button) - no nag")
             }
-            
-            // The existing flow will pick up the missed call and start nagging (for carers only)
+
+            // Flow above will pick up the missed call and start nagging for home-slot contacts only
         }
     }
     

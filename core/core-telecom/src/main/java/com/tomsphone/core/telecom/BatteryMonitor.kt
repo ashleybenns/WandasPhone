@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
+import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.tts.WandasTTS
@@ -238,10 +239,12 @@ class BatteryMonitor @Inject constructor(
                     Log.w(TAG, "Low battery: SMS permission not granted - alerts not sent")
                     return@launch
                 }
-                val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+                val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+                val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
+                    .filter { it.id in onHome }
                 val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
                 if (numbers.isEmpty()) {
-                    Log.w(TAG, "Low battery: no assistants with battery alerts / valid numbers - SMS not sent")
+                    Log.w(TAG, "Low battery: no home-slot contacts with battery alerts / valid numbers - SMS not sent")
                     return@launch
                 }
                 Log.d(TAG, "Sending low battery alert to ${numbers.size} assistant(s) using stored numbers")
@@ -326,7 +329,9 @@ class BatteryMonitor @Inject constructor(
             try {
                 val settings = settingsRepository.getSettings().first()
                 if (settings.batteryAlertSmsEnabled) {
-                    val recipients = contactRepository.getCarerContactsWithBatteryAlerts()
+                    val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+                    val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
+                        .filter { it.id in onHome }
                     val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
                     if (numbers.isNotEmpty()) {
                         Log.d(TAG, "Sending device connected alert to ${numbers.size} assistant(s) using stored numbers")

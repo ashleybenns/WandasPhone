@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.HomeSlotAssignments
+import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
@@ -23,14 +24,19 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
 @Composable
 fun HomeScreenLayoutScreen(
     onBack: () -> Unit,
+    /** After assigning an existing contact to this slot, open their details (battery, auto-answer). */
+    onNavigateToContactAfterSlot: (contactId: Long, contactType: ContactType) -> Unit = { _, _ -> },
+    /** Open add-contact for this slot; slot is assigned after a successful save. */
+    onNavigateToNewContactForSlot: (slotIndex: Int) -> Unit = {},
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
     val featureLevel = settings.featureLevel
     val slots by viewModel.homeSlotAssignments.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
-    val assistants = remember(contacts) {
-        contacts.filter { it.contactType == ContactType.CARER }.sortedBy { it.buttonPosition }
+    /** Any contact may be assigned a home slot (assistant or elevated answer-only). */
+    val contactsForSlots = remember(contacts) {
+        contacts.sortedWith(compareBy<Contact> { it.buttonPosition }.thenBy { it.name.lowercase() })
     }
 
     LaunchedEffect(Unit) {
@@ -45,15 +51,15 @@ fun HomeScreenLayoutScreen(
     }
 
     fun slotLabel(value: String): String = when {
-        value.isEmpty() -> "Empty"
+        value.isEmpty() -> "No button"
         HomeSlotAssignments.isContact(value) -> {
             val id = HomeSlotAssignments.parseContactId(value)
-            if (id == null) "Assistant"
-            else assistants.find { it.id == id }?.name ?: "Assistant (deleted)"
+            if (id == null) "Contact"
+            else contactsForSlots.find { it.id == id }?.name ?: "Contact (removed)"
         }
-        value == HomeSlotAssignments.MISSED_CALL_RETURN -> "Missed Call Return"
-        value == HomeSlotAssignments.MISSED_CALLS_LIST -> "Recent calls"
-        value == HomeSlotAssignments.OTHER_CONTACTS -> "Other Contacts"
+        value == HomeSlotAssignments.MISSED_CALL_RETURN -> "Missed call return"
+        value == HomeSlotAssignments.MISSED_CALLS_LIST -> "Missed calls list"
+        value == HomeSlotAssignments.OTHER_CONTACTS -> "Contacts"
         value == HomeSlotAssignments.SCREEN_OFF -> "Screen off"
         else -> "Unknown"
     }
@@ -125,13 +131,23 @@ fun HomeScreenLayoutScreen(
     }
 
     slotIndexToEdit?.let { index ->
+        val pickerScroll = rememberScrollState()
         AlertDialog(
             onDismissRequest = { slotIndexToEdit = null },
             title = { Text("Slot ${index + 1}") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Special actions first so “Recent calls” / missed list isn’t buried below many assistants;
+                // scroll so everything stays reachable on small screens.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 480.dp)
+                        .verticalScroll(pickerScroll),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     SlotOption(
-                        label = "Empty",
+                        label = "No button",
+                        subtitle = "Leave this row empty so other buttons can be larger with bigger text.",
                         value = HomeSlotAssignments.EMPTY,
                         current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
                         onSelect = {
@@ -139,19 +155,9 @@ fun HomeScreenLayoutScreen(
                             viewModel.setHomeSlotAt(index, HomeSlotAssignments.EMPTY)
                         }
                     )
-                    assistants.forEach { c ->
-                        SlotOption(
-                            label = c.name,
-                            value = HomeSlotAssignments.contactSlot(c.id),
-                            current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
-                            onSelect = {
-                                slotIndexToEdit = null
-                                viewModel.setHomeSlotAt(index, HomeSlotAssignments.contactSlot(c.id))
-                            }
-                        )
-                    }
                     SlotOption(
-                        label = "Missed Call Return",
+                        label = "Missed call return",
+                        subtitle = "One tap to call back the latest missed answer-only contact",
                         value = HomeSlotAssignments.MISSED_CALL_RETURN,
                         current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
                         onSelect = {
@@ -160,7 +166,8 @@ fun HomeScreenLayoutScreen(
                         }
                     )
                     SlotOption(
-                        label = "Missed Calls List",
+                        label = "Missed calls list",
+                        subtitle = "Two taps: open list, then tap a row to call back. Shows missed and declined only.",
                         value = HomeSlotAssignments.MISSED_CALLS_LIST,
                         current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
                         onSelect = {
@@ -169,7 +176,8 @@ fun HomeScreenLayoutScreen(
                         }
                     )
                     SlotOption(
-                        label = "Other Contacts",
+                        label = "Contacts",
+                        subtitle = "Opens on-phone list of everyone",
                         value = HomeSlotAssignments.OTHER_CONTACTS,
                         current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
                         onSelect = {
@@ -179,6 +187,7 @@ fun HomeScreenLayoutScreen(
                     )
                     SlotOption(
                         label = "Screen off",
+                        subtitle = null,
                         value = HomeSlotAssignments.SCREEN_OFF,
                         current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
                         onSelect = {
@@ -186,6 +195,36 @@ fun HomeScreenLayoutScreen(
                             viewModel.setHomeSlotAt(index, HomeSlotAssignments.SCREEN_OFF)
                         }
                     )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        text = "Contacts (home call button)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    SlotOption(
+                        label = "Add new contact…",
+                        subtitle = "Save a valid name and number, then return here with the slot filled",
+                        value = "__new_contact__",
+                        current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
+                        onSelect = {
+                            slotIndexToEdit = null
+                            onNavigateToNewContactForSlot(index)
+                        }
+                    )
+                    contactsForSlots.forEach { c ->
+                        SlotOption(
+                            label = c.name,
+                            subtitle = "Set slot, then open details for battery & auto-answer",
+                            value = HomeSlotAssignments.contactSlot(c.id),
+                            current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
+                            onSelect = {
+                                slotIndexToEdit = null
+                                viewModel.setHomeSlotAt(index, HomeSlotAssignments.contactSlot(c.id))
+                                onNavigateToContactAfterSlot(c.id, c.contactType)
+                            }
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -271,6 +310,7 @@ private fun SlotRow(
 @Composable
 private fun SlotOption(
     label: String,
+    subtitle: String?,
     value: String,
     current: String,
     onSelect: () -> Unit
@@ -285,11 +325,20 @@ private fun SlotOption(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.wandasColors.onSurface
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.wandasColors.onSurface
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.65f)
+                    )
+                }
+            }
             if (selected) {
                 Text(
                     text = "✓",

@@ -8,22 +8,21 @@ import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
+import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.ContactRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
 /**
  * ViewModel for Contacts List Screen
- * 
- * Shows contacts based on carer settings:
- * - If homeContactsListShowGreyListOnly: Only grey list contacts (answer-only)
- * - Otherwise: All contacts (carers + grey list)
- * 
+ *
+ * - Default: everyone (single list).
+ * - Optional: only contacts **without** a home call button (slot), when
+ *   [CarerSettings.homeContactsListShowGreyListOnly] is on (legacy setting key).
+ *
  * Paginates with up to 8 contacts per page (matching home screen button count).
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ContactsListViewModel @Inject constructor(
     private val contactRepository: ContactRepository,
@@ -42,8 +41,8 @@ class ContactsListViewModel @Inject constructor(
             initialValue = CarerSettings()
         )
     
-    // Get all contacts for button count calculation
-    private val allContactsForCount: StateFlow<List<Contact>> = contactRepository.getCarerContacts(100)
+    // All contacts for home button count (slots may reference any contact)
+    private val allContactsForCount: StateFlow<List<Contact>> = contactRepository.getContacts(200)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -63,30 +62,17 @@ class ContactsListViewModel @Inject constructor(
             initialValue = HomeSlotAssignments.TOTAL_SLOTS // fallback to 8
         )
     
-    // Whether to show only grey list contacts
-    private val showGreyListOnly: StateFlow<Boolean> = settings
-        .map { it.homeContactsListShowGreyListOnly }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
-    
-    // All contacts to display based on setting
-    private val allContacts: StateFlow<List<Contact>> = showGreyListOnly
-        .flatMapLatest { greyListOnly: Boolean ->
-            if (greyListOnly) {
-                contactRepository.getGreyListContacts(100)
-            } else {
-                // Show all contacts (carers + grey list combined)
-                combine(
-                    contactRepository.getCarerContacts(100),
-                    contactRepository.getGreyListContacts(100)
-                ) { carers: List<Contact>, greyList: List<Contact> ->
-                    carers + greyList
-                }
-            }
+    private val allContacts: StateFlow<List<Contact>> = combine(
+        settings,
+        contactRepository.getContacts(200)
+    ) { s, everyone ->
+        val onHome = HomeSlotAssignments.contactIdsOnHome(s.homeSlotAssignments)
+        if (s.homeContactsListShowGreyListOnly) {
+            everyone.filter { it.id !in onHome }.sortedBy { it.name.lowercase() }
+        } else {
+            everyone.sortedWith(compareBy<Contact> { it.buttonPosition }.thenBy { it.name.lowercase() })
         }
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -143,30 +129,30 @@ class ContactsListViewModel @Inject constructor(
             val slotsForOthers = count
             val maxContactSlots = (6 - slotsForOthers).coerceAtLeast(0)
             val callableContacts = contacts
-                .filter { it.canCallOut }
+                .filter { it.contactType == ContactType.CARER }
                 .sortedBy { it.buttonPosition }
                 .take(maxContactSlots)
             callableContacts.size + count
         }
     }
     
-    // Screen title - empty to hide header
-    val screenTitle: StateFlow<String> = flowOf("")
+    /** Shown when the list has at least one row */
+    val screenTitle: StateFlow<String> = flowOf("Contacts")
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
+            initialValue = "Contacts"
         )
     
-    // Empty message based on mode
-    val emptyMessage: StateFlow<String> = showGreyListOnly
-        .map { greyListOnly: Boolean ->
-            if (greyListOnly) "No Other Contacts" else "No Contacts"
+    val emptyMessage: StateFlow<String> = settings
+        .map { s ->
+            if (s.homeContactsListShowGreyListOnly) "No contacts without a home button"
+            else "No contacts"
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = "No Contacts"
+            initialValue = "No contacts"
         )
     
     fun nextPage() {

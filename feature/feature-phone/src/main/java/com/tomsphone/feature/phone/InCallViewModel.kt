@@ -4,10 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.SettingsRepository
-import com.tomsphone.core.data.model.CallLogEntry
-import com.tomsphone.core.data.model.CallType
 import com.tomsphone.core.data.model.Contact
-import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.telecom.CallInfo
 import com.tomsphone.core.telecom.CallManager
@@ -26,13 +23,11 @@ import javax.inject.Inject
  * - Call state management
  * - Contact name resolution
  * - Call controls (Level 1: end only, Level 2+: speaker/mute/volume)
- * - Call logging
  */
 @HiltViewModel
 class InCallViewModel @Inject constructor(
     private val callManager: CallManager,
     private val contactRepository: ContactRepository,
-    private val callLogRepository: CallLogRepository,
     private val settingsRepository: SettingsRepository,
     private val tts: WandasTTS
 ) : ViewModel() {
@@ -80,23 +75,14 @@ class InCallViewModel @Inject constructor(
     
     init {
         // Monitor call state for automatic actions
+        // Call logging is handled in WandasInCallService.onCallRemoved (always runs for real calls).
         viewModelScope.launch {
             currentCall.collect { call ->
-                when (call?.state) {
-                    CallState.DISCONNECTED -> {
-                        // Log the call
-                        logCall(call)
-                    }
-                    CallState.ACTIVE -> {
-                        // Auto-enable speaker if configured
-                        // No TTS announcement - carer is talking or voicemail is playing
-                        val settings = settingsRepository.getSettings().first()
-                        if (settings.speakerVolume > 0) {
-                            callManager.setSpeaker(true)
-                        }
-                    }
-                    else -> {
-                        // Other states handled by InCallService
+                if (call?.state == CallState.ACTIVE) {
+                    // Auto-enable speaker if configured
+                    val settings = settingsRepository.getSettings().first()
+                    if (settings.speakerVolume > 0) {
+                        callManager.setSpeaker(true)
                     }
                 }
             }
@@ -154,33 +140,5 @@ class InCallViewModel @Inject constructor(
         // Will be implemented with actual audio control
     }
     
-    /**
-     * Log completed call to database
-     */
-    private fun logCall(call: CallInfo) {
-        viewModelScope.launch {
-            val contact = contactRepository.getContactByPhone(call.phoneNumber).first()
-            val duration = System.currentTimeMillis() - call.startTime
-            
-            val callType = when {
-                call.direction == com.tomsphone.core.telecom.CallDirection.INCOMING -> CallType.INCOMING
-                call.direction == com.tomsphone.core.telecom.CallDirection.OUTGOING -> CallType.OUTGOING
-                else -> CallType.MISSED
-            }
-            
-            val entry = CallLogEntry(
-                id = 0,
-                contactId = contact?.id,
-                phoneNumber = call.phoneNumber,
-                contactName = contact?.name,
-                type = callType,
-                timestamp = call.startTime,
-                duration = duration,
-                isRead = true
-            )
-            
-            callLogRepository.logCall(entry)
-        }
-    }
 }
 

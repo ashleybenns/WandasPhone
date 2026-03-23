@@ -31,17 +31,24 @@ import com.tomsphone.core.ui.theme.UserScalingProvider
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.config.homeButtonRowCount
 import com.tomsphone.core.telecom.CallDirection
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
+import com.tomsphone.core.telecom.MissedCallNagManager
 import com.tomsphone.core.ui.theme.ThemeOption
 import com.tomsphone.core.ui.theme.WandasPhoneTheme
+import com.tomsphone.feature.home.AddBlockedCallerRoute
+import com.tomsphone.feature.home.AddBlockedCallerScreen
 import com.tomsphone.feature.home.HomeScreen
+import com.tomsphone.feature.home.RecentCallsListViewModel
 import com.tomsphone.feature.phone.EmergencyConfirmScreen
 import com.tomsphone.feature.phone.EmergencyCallScreen
 import com.tomsphone.feature.phone.EndIncomingCallScreen
@@ -87,6 +94,9 @@ class MainActivity : ComponentActivity() {
     
     @Inject
     lateinit var callManager: CallManager
+
+    @Inject
+    lateinit var missedCallNagManager: MissedCallNagManager
     
     @Inject
     lateinit var batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor
@@ -150,8 +160,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             WandasPhoneApp(
-                callManager = callManager, 
-                settingsRepository = settingsRepository, 
+                callManager = callManager,
+                missedCallNagManager = missedCallNagManager,
+                settingsRepository = settingsRepository,
                 batteryMonitor = batteryMonitor,
                 onExitApp = { exitApp() },
                 onTurnOffScreen = { turnOffScreenForLowBattery() },
@@ -374,7 +385,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun WandasPhoneApp(
-    callManager: CallManager, 
+    callManager: CallManager,
+    missedCallNagManager: MissedCallNagManager,
     settingsRepository: SettingsRepository,
     batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor,
     onExitApp: () -> Unit,
@@ -517,6 +529,7 @@ fun WandasPhoneApp(
     val homeButtonRowCount = run {
         val s = settings ?: return@run 4
         var rows = s.homeContactCount.coerceAtLeast(1)
+        if (s.homeShowMissedCallReturnButton) rows += 1
         if (s.showDisplayOffButton) rows += 1
         var menuButtons = 0
         if (s.homeShowMissedCallsButton) menuButtons++
@@ -579,10 +592,10 @@ fun WandasPhoneApp(
                             // #endregion
                             navController.popBackStack()
                         },
-                        onCallContact = { name, phoneNumber ->
-                            // Navigate back to home and place call
+                        onCallContact = { _, phoneNumber ->
                             navController.popBackStack()
                             scope.launch {
+                                missedCallNagManager.markMissedCallsAsReadAndDismiss(phoneNumber)
                                 callManager.placeCall(phoneNumber)
                             }
                         },
@@ -601,7 +614,57 @@ fun WandasPhoneApp(
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
+                        },
+                        onAddBlockedToApp = { phoneNumber, suggestedName ->
+                            val token = AddBlockedCallerRoute.encode(phoneNumber, suggestedName)
+                            navController.navigate("addAppContact/$token")
                         }
+                    )
+                }
+            }
+
+            composable(
+                route = "addAppContact/{token}",
+                arguments = listOf(
+                    navArgument("token") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val token = backStackEntry.arguments?.getString("token").orEmpty()
+                val decoded = remember(token) {
+                    try {
+                        AddBlockedCallerRoute.decode(token)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Invalid addAppContact token", e)
+                        null
+                    }
+                }
+                val addCtx = LocalContext.current
+                if (decoded == null) {
+                    LaunchedEffect(Unit) {
+                        Toast.makeText(addCtx, "Could not open add contact", Toast.LENGTH_SHORT).show()
+                        navController.popBackStack()
+                    }
+                    return@composable
+                }
+                val (blockedPhone, suggestedName) = decoded
+                val recentVm: RecentCallsListViewModel = hiltViewModel()
+                val buttonActivation by recentVm.buttonActivation.collectAsState()
+                val touchDebounceMs by recentVm.touchDebounceMs.collectAsState()
+                val accumulatedThresholdMs by recentVm.accumulatedTapThresholdMs.collectAsState()
+                val accumulatedTimeoutMs by recentVm.accumulatedTapTimeoutMs.collectAsState()
+                UserScalingProvider(
+                    buttonRowCount = homeButtonRowCount,
+                    userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
+                ) {
+                    AddBlockedCallerScreen(
+                        phoneNumber = blockedPhone,
+                        suggestedDisplayName = suggestedName,
+                        onBack = { navController.popBackStack() },
+                        onAdded = { navController.popBackStack() },
+                        buttonActivation = buttonActivation,
+                        touchDebounceMs = touchDebounceMs,
+                        accumulatedThresholdMs = accumulatedThresholdMs,
+                        accumulatedTimeoutMs = accumulatedTimeoutMs
                     )
                 }
             }

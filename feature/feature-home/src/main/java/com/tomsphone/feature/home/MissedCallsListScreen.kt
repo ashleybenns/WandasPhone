@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
-import com.tomsphone.core.data.model.CallLogEntry
 import com.tomsphone.core.data.model.CallType
+import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.components.ListScreenLayout
 import com.tomsphone.core.ui.theme.PastelColors
@@ -33,19 +33,22 @@ import java.util.*
 
 private const val INACTIVITY_TIMEOUT_MS = 30_000L
 
+/** Unknown / not-in-app number (call was allowed through screening) — solid blue row, white label. */
+private val UnknownAllowedRowBlue = Color(0xFF1976D2)
+
 /**
- * Recent calls for the assistant: incoming, outgoing, missed, and declined.
- * Each log row is listed separately (duplicates allowed). Unknown numbers can
- * open the system "new contact" screen with the number filled in.
+ * **Missed calls list** (two-tap home button): **one row per caller** with an outstanding missed/declined
+ * call; returning a call removes that caller. Rows use each contact’s button colour; unknown allowed numbers use blue.
  */
 @Composable
 fun MissedCallsListScreen(
     onBack: () -> Unit,
-    onCallContact: (String, String) -> Unit, // (name, phoneNumber)
+    onCallContact: (String, String) -> Unit,
     onAddToContacts: (String) -> Unit = {},
-    viewModel: RecentCallsListViewModel = hiltViewModel()
+    onAddBlockedToApp: (String, String?) -> Unit = { _, _ -> },
+    viewModel: MissedCallsListViewModel = hiltViewModel()
 ) {
-    val recentCalls by viewModel.recentCalls.collectAsState()
+    val missedCallRows by viewModel.missedCallRows.collectAsState()
     val listTextAlignment by viewModel.listTextAlignment.collectAsState()
     val buttonActivation by viewModel.buttonActivation.collectAsState()
     val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
@@ -59,18 +62,21 @@ fun MissedCallsListScreen(
 
     ListScreenLayout(
         backgroundColor = PastelColors.lightBlue,
-        title = "Recent calls",
-        emptyMessage = "No recent calls",
-        isEmpty = recentCalls.isEmpty(),
+        title = "Missed calls",
+        emptyMessage = "No missed calls",
+        isEmpty = missedCallRows.isEmpty(),
         onBack = onBack,
         activationPreset = buttonActivation,
         debounceMs = touchDebounceMs,
         accumulatedThresholdMs = accumulatedThresholdMs,
         accumulatedTimeoutMs = accumulatedTimeoutMs
     ) {
-        recentCalls.forEach { call ->
-            RecentCallItem(
-                call = call,
+        missedCallRows.forEach { row ->
+            val call = row.call
+            MissedCallListItem(
+                contact = row.contact,
+                mainLabel = call.contactName ?: call.phoneNumber,
+                timestamp = call.timestamp,
                 textAlignment = listTextAlignment,
                 activationPreset = buttonActivation,
                 debounceMs = touchDebounceMs,
@@ -80,8 +86,13 @@ fun MissedCallsListScreen(
                     val label = call.contactName ?: call.phoneNumber
                     onCallContact(label, call.phoneNumber)
                 },
-                onAddToContacts = if (call.contactId == null) {
+                onAddToDeviceContacts = if (row.contact == null && call.type != CallType.BLOCKED) {
                     { onAddToContacts(call.phoneNumber) }
+                } else {
+                    null
+                },
+                onAddBlockedToApp = if (call.contactId == null && call.type == CallType.BLOCKED) {
+                    { onAddBlockedToApp(call.phoneNumber, call.contactName) }
                 } else {
                     null
                 }
@@ -90,39 +101,24 @@ fun MissedCallsListScreen(
     }
 }
 
-private fun callTypeLabel(type: CallType): String = when (type) {
-    CallType.INCOMING -> "Answered incoming"
-    CallType.OUTGOING -> "Outgoing"
-    CallType.MISSED -> "Missed"
-    CallType.REJECTED -> "Declined"
-    CallType.BLOCKED -> "Blocked"
-}
-
 @Composable
-private fun RecentCallItem(
-    call: CallLogEntry,
+private fun MissedCallListItem(
+    contact: Contact?,
+    mainLabel: String,
+    timestamp: Long,
     textAlignment: ListTextAlignment,
     activationPreset: ButtonActivationPreset,
     debounceMs: Int,
     accumulatedThresholdMs: Int,
     accumulatedTimeoutMs: Int,
     onCall: () -> Unit,
-    onAddToContacts: (() -> Unit)?
+    onAddToDeviceContacts: (() -> Unit)?,
+    onAddBlockedToApp: (() -> Unit)?
 ) {
     val textSize = ScaledDimensions.buttonTextSize
-    val typeSize = textSize * 0.72f
-    val timeText = formatRelativeTime(call.timestamp)
-    val typeLabel = callTypeLabel(call.type)
-    val mainLabel = call.contactName ?: call.phoneNumber
-    val subtitle = buildString {
-        append(typeLabel)
-        if (call.duration > 0L &&
-            (call.type == CallType.INCOMING || call.type == CallType.OUTGOING)
-        ) {
-            append(" · ")
-            append(formatDuration(call.duration))
-        }
-    }
+    val timeSize = textSize * 0.78f
+    val timeText = formatRelativeTimeMissed(timestamp)
+    val rowColors = missedCallRowColors(contact)
 
     val boxAlignment = when (textAlignment) {
         ListTextAlignment.LEFT -> Alignment.CenterStart
@@ -143,7 +139,6 @@ private fun RecentCallItem(
         horizontalAlignment = columnAlignment,
         modifier = Modifier.fillMaxWidth()
     ) {
-        val rowBg = callRowColors(call.type)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -159,51 +154,76 @@ private fun RecentCallItem(
                     onActivate = onCall,
                     interactionSource = callInteractionSource
                 ),
-            color = rowBg.background,
+            color = rowColors.background,
             shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 contentAlignment = boxAlignment
             ) {
                 Column(horizontalAlignment = columnAlignment) {
-                    Text(
-                        text = subtitle,
-                        style = TextStyle(
-                            fontSize = typeSize,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        color = rowBg.onBackground.copy(alpha = 0.92f),
-                        textAlign = textAlign
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = mainLabel,
                         style = TextStyle(
                             fontSize = textSize,
                             fontWeight = FontWeight.Bold
                         ),
-                        color = rowBg.onBackground,
+                        color = rowColors.onBackground,
+                        textAlign = textAlign
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = timeText,
+                        style = TextStyle(
+                            fontSize = timeSize,
+                            fontWeight = FontWeight.Normal
+                        ),
+                        color = rowColors.onBackground.copy(alpha = 0.88f),
                         textAlign = textAlign
                     )
                 }
             }
         }
 
-        Text(
-            text = timeText,
-            style = TextStyle(
-                fontSize = textSize,
-                fontWeight = FontWeight.Normal
-            ),
-            color = Color.Black,
-            textAlign = textAlign,
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
-        )
+        Spacer(modifier = Modifier.height(8.dp))
 
-        if (onAddToContacts != null) {
+        if (onAddBlockedToApp != null) {
+            val addBlockedInteraction = remember { MutableInteractionSource() }
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                    .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                    .indication(addBlockedInteraction, rememberRipple())
+                    .activationGesture(
+                        preset = activationPreset,
+                        debounceMs = debounceMs,
+                        accumulatedThresholdMs = accumulatedThresholdMs,
+                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                        onActivate = onAddBlockedToApp,
+                        interactionSource = addBlockedInteraction
+                    ),
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
+            ) {
+                Text(
+                    text = "Add to Contacts or Assistants (in this app)",
+                    style = TextStyle(
+                        fontSize = timeSize,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = textAlign,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+        }
+        if (onAddToDeviceContacts != null) {
             val addInteraction = remember { MutableInteractionSource() }
             Surface(
                 modifier = Modifier
@@ -217,7 +237,7 @@ private fun RecentCallItem(
                         debounceMs = debounceMs,
                         accumulatedThresholdMs = accumulatedThresholdMs,
                         accumulatedTimeoutMs = accumulatedTimeoutMs,
-                        onActivate = onAddToContacts,
+                        onActivate = onAddToDeviceContacts,
                         interactionSource = addInteraction
                     ),
                 color = MaterialTheme.colorScheme.surface,
@@ -226,7 +246,7 @@ private fun RecentCallItem(
                 Text(
                     text = "Add to phone contacts",
                     style = TextStyle(
-                        fontSize = typeSize,
+                        fontSize = timeSize,
                         fontWeight = FontWeight.SemiBold
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -240,26 +260,21 @@ private fun RecentCallItem(
     }
 }
 
-private data class CallRowColors(val background: Color, val onBackground: Color)
+private data class MissedRowColors(val background: Color, val onBackground: Color)
 
 @Composable
-private fun callRowColors(type: CallType): CallRowColors {
-    val c = MaterialTheme.wandasColors
-    return when (type) {
-        CallType.MISSED, CallType.REJECTED -> CallRowColors(c.missedCall, c.onMissedCall)
-        CallType.BLOCKED -> CallRowColors(c.hangUpButton, c.onHangUpButton)
-        CallType.INCOMING, CallType.OUTGOING -> CallRowColors(c.primaryButton, c.onPrimaryButton)
+private fun missedCallRowColors(contact: Contact?): MissedRowColors {
+    val w = MaterialTheme.wandasColors
+    return if (contact != null) {
+        val bg = contact.buttonColor?.let { Color(it) } ?: w.primaryButton
+        val on = if (contact.buttonColor != null) Color.White else w.onPrimaryButton
+        MissedRowColors(bg, on)
+    } else {
+        MissedRowColors(UnknownAllowedRowBlue, Color.White)
     }
 }
 
-private fun formatDuration(durationMs: Long): String {
-    val totalSec = durationMs / 1000
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return if (m > 0) "${m}m ${s}s" else "${s}s"
-}
-
-private fun formatRelativeTime(timestamp: Long): String {
+private fun formatRelativeTimeMissed(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
 
@@ -268,12 +283,12 @@ private fun formatRelativeTime(timestamp: Long): String {
     val days = diff / 86_400_000
 
     return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "$minutes minute${if (minutes > 1) "s" else ""} ago"
-        hours < 24 -> "$hours hour${if (hours > 1) "s" else ""} ago"
+        minutes < 1 -> "Just now"
+        minutes < 60 -> "$minutes min ago"
+        hours < 24 -> "$hours hr ago"
         days < 2 -> {
             val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-            "yesterday at ${timeFormat.format(Date(timestamp))}"
+            "Yesterday ${timeFormat.format(Date(timestamp))}"
         }
         days < 7 -> "$days days ago"
         else -> {

@@ -6,8 +6,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ripple.rememberRipple
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -18,16 +16,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
-import com.tomsphone.core.ui.theme.WandasTextStyles
 import com.tomsphone.core.ui.theme.wandasColors
 
 /**
@@ -49,6 +51,8 @@ import com.tomsphone.core.ui.theme.wandasColors
  * 
  * @param activationPreset How the button responds to touch (ON_RELEASE, ON_PRESS, DOUBLE_TAP)
  * @param debounceMs Minimum touch duration to filter accidental brushes
+ * @param autoScaleLabelToFit When true (and no [warningText]), shrink font only as needed so the label
+ *        fits in up to [autoScaleMaxLines] lines within the button (missed-call return on weighted rows).
  */
 @Composable
 fun ConfigurableButton(
@@ -63,7 +67,9 @@ fun ConfigurableButton(
     activationPreset: ButtonActivationPreset = ButtonActivationPreset.ON_RELEASE,
     debounceMs: Int = 150,
     accumulatedThresholdMs: Int = 500,
-    accumulatedTimeoutMs: Int = 3000
+    accumulatedTimeoutMs: Int = 3000,
+    autoScaleLabelToFit: Boolean = false,
+    autoScaleMaxLines: Int = 2
 ) {
     // Text size adapts to screen height and button count
     val textSize = ScaledDimensions.contactNameTextSize
@@ -142,19 +148,116 @@ fun ConfigurableButton(
                         modifier = Modifier.padding(horizontal = WandasDimensions.SpacingSmall)
                     )
                 }
+            } else if (autoScaleLabelToFit) {
+                AutoScaledButtonLabel(
+                    label = label,
+                    maxFontSize = textSize,
+                    color = actualTextColor,
+                    textAlign = textAlign,
+                    maxLines = autoScaleMaxLines.coerceIn(1, 4),
+                    modifier = Modifier.fillMaxSize()
+                )
             } else {
                 // Single label
+                val lineH = (textSize.value * 1.25f).sp
                 Text(
                     text = label,
                     style = TextStyle(
                         fontSize = textSize,
                         fontWeight = FontWeight.SemiBold,
-                        lineHeight = textSize  // Tight line height
+                        lineHeight = lineH
                     ),
                     color = actualTextColor,
                     textAlign = textAlign
                 )
             }
+        }
+    }
+}
+
+/**
+ * Picks the largest font size (down to ~50% of [maxFontSize]) so text fits in [maxLines] and
+ * in the measured box. Work is done inside [remember] + [TextMeasurer.measure] — no state loop.
+ */
+@Composable
+private fun AutoScaledButtonLabel(
+    label: String,
+    maxFontSize: TextUnit,
+    color: Color,
+    textAlign: TextAlign,
+    maxLines: Int,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier = modifier) {
+        val maxWpx = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
+        val maxHpx = if (!maxHeight.value.isFinite()) {
+            Int.MAX_VALUE
+        } else {
+            with(density) { maxHeight.roundToPx() }.coerceAtLeast(1)
+        }
+        val baseMaxSp = maxFontSize.value
+        val minSp = (baseMaxSp * 0.5f).coerceAtLeast(11f).coerceAtMost(baseMaxSp)
+        val textMeasurer = rememberTextMeasurer()
+        val chosenSp = remember(label, maxWpx, maxHpx, baseMaxSp, minSp, maxLines) {
+            fun fits(sp: Float): Boolean {
+                if (sp < minSp) return false
+                val lineHeight = sp * 1.25f
+                val layout = textMeasurer.measure(
+                    text = AnnotatedString(label),
+                    style = TextStyle(
+                        fontSize = sp.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = lineHeight.sp,
+                        textAlign = textAlign
+                    ),
+                    constraints = Constraints(maxWidth = maxWpx),
+                    maxLines = maxLines
+                )
+                val linesOk = layout.lineCount <= maxLines
+                val heightOk = maxHpx == Int.MAX_VALUE || layout.size.height <= maxHpx
+                return linesOk && heightOk
+            }
+            var lo = (minSp * 10f).toInt().coerceAtLeast(1)
+            var hi = (baseMaxSp * 10f).toInt().coerceAtLeast(lo)
+            var best = lo
+            while (lo <= hi) {
+                val mid = (lo + hi) / 2
+                val sp = mid / 10f
+                if (fits(sp)) {
+                    best = mid
+                    lo = mid + 1
+                } else {
+                    hi = mid - 1
+                }
+            }
+            val candidate = best / 10f
+            if (fits(candidate)) candidate else minSp
+        }
+        val lineHeight = chosenSp * 1.25f
+        // BoxWithConstraints is fillMaxSize from parent; Text only measures to its line height, so
+        // without this Box the label sits at the top when a single short line uses auto-scaled text.
+        val labelBoxAlignment = when (textAlign) {
+            TextAlign.Start, TextAlign.Left -> Alignment.CenterStart
+            TextAlign.End, TextAlign.Right -> Alignment.CenterEnd
+            else -> Alignment.Center
+        }
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = labelBoxAlignment
+        ) {
+            Text(
+                text = label,
+                style = TextStyle(
+                    fontSize = chosenSp.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = lineHeight.sp
+                ),
+                color = color,
+                textAlign = textAlign,
+                maxLines = maxLines,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

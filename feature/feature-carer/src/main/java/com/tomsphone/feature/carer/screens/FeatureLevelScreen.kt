@@ -192,8 +192,8 @@ private fun getLevelInfo(level: FeatureLevel): Triple<String, String, List<Strin
             listOf(
                 "Up to 5 assistant contact buttons",
                 "Emergency button",
-                "Missed Calls list button",
-                "Contacts list button",
+                "Missed calls list button",
+                "Contacts button",
                 "Screen Off button",
                 "Speaker toggle during calls",
                 "Appearance options"

@@ -34,6 +34,10 @@ class LocalContactRepository @Inject constructor(
     override suspend fun getCarerContactsWithBatteryAlerts(): List<Contact> {
         return contactDao.getCarerContactsWithBatteryAlerts().map { it.toContact() }
     }
+
+    override suspend fun getContactsWithBatteryAlertsEnabled(): List<Contact> {
+        return contactDao.getContactsWithBatteryAlertsEnabled().map { it.toContact() }
+    }
     
     override fun getGreyListContacts(limit: Int): Flow<List<Contact>> {
         return contactDao.getGreyListContacts(limit).map { list ->

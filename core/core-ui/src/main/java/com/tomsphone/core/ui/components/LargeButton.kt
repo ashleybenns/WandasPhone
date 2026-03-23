@@ -599,10 +599,10 @@ fun ListButton(
         ListTextAlignment.CENTER -> TextAlign.Center
     }
     
-    // Calculate width for 14 characters (approx 0.6 * fontSize per char + padding)
-    // "0 Missed Calls" = 14 chars including space
+    // Width scales with label: "No Missed Calls" / "N Missed Calls" / "Contacts", etc.
     val charWidth = textSize.value * 0.6f  // Approximate character width
-    val buttonWidth = (charWidth * 14 + 12).dp  // 14 chars + minimal horizontal padding
+    val charCount = label.length.coerceIn(10, 20)
+    val buttonWidth = (charWidth * charCount + 12).dp
     
     // Interaction source for ripple effect
     val interactionSource = remember { MutableInteractionSource() }
