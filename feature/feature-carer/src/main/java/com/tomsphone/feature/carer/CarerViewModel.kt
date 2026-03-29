@@ -5,7 +5,6 @@ import android.media.AudioManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.CarerSettings
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
@@ -13,6 +12,8 @@ import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.config.ThemeOption
 import com.tomsphone.core.telecom.BatteryAlertSmsSender
+import com.tomsphone.core.telecom.DEFAULT_EMERGENCY_FALLBACK
+import com.tomsphone.core.telecom.EmergencyNumberResolver
 import com.tomsphone.core.analytics.AnalyticsManager
 import com.tomsphone.core.analytics.AnalyticsEvent
 import com.tomsphone.core.analytics.RemoteConfigManager
@@ -143,21 +144,6 @@ class CarerSettingsViewModel @Inject constructor(
     }
     
     /**
-     * Update feature level
-     */
-    fun setFeatureLevel(level: FeatureLevel) {
-        viewModelScope.launch {
-            val currentLevel = settings.first().featureLevel
-            settingsRepository.setFeatureLevel(level)
-            // Track feature level change
-            analytics.logEvent(AnalyticsEvent.FeatureLevelChanged(
-                fromLevel = currentLevel.level,
-                toLevel = level.level
-            ))
-        }
-    }
-    
-    /**
      * Update theme
      */
     fun setTheme(theme: ThemeOption) {
@@ -178,42 +164,6 @@ class CarerSettingsViewModel @Inject constructor(
             settingsRepository.updateSettings(
                 current.copy(ui = current.ui.copy(userTextSize = textSize))
             )
-        }
-    }
-    
-    fun setShowDisplayOffButton(enabled: Boolean) {
-        viewModelScope.launch {
-            // Read fresh from repository to avoid race conditions with other updates
-            val current = settingsRepository.getSettings().first()
-            settingsRepository.updateSettings(current.copy(showDisplayOffButton = enabled))
-        }
-    }
-    
-    fun setShowMissedCallsButton(enabled: Boolean) {
-        viewModelScope.launch {
-            val current = settingsRepository.getSettings().first()
-            settingsRepository.updateSettings(current.copy(homeShowMissedCallsButton = enabled))
-        }
-    }
-    
-    fun setShowMissedCallReturnButton(enabled: Boolean) {
-        viewModelScope.launch {
-            val current = settingsRepository.getSettings().first()
-            settingsRepository.updateSettings(current.copy(homeShowMissedCallReturnButton = enabled))
-        }
-    }
-    
-    fun setShowContactsListButton(enabled: Boolean) {
-        viewModelScope.launch {
-            val current = settingsRepository.getSettings().first()
-            settingsRepository.updateSettings(current.copy(homeShowContactsListButton = enabled))
-        }
-    }
-    
-    fun setContactsListShowGreyListOnly(enabled: Boolean) {
-        viewModelScope.launch {
-            val current = settingsRepository.getSettings().first()
-            settingsRepository.updateSettings(current.copy(homeContactsListShowGreyListOnly = enabled))
         }
     }
     
@@ -380,6 +330,7 @@ class CarerSettingsViewModel @Inject constructor(
         if (current.homeShowMissedCallReturnButton) list.add(HomeSlotAssignments.MISSED_CALL_RETURN)
         if (current.homeShowMissedCallsButton) list.add(HomeSlotAssignments.MISSED_CALLS_LIST)
         if (current.homeShowContactsListButton) list.add(HomeSlotAssignments.OTHER_CONTACTS)
+        if (current.homeShowDialerButton) list.add(HomeSlotAssignments.DIALER)
         if (current.showDisplayOffButton) list.add(HomeSlotAssignments.SCREEN_OFF)
         while (list.size < HomeSlotAssignments.SLOT_COUNT) list.add(HomeSlotAssignments.EMPTY)
         return list.take(HomeSlotAssignments.SLOT_COUNT)
@@ -397,6 +348,12 @@ class CarerSettingsViewModel @Inject constructor(
                 val contactsList = contacts.first()
                 val migrated = buildLegacySlotAssignments(contactsList, current)
                 settingsRepository.updateSettings(current.withSlotsSynced(migrated))
+            } else {
+                val trimmed = list.take(HomeSlotAssignments.SLOT_COUNT)
+                val synced = current.withSlotsSynced(trimmed)
+                if (synced != current) {
+                    settingsRepository.updateSettings(synced)
+                }
             }
         }
     }
@@ -650,7 +607,24 @@ class CarerSettingsViewModel @Inject constructor(
     fun setEmergencyNumber(number: String) {
         viewModelScope.launch {
             val current = settingsRepository.getSettings().first()
-            settingsRepository.updateSettings(current.copy(emergencyNumber = number))
+            val digits = number.filter { it.isDigit() }
+            val toStore =
+                if (digits.isEmpty()) DEFAULT_EMERGENCY_FALLBACK else number.trim()
+            settingsRepository.updateSettings(current.copy(emergencyNumber = toStore))
+        }
+    }
+
+    /**
+     * If the stored value is still the generic default, replace it with a device-appropriate code when known.
+     */
+    fun syncEmergencyNumberWithRegionIfNeeded() {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            val suggested =
+                EmergencyNumberResolver.resolve(context, current.emergencyNumber)
+                    .suggestedPersistDigits
+                    ?: return@launch
+            settingsRepository.updateSettings(current.copy(emergencyNumber = suggested))
         }
     }
     
@@ -843,5 +817,6 @@ private fun CarerSettings.withSlotsSynced(slots: List<String>): CarerSettings = 
     homeShowMissedCallReturnButton = slots.contains(HomeSlotAssignments.MISSED_CALL_RETURN),
     homeShowMissedCallsButton = slots.contains(HomeSlotAssignments.MISSED_CALLS_LIST),
     homeShowContactsListButton = slots.contains(HomeSlotAssignments.OTHER_CONTACTS),
+    homeShowDialerButton = slots.contains(HomeSlotAssignments.DIALER),
     showDisplayOffButton = slots.contains(HomeSlotAssignments.SCREEN_OFF)
 )

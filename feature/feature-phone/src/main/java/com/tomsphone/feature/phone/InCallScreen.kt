@@ -11,7 +11,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.ui.components.HangUpButton
 import com.tomsphone.core.ui.components.InertBorderLayout
@@ -23,8 +22,7 @@ import com.tomsphone.core.ui.theme.wandasColors
 /**
  * In-Call Screen
  * 
- * Level 1: Just shows who's calling and End Call button
- * Level 2+: Adds speaker, mute, volume controls
+ * Active call: speaker and mute when the call is connected; end call always available.
  */
 @Composable
 fun InCallScreen(
@@ -33,8 +31,6 @@ fun InCallScreen(
 ) {
     val currentCall by viewModel.currentCall.collectAsState()
     val contactName by viewModel.contactName.collectAsState()
-    val featureLevel by viewModel.featureLevel.collectAsState()
-    
     val call = currentCall
     
     // Auto-navigate back when call ends
@@ -87,8 +83,7 @@ fun InCallScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge)
                 ) {
-                    // Level 2+ controls
-                    if (featureLevel.level >= FeatureLevel.BASIC.level && call?.state == CallState.ACTIVE) {
+                    if (call?.state == CallState.ACTIVE) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)

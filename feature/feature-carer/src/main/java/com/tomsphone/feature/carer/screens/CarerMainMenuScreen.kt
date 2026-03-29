@@ -15,16 +15,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
-import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
 import com.tomsphone.feature.carer.components.CarerMenuButton
-import com.tomsphone.feature.carer.components.DevLevelIndicator
 
 /**
  * Main menu for carer settings.
- * 
- * Shows category buttons with descriptions.
- * Some categories are level-gated.
  */
 @Composable
 fun CarerMainMenuScreen(
@@ -35,24 +30,20 @@ fun CarerMainMenuScreen(
     onNavigateToTouchResponse: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToHomeLayout: () -> Unit,
-    onNavigateToFeatureLevel: () -> Unit,
     onNavigateToAlwaysOn: () -> Unit,
     onNavigateToFactoryReset: () -> Unit,
     onNavigateToSupportSuggestions: () -> Unit,
     onExitApp: () -> Unit,
     onBack: () -> Unit,
-    viewModel: CarerSettingsViewModel = hiltViewModel(),
     supportViewModel: com.tomsphone.feature.carer.support.SupportSuggestionsViewModel = hiltViewModel()
 ) {
-    val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val supportUnreadCount by supportViewModel.unreadCount.collectAsState(initial = 0)
 
     LaunchedEffect(Unit) {
         supportViewModel.ensureDeviceId()
         supportViewModel.refreshUnreadCount()
     }
-    
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.wandasColors.background
@@ -60,16 +51,11 @@ fun CarerMainMenuScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Dev level indicator
-            DevLevelIndicator(level = featureLevel)
-            
-            // Breadcrumb / title
             CarerBreadcrumb(
-                title = "Assistant Settings",
+                title = "Settings",
                 onBack = onBack
             )
-            
-            // Menu items
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -77,84 +63,57 @@ fun CarerMainMenuScreen(
                     .padding(WandasDimensions.SpacingMedium),
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
             ) {
-                // Tom's Phone Description - first, informational
-                CarerMenuButton(
-                    title = "Tom's Phone Description",
-                    description = "The story behind this phone app for seniors",
-                    onClick = onNavigateToTomsPhoneDescription,
-                    currentLevel = featureLevel
-                )
-
-                // User Profile - always visible
                 CarerMenuButton(
                     title = "User Profile",
-                    description = "Name, emergency info",
-                    onClick = onNavigateToUserProfile,
-                    currentLevel = featureLevel
+                    description = "User Name, Emergency, Medical info, Photo",
+                    onClick = onNavigateToUserProfile
                 )
-                
-                // Contacts hub: everyone in one list + recent calls
+                CarerMenuButton(
+                    title = "Home Screen Layout",
+                    description = "Slots for up to Seven Buttons",
+                    onClick = onNavigateToHomeLayout
+                )
                 CarerMenuButton(
                     title = "Contacts",
-                    description = "All people in one list; home buttons from Home screen layout",
-                    onClick = onNavigateToContactsHub,
-                    currentLevel = featureLevel
+                    description = "Add, reorder or delete contacts, Recent Calls record",
+                    onClick = onNavigateToContactsHub
                 )
-                
-                // Call Handling - always visible
                 CarerMenuButton(
                     title = "Call Handling",
-                    description = "Auto-answer, speakerphone, missed calls",
-                    onClick = onNavigateToCallHandling,
-                    currentLevel = featureLevel
+                    description = "Volumes, Unknown Callers, Speakerphone, Auto-answer, Reminders, Battery texts, Voice Announcements",
+                    onClick = onNavigateToCallHandling
                 )
-                
-                // Touch Response - always visible (fundamental accessibility)
                 CarerMenuButton(
-                    title = "Touch Response",
-                    description = "How buttons respond: tap, press, or double-tap",
-                    onClick = onNavigateToTouchResponse,
-                    currentLevel = featureLevel
+                    title = "Touch Click Response",
+                    description = "Tap, Press or Accumulated Tap",
+                    onClick = onNavigateToTouchResponse
                 )
-                
-                // Appearance - always visible (accessibility is essential)
                 CarerMenuButton(
                     title = "Appearance",
-                    description = "Theme, text size, list alignment, two-touch buttons",
-                    onClick = onNavigateToAppearance,
-                    currentLevel = featureLevel
+                    description = "Text size, alignment, time display",
+                    onClick = onNavigateToAppearance
                 )
-
-                // Home screen layout - assign and reorder the 7 slots + Emergency
                 CarerMenuButton(
-                    title = "Home screen layout",
-                    description = "Assign and reorder buttons (slots 1–7, Emergency always 8)",
-                    onClick = onNavigateToHomeLayout,
-                    currentLevel = featureLevel
+                    title = "Always On",
+                    description = "Pin app, screen awake, volume lock",
+                    onClick = onNavigateToAlwaysOn
                 )
-
-                // Always On Mode - always visible
                 CarerMenuButton(
-                    title = "Always On Mode",
-                    description = "Charging stand, pinned mode",
-                    onClick = onNavigateToAlwaysOn,
-                    currentLevel = featureLevel
-                )
-                
-                // Support & suggestions - anonymous feedback, unread badge
-                CarerMenuButton(
-                    title = "Support & suggestions",
-                    description = "Get support or suggest improvements (anonymous)",
+                    title = "Support",
+                    description = "Messaging for Support or Suggestions",
                     onClick = onNavigateToSupportSuggestions,
-                    currentLevel = featureLevel,
                     unreadCount = supportUnreadCount
                 )
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // Factory Reset - always visible, red to indicate danger
+                CarerMenuButton(
+                    title = "About",
+                    description = "Why this app exists and how it works",
+                    onClick = onNavigateToTomsPhoneDescription
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                
+
                 Button(
                     onClick = onNavigateToFactoryReset,
                     modifier = Modifier
@@ -162,7 +121,7 @@ fun CarerMainMenuScreen(
                         .height(56.dp),
                     shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFD32F2F),  // Red
+                        containerColor = Color(0xFFD32F2F),
                         contentColor = Color.White
                     )
                 ) {
@@ -171,17 +130,16 @@ fun CarerMainMenuScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
-                
+
                 Text(
-                    text = "Wipe all data before giving phone to new user",
+                    text = "Wipes data before giving the phone to a new user",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.padding(top = 4.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                // Exit App - unpin and close
+
                 OutlinedButton(
                     onClick = onExitApp,
                     modifier = Modifier
@@ -197,14 +155,14 @@ fun CarerMainMenuScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
-                
+
                 Text(
-                    text = "Unpin and close the app (assistant escape)",
+                    text = "Unpin (if needed) and close",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.padding(top = 4.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }

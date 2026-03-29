@@ -35,8 +35,6 @@ fun ContactsScreen(
     openedFromAssistantsHub: Boolean = false,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
-    val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val contacts by viewModel.contacts.collectAsState()
     val homeSlots by viewModel.homeSlotAssignments.collectAsState()
     // Always derive from current slots (no remember) so home status can’t go stale after edits
@@ -53,10 +51,9 @@ fun ContactsScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            DevLevelIndicator(level = featureLevel)
             CarerBreadcrumb(
                 title = if (openedFromAssistantsHub) "All contacts" else "Contacts",
-                parentTitle = if (openedFromAssistantsHub) "Contacts" else "Assistant Settings",
+                parentTitle = if (openedFromAssistantsHub) "Contacts" else "Settings",
                 onBack = onBack
             )
 
@@ -68,13 +65,12 @@ fun ContactsScreen(
             ) {
                 item {
                     Text(
-                        text = "Everyone in one place",
+                        text = "One list for everyone",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.wandasColors.onSurface
                     )
                     Text(
-                        text = "Use Home screen layout to put someone on a home call button (assistant). " +
-                            "Without a slot they can still call in and appear in the on-phone Contacts list.",
+                        text = "Home Screen Layout assigns call buttons. Others can still call in and show in the on-phone list.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.65f),
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)

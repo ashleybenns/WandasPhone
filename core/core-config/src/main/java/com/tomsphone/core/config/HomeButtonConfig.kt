@@ -45,6 +45,7 @@ sealed class HomeButtonConfig {
         companion object {
             const val ID_MISSED_CALLS = "missed_calls"
             const val ID_CONTACTS_LIST = "contacts_list"
+            const val ID_DIALER = "dialer"
         }
     }
     
@@ -75,6 +76,8 @@ sealed class HomeButtonConfig {
      * Emergency button - always at bottom, distinct styling
      */
     data class EmergencyButton(
-        val label: String = "Emergency"
+        val label: String = "Emergency",
+        /** Digits shown under the title (resolved for region / stored override). */
+        val dialDigitsDisplay: String? = null
     ) : HomeButtonConfig()
 }

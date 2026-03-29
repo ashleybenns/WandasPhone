@@ -2,6 +2,7 @@ package com.tomsphone.feature.carer.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -10,7 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.data.model.Contact
@@ -19,8 +22,6 @@ import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
-import com.tomsphone.feature.carer.components.DevLevelIndicator
-
 @Composable
 fun HomeScreenLayoutScreen(
     onBack: () -> Unit,
@@ -30,8 +31,6 @@ fun HomeScreenLayoutScreen(
     onNavigateToNewContactForSlot: (slotIndex: Int) -> Unit = {},
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
-    val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val slots by viewModel.homeSlotAssignments.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
     /** Any contact may be assigned a home slot (assistant or elevated answer-only). */
@@ -60,6 +59,7 @@ fun HomeScreenLayoutScreen(
         value == HomeSlotAssignments.MISSED_CALL_RETURN -> "Missed call return"
         value == HomeSlotAssignments.MISSED_CALLS_LIST -> "Missed calls list"
         value == HomeSlotAssignments.OTHER_CONTACTS -> "Contacts"
+        value == HomeSlotAssignments.DIALER -> "Dial"
         value == HomeSlotAssignments.SCREEN_OFF -> "Screen off"
         else -> "Unknown"
     }
@@ -69,10 +69,9 @@ fun HomeScreenLayoutScreen(
         color = MaterialTheme.wandasColors.background
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            DevLevelIndicator(level = featureLevel)
             CarerBreadcrumb(
-                title = "Home screen layout",
-                parentTitle = "Assistant Settings",
+                title = "Home Screen Layout",
+                parentTitle = "Settings",
                 onBack = onBack
             )
             Column(
@@ -83,7 +82,7 @@ fun HomeScreenLayoutScreen(
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingSmall)
             ) {
                 Text(
-                    text = "Slots 1–7 are assignable. Slot 8 is always Emergency.",
+                    text = "Slots 1–7: your buttons. Slot 8: Emergency (fixed).",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.8f),
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -134,6 +133,8 @@ fun HomeScreenLayoutScreen(
         val pickerScroll = rememberScrollState()
         AlertDialog(
             onDismissRequest = { slotIndexToEdit = null },
+            // Slightly gentler radius so less content sits in the curved clip zone (glyphs were cropped).
+            shape = RoundedCornerShape(20.dp),
             title = { Text("Slot ${index + 1}") },
             text = {
                 // Special actions first so “Recent calls” / missed list isn’t buried below many assistants;
@@ -142,6 +143,8 @@ fun HomeScreenLayoutScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 480.dp)
+                        // Inset from dialog surface: rounded clip was cutting label/subtitle ascenders & line ends.
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                         .verticalScroll(pickerScroll),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -183,6 +186,16 @@ fun HomeScreenLayoutScreen(
                         onSelect = {
                             slotIndexToEdit = null
                             viewModel.setHomeSlotAt(index, HomeSlotAssignments.OTHER_CONTACTS)
+                        }
+                    )
+                    SlotOption(
+                        label = "Dial",
+                        subtitle = "Keypad to enter a number, then a large Call button",
+                        value = HomeSlotAssignments.DIALER,
+                        current = if (index in list.indices) list[index] else HomeSlotAssignments.EMPTY,
+                        onSelect = {
+                            slotIndexToEdit = null
+                            viewModel.setHomeSlotAt(index, HomeSlotAssignments.DIALER)
                         }
                     )
                     SlotOption(
@@ -316,26 +329,48 @@ private fun SlotOption(
     onSelect: () -> Unit
 ) {
     val selected = value == current
+    // Extra padding so text doesn’t sit under the dialog’s rounded clip; room for ascenders/descenders.
     TextButton(
         onClick = onSelect,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+            ) {
+                val labelStyle = MaterialTheme.typography.bodyLarge.copy(
+                    lineHeight = (MaterialTheme.typography.bodyLarge.fontSize.value * 1.35f).sp,
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.None
+                    )
+                )
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = labelStyle,
                     color = MaterialTheme.wandasColors.onSurface
                 )
                 if (!subtitle.isNullOrBlank()) {
+                    val subStyle = MaterialTheme.typography.bodySmall.copy(
+                        lineHeight = (MaterialTheme.typography.bodySmall.fontSize.value * 1.45f).sp,
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.None
+                        )
+                    )
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.65f)
+                        style = subStyle,
+                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.65f),
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 }
             }

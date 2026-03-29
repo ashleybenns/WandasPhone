@@ -35,6 +35,13 @@ fun Modifier.activationGesture(
     onActivate: () -> Unit,
     interactionSource: MutableInteractionSource? = null
 ): Modifier {
+    val resetSecondaryIdle = LocalSecondaryScreenIdleReset.current
+    val wrappedOnActivate = remember(onActivate, resetSecondaryIdle) {
+        {
+            resetSecondaryIdle()
+            onActivate()
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
     
     // State for ON_PRESS mode
@@ -48,7 +55,7 @@ fun Modifier.activationGesture(
     var hasActivatedAccumulated by remember { mutableStateOf(false) }
     var timeoutJob by remember { mutableStateOf<Job?>(null) }
     
-    return this.pointerInput(preset, debounceMs, accumulatedThresholdMs, accumulatedTimeoutMs) {
+    return this.pointerInput(preset, debounceMs, accumulatedThresholdMs, accumulatedTimeoutMs, wrappedOnActivate) {
         detectTapGestures(
             onPress = { offset ->
                 pressStartTime = System.currentTimeMillis()
@@ -67,7 +74,7 @@ fun Modifier.activationGesture(
                         val holdDuration = System.currentTimeMillis() - pressStartTime
                         if (holdDuration >= preset.minHoldMs && !hasActivatedOnPress) {
                             hasActivatedOnPress = true
-                            onActivate()
+                            wrappedOnActivate()
                         }
                     }
                 }
@@ -105,7 +112,7 @@ fun Modifier.activationGesture(
                     ButtonActivationPreset.ON_RELEASE -> {
                         // Standard tap: activate on release if held long enough
                         if (released && pressDuration >= debounceMs) {
-                            onActivate()
+                            wrappedOnActivate()
                         }
                     }
                     ButtonActivationPreset.ON_PRESS -> {
@@ -120,7 +127,7 @@ fun Modifier.activationGesture(
                             // Check if we've reached the threshold
                             if (accumulatedTouchTime >= accumulatedThresholdMs) {
                                 hasActivatedAccumulated = true
-                                onActivate()
+                                wrappedOnActivate()
                                 // Reset for next activation
                                 accumulatedTouchTime = 0L
                                 hasActivatedAccumulated = false

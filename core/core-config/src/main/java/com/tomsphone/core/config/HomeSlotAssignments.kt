@@ -16,6 +16,8 @@ object HomeSlotAssignments {
     /** Two-tap “Missed calls” list on the assistant phone (missed + declined only). */
     const val MISSED_CALLS_LIST = "mcl"
     const val OTHER_CONTACTS = "oc"
+    /** Keypad dialer (assign a slot in home layout). */
+    const val DIALER = "dial"
     const val SCREEN_OFF = "so"
 
     fun contactSlot(contactId: Long): String = "$PREFIX_CONTACT$contactId"

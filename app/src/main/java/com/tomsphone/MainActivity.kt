@@ -42,6 +42,8 @@ import com.tomsphone.core.config.homeButtonRowCount
 import com.tomsphone.core.telecom.CallDirection
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
+import com.tomsphone.core.telecom.DEFAULT_EMERGENCY_FALLBACK
+import com.tomsphone.core.telecom.EmergencyNumberResolver
 import com.tomsphone.core.telecom.MissedCallNagManager
 import com.tomsphone.core.ui.theme.ThemeOption
 import com.tomsphone.core.ui.theme.WandasPhoneTheme
@@ -525,18 +527,8 @@ fun WandasPhoneApp(
         }
     }
     
-    // Button row count from home layout (max 7 slots: call + two-touch + emergency)
-    val homeButtonRowCount = run {
-        val s = settings ?: return@run 4
-        var rows = s.homeContactCount.coerceAtLeast(1)
-        if (s.homeShowMissedCallReturnButton) rows += 1
-        if (s.showDisplayOffButton) rows += 1
-        var menuButtons = 0
-        if (s.homeShowMissedCallsButton) menuButtons++
-        if (s.homeShowContactsListButton) menuButtons++
-        rows += (menuButtons + 1) / 2
-        rows.coerceIn(2, 6)
-    }
+    // Button row count from home layout (slots when migrated, else legacy toggles)
+    val homeButtonRowCount = settings?.homeButtonRowCount?.coerceIn(2, 6) ?: 4
     
     WandasPhoneTheme(themeOption = ThemeOption.HIGH_CONTRAST_LIGHT) {
         NavHost(
@@ -566,6 +558,9 @@ fun WandasPhoneApp(
                         },
                         onNavigateToContactsList = {
                             navController.navigate("contactsList")
+                        },
+                        onNavigateToDialer = {
+                            navController.navigate("dialer")
                         },
                         batteryLevel = batteryLevel,
                         isLowBattery = isLowBattery,
@@ -669,6 +664,29 @@ fun WandasPhoneApp(
                 }
             }
             
+            composable("dialer") {
+                val scope = rememberCoroutineScope()
+                val dialerVm: com.tomsphone.feature.home.DialerScreenViewModel = hiltViewModel()
+                val buttonActivation by dialerVm.buttonActivation.collectAsState()
+                val touchDebounceMs by dialerVm.touchDebounceMs.collectAsState()
+                val accumulatedThresholdMs by dialerVm.accumulatedTapThresholdMs.collectAsState()
+                val accumulatedTimeoutMs by dialerVm.accumulatedTapTimeoutMs.collectAsState()
+                // Dialer uses screen-based typography/layout only (not UserScalingProvider / home row count).
+                com.tomsphone.feature.home.DialerScreen(
+                    onBack = { navController.popBackStack() },
+                    onPlaceCall = { e164 ->
+                        navController.popBackStack()
+                        scope.launch {
+                            callManager.placeCall(e164)
+                        }
+                    },
+                    buttonActivation = buttonActivation,
+                    touchDebounceMs = touchDebounceMs,
+                    accumulatedThresholdMs = accumulatedThresholdMs,
+                    accumulatedTimeoutMs = accumulatedTimeoutMs
+                )
+            }
+
             // Contacts List (Level 2+)
             composable("contactsList") {
                 val scope = rememberCoroutineScope()
@@ -691,7 +709,14 @@ fun WandasPhoneApp(
             
             // Emergency confirm screen (after 3 taps)
             composable("emergencyConfirm") {
-                val emergencyNumber = settings?.emergencyNumber ?: "999"
+                val appCtx = LocalContext.current.applicationContext
+                val storedEmergency = settings?.emergencyNumber.orEmpty()
+                val emergencyResolution = remember(storedEmergency) {
+                    EmergencyNumberResolver.resolve(appCtx, storedEmergency)
+                }
+                val emergencyNumber = emergencyResolution.dialDigits.ifEmpty {
+                    DEFAULT_EMERGENCY_FALLBACK
+                }
                 val isTestMode = settings?.emergencyTestMode ?: true
                 
                 UserScalingProvider(
@@ -745,6 +770,14 @@ fun WandasPhoneApp(
             
             // Emergency call screen (shows user info during call)
             composable("emergencyCall") {
+                val appCtx = LocalContext.current.applicationContext
+                val storedEmergency = settings?.emergencyNumber.orEmpty()
+                val emergencyResolution = remember(storedEmergency) {
+                    EmergencyNumberResolver.resolve(appCtx, storedEmergency)
+                }
+                val emergencyDialDigits = emergencyResolution.dialDigits.ifEmpty {
+                    DEFAULT_EMERGENCY_FALLBACK
+                }
                 val userName = settings?.userName ?: "User"
                 val isTestMode = settings?.emergencyTestMode ?: true
                 
@@ -761,6 +794,7 @@ fun WandasPhoneApp(
                     userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
                 ) {
                     EmergencyCallScreen(
+                        emergencyDialDigits = emergencyDialDigits,
                         userName = userName,
                         userSurname = settings?.userSurname ?: "",
                         userPhotoUri = settings?.userPhotoUri,

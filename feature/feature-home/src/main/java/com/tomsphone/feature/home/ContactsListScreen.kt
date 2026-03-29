@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.components.ConfigurableButton
 import com.tomsphone.core.config.ButtonActivationPreset
@@ -29,8 +30,6 @@ import com.tomsphone.core.ui.theme.PastelColors
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
-import kotlinx.coroutines.delay
-
 private const val INACTIVITY_TIMEOUT_MS = 30_000L
 
 /**
@@ -57,12 +56,7 @@ fun ContactsListScreen(
     val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
     val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     
-    // Auto-dismiss after 30 seconds of inactivity
-    LaunchedEffect(Unit) {
-        delay(INACTIVITY_TIMEOUT_MS)
-        onBack()
-    }
-    
+    SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onBack) {
     ListScreenLayout(
         backgroundColor = PastelColors.lightYellow,
         title = screenTitle,
@@ -104,6 +98,7 @@ fun ContactsListScreen(
                 onClick = { viewModel.nextPage() }
             )
         }
+    }
     }
 }
 

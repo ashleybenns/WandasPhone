@@ -1,6 +1,11 @@
 package com.tomsphone.feature.carer
 
+import android.net.Uri
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -8,6 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tomsphone.core.data.model.ContactType
+import com.tomsphone.core.ui.components.LocalSecondaryScreenIdleReset
 import com.tomsphone.feature.carer.screens.*
 
 /**
@@ -21,12 +27,12 @@ object CarerRoutes {
     const val ASSISTANTS_HUB = "carer_assistants_hub"
     /** Unified contacts list (all people; home slots define assistants). */
     const val CONTACTS_LIST = "carer_contacts_list"
-    const val CONTACT_EDIT = "carer_contact_edit/{contactId}/{contactType}/{homeSlotPendingIndex}"
+    const val CONTACT_EDIT =
+        "carer_contact_edit/{contactId}/{contactType}/{homeSlotPendingIndex}?initialPhone={initialPhone}&parentBreadcrumb={parentBreadcrumb}"
     const val CALL_HANDLING = "carer_call_handling"
     const val TOUCH_RESPONSE = "carer_touch_response"
     const val APPEARANCE = "carer_appearance"
     const val HOME_LAYOUT = "carer_home_layout"
-    const val FEATURE_LEVEL = "carer_feature_level"
     const val ALWAYS_ON = "carer_always_on"
     const val FACTORY_RESET = "carer_factory_reset"
     const val SUPPORT_SUGGESTIONS = "carer_support_suggestions"
@@ -37,15 +43,25 @@ object CarerRoutes {
     fun supportThread(threadId: String) = "carer_support_thread/$threadId"
 
     /** [homeSlotPendingIndex] 0–6 assigns that slot after a **new** contact is saved; -1 = normal flow. */
-    fun contactEdit(contactId: Long, contactType: ContactType, homeSlotPendingIndex: Int = -1) =
-        "carer_contact_edit/$contactId/${contactType.name}/$homeSlotPendingIndex"
+    fun contactEdit(
+        contactId: Long,
+        contactType: ContactType,
+        homeSlotPendingIndex: Int = -1,
+        initialPhone: String? = null,
+        parentBreadcrumb: String? = null
+    ): String {
+        val path = "carer_contact_edit/$contactId/${contactType.name}/$homeSlotPendingIndex"
+        // Always include query args so the route matches the registered pattern (defaults when empty).
+        val ip = Uri.encode(initialPhone.orEmpty())
+        val pb = Uri.encode(parentBreadcrumb.orEmpty())
+        return "$path?initialPhone=$ip&parentBreadcrumb=$pb"
+    }
 }
 
 /**
  * Carer settings navigation host.
  * 
  * All carer settings screens are nested here with proper back navigation.
- * Each screen reads the feature level directly from the ViewModel for reactivity.
  */
 @Composable
 fun CarerNavigation(
@@ -53,9 +69,22 @@ fun CarerNavigation(
     onExitApp: () -> Unit,
     navController: NavHostController = rememberNavController()
 ) {
+    val resetIdle = LocalSecondaryScreenIdleReset.current
     NavHost(
         navController = navController,
-        startDestination = CarerRoutes.MAIN_MENU
+        startDestination = CarerRoutes.MAIN_MENU,
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(resetIdle) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.any { it.pressed && !it.previousPressed }) {
+                            resetIdle()
+                        }
+                    }
+                }
+            }
     ) {
         // Main Menu
         composable(CarerRoutes.MAIN_MENU) {
@@ -67,7 +96,6 @@ fun CarerNavigation(
                 onNavigateToTouchResponse = { navController.navigate(CarerRoutes.TOUCH_RESPONSE) },
                 onNavigateToAppearance = { navController.navigate(CarerRoutes.APPEARANCE) },
                 onNavigateToHomeLayout = { navController.navigate(CarerRoutes.HOME_LAYOUT) },
-                onNavigateToFeatureLevel = { navController.navigate(CarerRoutes.FEATURE_LEVEL) },
                 onNavigateToAlwaysOn = { navController.navigate(CarerRoutes.ALWAYS_ON) },
                 onNavigateToFactoryReset = { navController.navigate(CarerRoutes.FACTORY_RESET) },
                 onNavigateToSupportSuggestions = { navController.navigate(CarerRoutes.SUPPORT_SUGGESTIONS) },
@@ -131,6 +159,14 @@ fun CarerNavigation(
                 navArgument("homeSlotPendingIndex") {
                     type = NavType.IntType
                     defaultValue = -1
+                },
+                navArgument("initialPhone") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("parentBreadcrumb") {
+                    type = NavType.StringType
+                    defaultValue = ""
                 }
             )
         ) { backStackEntry ->
@@ -142,10 +178,14 @@ fun CarerNavigation(
                 ContactType.GREY_LIST
             }
             val homeSlotPendingIndex = backStackEntry.arguments?.getInt("homeSlotPendingIndex") ?: -1
+            val initialPhone = backStackEntry.arguments?.getString("initialPhone").orEmpty()
+            val parentBreadcrumb = backStackEntry.arguments?.getString("parentBreadcrumb").orEmpty()
             ContactEditScreen(
                 contactId = contactId,
                 contactType = contactType,
                 homeSlotPendingIndex = homeSlotPendingIndex,
+                initialPhoneFromCallLog = initialPhone,
+                parentBreadcrumbTitle = parentBreadcrumb,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -189,14 +229,18 @@ fun CarerNavigation(
         // Recent calls (read-only, same DB as user list; for carer review / future sync)
         composable(CarerRoutes.RECENT_CALLS) {
             CarerRecentCallsScreen(
-                onBack = { navController.popBackStack() }
-            )
-        }
-        
-        // Feature Level
-        composable(CarerRoutes.FEATURE_LEVEL) {
-            FeatureLevelScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onAddUnknownCallerToContacts = { phone ->
+                    navController.navigate(
+                        CarerRoutes.contactEdit(
+                            contactId = 0L,
+                            contactType = ContactType.GREY_LIST,
+                            homeSlotPendingIndex = -1,
+                            initialPhone = phone,
+                            parentBreadcrumb = "Recent calls"
+                        )
+                    )
+                }
             )
         }
         

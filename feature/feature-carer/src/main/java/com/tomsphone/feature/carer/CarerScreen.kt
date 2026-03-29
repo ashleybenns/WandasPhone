@@ -13,6 +13,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 
@@ -42,12 +43,15 @@ fun CarerScreen(
         )
     }
     
-    // Once verified, show the settings navigation
+    // Once verified, show the settings navigation (idle timeout → home uses carer inactivity setting).
     if (isPinVerified) {
-        CarerNavigation(
-            onExitCarerSettings = onNavigateBack,
-            onExitApp = onExitApp
-        )
+        val timeoutMs = (settings.inactivityTimeoutSeconds * 1000L).coerceIn(15_000L, 600_000L)
+        SecondaryScreenIdleEffect(timeoutMs = timeoutMs, onTimeout = onNavigateBack) {
+            CarerNavigation(
+                onExitCarerSettings = onNavigateBack,
+                onExitApp = onExitApp
+            )
+        }
     }
 }
 

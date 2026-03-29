@@ -1,5 +1,6 @@
 package com.tomsphone.feature.carer.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,9 +24,7 @@ import com.tomsphone.core.data.model.CallLogEntry
 import com.tomsphone.core.data.model.CallType
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
-import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
-import com.tomsphone.feature.carer.components.DevLevelIndicator
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,26 +32,24 @@ import java.util.Locale
 @Composable
 fun CarerRecentCallsScreen(
     onBack: () -> Unit,
-    viewModel: CarerRecentCallsViewModel = hiltViewModel(),
-    settingsViewModel: CarerSettingsViewModel = hiltViewModel()
+    /** Number not in contacts ([CallLogEntry.contactId] is null): tap opens add-contact with phone pre-filled. */
+    onAddUnknownCallerToContacts: (phoneNumber: String) -> Unit = {},
+    viewModel: CarerRecentCallsViewModel = hiltViewModel()
 ) {
     val calls by viewModel.recentCalls.collectAsState()
-    val settings by settingsViewModel.settings.collectAsState()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.wandasColors.background
     ) {
         Column(Modifier.fillMaxSize()) {
-            DevLevelIndicator(level = settings.featureLevel)
             CarerBreadcrumb(
                 title = "Recent calls",
-                parentTitle = "Assistants",
+                parentTitle = "Contacts",
                 onBack = onBack
             )
             Text(
-                text = "Same call log as on the user’s phone (one row per event). " +
-                    "Useful to see repeat callers. Stored on device for future sync.",
+                text = "Matches the user’s phone (one row per event). Tap an unknown number to add a contact.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.75f),
                 modifier = Modifier.padding(horizontal = WandasDimensions.SpacingMedium)
@@ -72,7 +69,10 @@ fun CarerRecentCallsScreen(
                     )
                 } else {
                     calls.forEach { call ->
-                        CarerRecentCallRow(call)
+                        CarerRecentCallRow(
+                            call = call,
+                            onAddUnknownCallerToContacts = onAddUnknownCallerToContacts
+                        )
                     }
                 }
             }
@@ -81,9 +81,23 @@ fun CarerRecentCallsScreen(
 }
 
 @Composable
-private fun CarerRecentCallRow(call: CallLogEntry) {
+private fun CarerRecentCallRow(
+    call: CallLogEntry,
+    onAddUnknownCallerToContacts: (String) -> Unit
+) {
+    val unknownNotInContacts = call.contactId == null && call.phoneNumber.isNotBlank()
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (unknownNotInContacts) {
+                    Modifier.clickable {
+                        onAddUnknownCallerToContacts(call.phoneNumber)
+                    }
+                } else {
+                    Modifier
+                }
+            ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.wandasColors.surface)
     ) {
         Column(Modifier.padding(WandasDimensions.SpacingMedium)) {
@@ -114,6 +128,14 @@ private fun CarerRecentCallRow(call: CallLogEntry) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f)
             )
+            if (unknownNotInContacts) {
+                Text(
+                    text = "Tap to add to contacts — set name and button colour",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.wandasColors.primaryButton,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
         }
     }
 }

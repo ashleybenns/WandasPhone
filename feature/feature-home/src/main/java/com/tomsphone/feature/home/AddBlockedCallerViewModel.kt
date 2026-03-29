@@ -45,7 +45,7 @@ class AddBlockedCallerViewModel @Inject constructor(
                 if (type == ContactType.CARER) {
                     val carers = all.filter { it.contactType == ContactType.CARER }
                     if (carers.size >= MAX_ASSISTANTS) {
-                        error("You already have $MAX_ASSISTANTS assistants. Remove one in Assistant Settings first.")
+                        error("You already have $MAX_ASSISTANTS assistants. Remove one in Settings first.")
                     }
                 }
                 val sameType = all.filter { it.contactType == type }

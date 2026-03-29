@@ -21,13 +21,13 @@ import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.data.model.CallType
 import com.tomsphone.core.data.model.Contact
+import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.components.ListScreenLayout
 import com.tomsphone.core.ui.theme.PastelColors
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
-import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -55,11 +55,7 @@ fun MissedCallsListScreen(
     val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
     val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
 
-    LaunchedEffect(Unit) {
-        delay(INACTIVITY_TIMEOUT_MS)
-        onBack()
-    }
-
+    SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onBack) {
     ListScreenLayout(
         backgroundColor = PastelColors.lightBlue,
         title = "Missed calls",
@@ -98,6 +94,7 @@ fun MissedCallsListScreen(
                 }
             )
         }
+    }
     }
 }
 

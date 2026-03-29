@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.ButtonColor
 import com.tomsphone.core.data.util.PhoneNumberUtils
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
@@ -57,11 +56,13 @@ fun ContactEditScreen(
     contactType: ContactType,  // Type is fixed - determined by entry point
     /** If 0–6, assign this home slot after a new contact is saved (from Home screen layout). */
     homeSlotPendingIndex: Int = -1,
+    /** When adding from Assistants → Recent calls: pre-fill phone (E164 or raw). */
+    initialPhoneFromCallLog: String = "",
+    /** Override breadcrumb parent (e.g. "Recent calls"); empty = Contacts / Home layout. */
+    parentBreadcrumbTitle: String = "",
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
-    val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val contacts by viewModel.contacts.collectAsState()
     val homeSlots by viewModel.homeSlotAssignments.collectAsState()
     val onHomeIds = remember(homeSlots) { HomeSlotAssignments.contactIdsOnHome(homeSlots) }
@@ -92,24 +93,45 @@ fun ContactEditScreen(
     var notifyBatteryAlerts by remember { mutableStateOf(existingContact?.notifyBatteryAlerts ?: false) }
     var selectedColor by remember { mutableStateOf(ButtonColor.fromArgb(existingContact?.buttonColor)) }
     
-    // Update form when contact loads
-    LaunchedEffect(existingContact, defaultRegion) {
-        existingContact?.let {
-            name = it.name
-            val parsed = PhoneNumberUtils.parseToRegionAndNational(it.phoneNumber, defaultRegion)
-            if (parsed != null) {
-                selectedRegionCode = parsed.first
-                nationalNumber = parsed.second
-            } else {
-                selectedRegionCode = defaultRegion
-                nationalNumber = it.phoneNumber.replace(Regex("[^0-9]"), "")
+    // Update form when contact loads, or seed new contact from recent-calls / deep link
+    LaunchedEffect(contactId, existingContact, defaultRegion, initialPhoneFromCallLog) {
+        when {
+            contactId != 0L && existingContact != null -> {
+                val it = existingContact
+                name = it.name
+                val parsed = PhoneNumberUtils.parseToRegionAndNational(it.phoneNumber, defaultRegion)
+                if (parsed != null) {
+                    selectedRegionCode = parsed.first
+                    nationalNumber = parsed.second
+                } else {
+                    selectedRegionCode = defaultRegion
+                    nationalNumber = it.phoneNumber.replace(Regex("[^0-9]"), "")
+                }
+                autoAnswerEnabled = it.autoAnswerEnabled
+                notifyBatteryAlerts = it.notifyBatteryAlerts
+                selectedColor = ButtonColor.fromArgb(it.buttonColor)
             }
-            autoAnswerEnabled = it.autoAnswerEnabled
-            notifyBatteryAlerts = it.notifyBatteryAlerts
-            selectedColor = ButtonColor.fromArgb(it.buttonColor)
-        } ?: run {
-            if (existingContact == null && nationalNumber.isEmpty()) {
-                selectedRegionCode = defaultRegion
+            contactId == 0L && initialPhoneFromCallLog.isNotBlank() -> {
+                name = ""
+                autoAnswerEnabled = false
+                notifyBatteryAlerts = false
+                selectedColor = ButtonColor.DEFAULT
+                val parsed = PhoneNumberUtils.parseToRegionAndNational(
+                    initialPhoneFromCallLog.trim(),
+                    defaultRegion
+                )
+                if (parsed != null) {
+                    selectedRegionCode = parsed.first
+                    nationalNumber = parsed.second
+                } else {
+                    selectedRegionCode = defaultRegion
+                    nationalNumber = initialPhoneFromCallLog.filter { it.isDigit() }
+                }
+            }
+            contactId == 0L -> {
+                if (name.isEmpty() && nationalNumber.isEmpty()) {
+                    selectedRegionCode = defaultRegion
+                }
             }
         }
     }
@@ -128,12 +150,14 @@ fun ContactEditScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 // Dev level indicator
-                DevLevelIndicator(level = featureLevel)
-                
                 // Breadcrumb
                 CarerBreadcrumb(
                     title = if (isNewContact) "Add Contact" else name.ifEmpty { "Edit Contact" },
-                    parentTitle = if (homeSlotPendingIndex >= 0) "Home screen layout" else "Contacts",
+                    parentTitle = when {
+                        homeSlotPendingIndex >= 0 -> "Home screen layout"
+                        parentBreadcrumbTitle.isNotBlank() -> parentBreadcrumbTitle
+                        else -> "Contacts"
+                    },
                     onBack = onBack
                 )
                 
@@ -323,44 +347,38 @@ fun ContactEditScreen(
                         }
                     }
                     
-                    // Auto-Answer (Carers only, Level 1+)
-                    LevelGatedContent(
-                        minLevel = FeatureLevel.MINIMAL,
-                        currentLevel = featureLevel
-                    ) {
-                        if (showAssistantDeviceOptions) {
-                            SettingCard(title = "Auto-Answer") {
-                                SettingToggle(
-                                    title = "Auto-Answer for this assistant",
-                                    description = "Phone answers automatically when they call",
-                                    checked = autoAnswerEnabled,
-                                    onCheckedChange = { enabled ->
-                                        autoAnswerEnabled = enabled
-                                        if (!isNewContact) {
+                    if (showAssistantDeviceOptions) {
+                        SettingCard(title = "Auto-Answer") {
+                            SettingToggle(
+                                title = "Auto-Answer for this assistant",
+                                description = "Phone answers automatically when they call",
+                                checked = autoAnswerEnabled,
+                                onCheckedChange = { enabled ->
+                                    autoAnswerEnabled = enabled
+                                    if (!isNewContact) {
 saveContact(
                                         viewModel, existingContact, name, phoneForSave,
                                         effectiveContactType, autoAnswerEnabled, notifyBatteryAlerts, selectedColor
                                     )
-                                            saveToastState.show("$name's auto-answer ${if (enabled) "enabled" else "disabled"}")
-                                        }
+                                        saveToastState.show("$name's auto-answer ${if (enabled) "enabled" else "disabled"}")
                                     }
-                                )
-                                
-                                if (autoAnswerEnabled) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    
-                                    Surface(
-                                        shape = MaterialTheme.shapes.small,
-                                        color = Color(0xFFFFEB3B).copy(alpha = 0.3f),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = "⚠️ Privacy warning: This assistant can listen without the user answering",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFF795548),
-                                            modifier = Modifier.padding(8.dp)
-                                        )
-                                    }
+                                }
+                            )
+
+                            if (autoAnswerEnabled) {
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = Color(0xFFFFEB3B).copy(alpha = 0.3f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "⚠️ Privacy warning: This assistant can listen without the user answering",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF795548),
+                                        modifier = Modifier.padding(8.dp)
+                                    )
                                 }
                             }
                         }

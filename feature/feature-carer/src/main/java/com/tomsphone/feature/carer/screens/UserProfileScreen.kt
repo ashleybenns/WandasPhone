@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.tomsphone.core.telecom.EmergencyNumberResolver
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
@@ -38,9 +39,12 @@ fun UserProfileScreen(
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.syncEmergencyNumberWithRegionIfNeeded()
+    }
     
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -50,13 +54,9 @@ fun UserProfileScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Dev level indicator
-                DevLevelIndicator(level = featureLevel)
-                
-                // Breadcrumb
                 CarerBreadcrumb(
                     title = "User Profile",
-                    parentTitle = "Assistant Settings",
+                    parentTitle = "Settings",
                     onBack = onBack
                 )
                 
@@ -107,7 +107,7 @@ fun UserProfileScreen(
                         )
                         
                         Text(
-                            text = "Full name is used for EMT identification and voice announcements",
+                            text = "Used for emergency ID and spoken prompts",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(top = 8.dp)
@@ -117,6 +117,9 @@ fun UserProfileScreen(
                     // Emergency Number
                     SettingCard(title = "Emergency Number") {
                         var number by remember { mutableStateOf(settings.emergencyNumber) }
+                        val emergencyResolution = remember(settings.emergencyNumber) {
+                            EmergencyNumberResolver.resolve(context, settings.emergencyNumber)
+                        }
                         
                         LaunchedEffect(settings.emergencyNumber) {
                             number = settings.emergencyNumber
@@ -135,18 +138,33 @@ fun UserProfileScreen(
                         )
                         
                         Text(
-                            text = "UK default: 999",
+                            text = "Default is 112. The app picks a local code when the phone or SIM region is known.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(top = 8.dp)
                         )
+
+                        emergencyResolution.assistantNotice?.let { notice ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "For carers / assistants: $notice",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                        }
                     }
                     
                     // Emergency Test Mode
                     SettingCard(title = "Emergency Test Mode") {
                         SettingToggle(
                             title = "Test Mode Enabled",
-                            description = "When ON, pressing the emergency button simulates a call without dialling. Turn OFF only when ready for real emergencies.",
+                            description = "Emergency button simulates a call — no real dial",
                             checked = settings.emergencyTestMode,
                             onCheckedChange = { enabled ->
                                 viewModel.setEmergencyTestMode(enabled)
@@ -165,7 +183,7 @@ fun UserProfileScreen(
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                             ) {
                                 Text(
-                                    text = "⚠️ Emergency button will make REAL 999 calls",
+                                    text = "⚠️ Emergency button will place REAL calls to the emergency number",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.padding(12.dp)
@@ -196,7 +214,7 @@ fun UserProfileScreen(
                         )
                         
                         Text(
-                            text = "Displayed during emergency calls for attending help",
+                            text = "Shown on the emergency screen for responders",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(top = 8.dp)
@@ -206,7 +224,7 @@ fun UserProfileScreen(
                     // Medical Information
                     SettingCard(title = "Medical Information") {
                         Text(
-                            text = "This information is displayed during emergency calls so EMTs can quickly verify the patient and understand their medical needs.",
+                            text = "Shown during emergency calls for responders.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 12.dp)

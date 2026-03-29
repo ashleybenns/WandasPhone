@@ -17,7 +17,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
-import com.tomsphone.feature.carer.components.DevLevelIndicator
 import com.tomsphone.feature.carer.support.SupportThread
 import com.tomsphone.feature.carer.support.SupportThreadReply
 import com.tomsphone.feature.carer.support.SupportSuggestionsViewModel
@@ -45,10 +44,9 @@ fun SupportThreadDetailScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.wandasColors.background) {
         Column(modifier = Modifier.fillMaxSize()) {
-            DevLevelIndicator(level = com.tomsphone.core.config.FeatureLevel.MINIMAL)
             CarerBreadcrumb(
                 title = "Thread",
-                parentTitle = "Support & suggestions",
+                parentTitle = "Support",
                 onBack = onBack
             )
             when {

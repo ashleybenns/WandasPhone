@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,6 +64,7 @@ fun HomeScreen(
     onNavigateToEmergencyConfirm: () -> Unit,
     onNavigateToMissedCalls: () -> Unit = {},
     onNavigateToContactsList: () -> Unit = {},
+    onNavigateToDialer: () -> Unit = {},
     batteryLevel: Int = 100,
     isLowBattery: Boolean = false,
     isCharging: Boolean = false,
@@ -72,6 +76,7 @@ fun HomeScreen(
     val showEmergencyConfirm by viewModel.showEmergencyConfirm.collectAsState()
     val showMissedCallsList by viewModel.showMissedCallsList.collectAsState()
     val showContactsList by viewModel.showContactsList.collectAsState()
+    val showDialer by viewModel.showDialer.collectAsState()
     
     // #region agent log
     LaunchedEffect(Unit) { debugLog("HomeScreen.kt:72", "H2", "HomeScreen composed", mapOf("buttonCount" to homeButtons.size)) }
@@ -591,8 +596,8 @@ fun HomeScreen(
                         ) {
                             // Emergency button - single tap opens emergency screen
                             EmergencyButton(
-                                text = if (emergencyTestMode) "${emergencyButton.label} (Test)" else emergencyButton.label,
-                                subtitle = null, // No subtitle - tap to open emergency screen
+                                text = if (emergencyTestMode) "Test" else emergencyButton.label,
+                                subtitle = emergencyButton.dialDigitsDisplay,
                                 tapCount = 0,
                                 requiredTaps = 1,
                                 onClick = { viewModel.onEmergencyButtonTap() },
@@ -621,27 +626,37 @@ fun HomeScreen(
         }
     }
     
-    // Carer access (via long press on emergency or hidden tap)
-    if (showCarerAccess) {
-        viewModel.dismissCarerAccess()
-        onNavigateToCarer()
+    // Navigate outside composition: calling NavController during composition breaks on some devices (e.g. Samsung).
+    // Order: navigate first, then clear the flag — if we dismiss first, LaunchedEffect(showX) can cancel before navigate.
+    LaunchedEffect(showCarerAccess) {
+        if (showCarerAccess) {
+            onNavigateToCarer()
+            viewModel.dismissCarerAccess()
+        }
     }
-    
-    // Emergency confirm navigation (after 3 taps)
-    if (showEmergencyConfirm) {
-        viewModel.dismissEmergencyConfirm()
-        onNavigateToEmergencyConfirm()
+    LaunchedEffect(showEmergencyConfirm) {
+        if (showEmergencyConfirm) {
+            onNavigateToEmergencyConfirm()
+            viewModel.dismissEmergencyConfirm()
+        }
     }
-    
-    // List screen navigation (Level 2+)
-    if (showMissedCallsList) {
-        viewModel.dismissMissedCallsList()
-        onNavigateToMissedCalls()
+    LaunchedEffect(showMissedCallsList) {
+        if (showMissedCallsList) {
+            onNavigateToMissedCalls()
+            viewModel.dismissMissedCallsList()
+        }
     }
-    
-    if (showContactsList) {
-        viewModel.dismissContactsList()
-        onNavigateToContactsList()
+    LaunchedEffect(showContactsList) {
+        if (showContactsList) {
+            onNavigateToContactsList()
+            viewModel.dismissContactsList()
+        }
+    }
+    LaunchedEffect(showDialer) {
+        if (showDialer) {
+            onNavigateToDialer()
+            viewModel.dismissDialer()
+        }
     }
     
     // Display Off overlay - black screen, any touch wakes it
@@ -751,15 +766,29 @@ private fun RenderMenuButton(
     val fillColor = when (button.id) {
         HomeButtonConfig.MenuButton.ID_MISSED_CALLS -> PastelColors.lightBlue
         HomeButtonConfig.MenuButton.ID_CONTACTS_LIST -> PastelColors.lightYellow
+        HomeButtonConfig.MenuButton.ID_DIALER -> PastelColors.lightGreen
         else -> PastelColors.lightGray  // Fallback for future button types
     }
     
+    val dialPadIconSize = (ScaledDimensions.buttonTextSize.value * 1.2f).dp
     ListButton(
         label = button.label,
         fillColor = fillColor,
         onClick = onClick,
         modifier = modifier,
         textAlignment = textAlignment,
+        trailingContent = if (button.id == HomeButtonConfig.MenuButton.ID_DIALER) {
+            {
+                Icon(
+                    imageVector = Icons.Filled.Dialpad,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(dialPadIconSize)
+                )
+            }
+        } else {
+            null
+        },
         activationPreset = activationPreset,
         debounceMs = debounceMs,
         accumulatedThresholdMs = accumulatedThresholdMs,

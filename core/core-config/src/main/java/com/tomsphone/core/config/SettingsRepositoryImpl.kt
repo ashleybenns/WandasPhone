@@ -9,8 +9,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -99,28 +99,16 @@ class SettingsRepositoryImpl @Inject constructor(
     }
     
     override fun isFeatureEnabled(feature: Feature): Flow<Boolean> {
-        return getFeatureLevel().map { currentLevel ->
-            currentLevel.level >= feature.requiredLevel.level
-        }
+        val tier = FeatureLevel.EFFECTIVE_PRODUCT_TIER
+        return flowOf(tier.level >= feature.requiredLevel.level)
     }
     
     override fun getMaxContacts(): Flow<Int> {
-        // Production: up to 7 home screen slots (call buttons + two-touch buttons share the 7)
-        return getFeatureLevel().map { _ ->
-            7
-        }
+        return flowOf(7)
     }
     
-    /**
-     * Auto-answer is allowed at Level 1+ (MINIMAL or higher).
-     * Requires user consent via the carer settings toggle.
-     * Level 1 users benefit most from auto-answer as it requires no interaction.
-     */
     override fun isAutoAnswerAllowed(): Flow<Boolean> {
-        return combine(getFeatureLevel(), getSettings()) { level, settings ->
-            // Must have auto-answer enabled (level check removed - allowed at all levels)
-            level.level >= FeatureLevel.MINIMAL.level && settings.autoAnswerEnabled
-        }
+        return getSettings().map { it.autoAnswerEnabled }
     }
     
     override suspend fun verifyPin(hashedPin: String): Boolean {

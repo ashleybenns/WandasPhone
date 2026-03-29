@@ -9,17 +9,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
-import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
 import com.tomsphone.feature.carer.components.CarerMenuButton
-import com.tomsphone.feature.carer.components.DevLevelIndicator
-
 /**
  * Assistant-related settings grouped under one place:
  * managing assistant contacts vs reviewing the call log.
@@ -28,21 +22,16 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
 fun AssistantsSettingsHubScreen(
     onNavigateToAllContacts: () -> Unit,
     onNavigateToRecentCalls: () -> Unit,
-    onBack: () -> Unit,
-    viewModel: CarerSettingsViewModel = hiltViewModel()
+    onBack: () -> Unit
 ) {
-    val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
-
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.wandasColors.background
     ) {
         Column(Modifier.fillMaxSize()) {
-            DevLevelIndicator(level = featureLevel)
             CarerBreadcrumb(
                 title = "Contacts",
-                parentTitle = "Assistant Settings",
+                parentTitle = "Settings",
                 onBack = onBack
             )
             Column(
@@ -54,15 +43,13 @@ fun AssistantsSettingsHubScreen(
             ) {
                 CarerMenuButton(
                     title = "All contacts",
-                    description = "One list for everyone; assign home buttons in Home screen layout",
-                    onClick = onNavigateToAllContacts,
-                    currentLevel = featureLevel
+                    description = "Everyone; home slots add call buttons",
+                    onClick = onNavigateToAllContacts
                 )
                 CarerMenuButton(
                     title = "Recent calls",
-                    description = "Full call history: answered, missed, declined, blocked (repeat callers visible)",
-                    onClick = onNavigateToRecentCalls,
-                    currentLevel = featureLevel
+                    description = "Answered, missed, declined — tap unknown to add",
+                    onClick = onNavigateToRecentCalls
                 )
             }
         }

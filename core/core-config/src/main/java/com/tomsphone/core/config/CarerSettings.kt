@@ -27,25 +27,27 @@ data class CarerSettings(
     // ========== USER IDENTITY ==========
     // Default: Generic name, carer should personalize
     val userName: String = "User",
-    // Production: single tier with all features (level system kept but hidden in UI)
+    /** Reserved for future remote / corporate tier; not used for current product gating. */
     val featureLevel: FeatureLevel = FeatureLevel.BASIC,
     
     // ========== HOME SCREEN LAYOUT ==========
     // Each setting is discrete for individual remote sync and paywall gating
     val homeMaxButtons: Int = 6,                    // 1-6 contact buttons on home screen
     val homeShowEmergencyButton: Boolean = true,    // SAFE: Emergency always visible
-    val homeShowMissedCallsButton: Boolean = false, // Level 2+: Two-tap “Missed calls” list (missed + declined)
-    val homeShowContactsListButton: Boolean = false,// Level 2+: Show contacts list button
-    val homeContactsListShowGreyListOnly: Boolean = false, // Contacts list: answer-only only (hide assistants)
+    /** Mirrored from [homeSlotAssignments] when layout is saved (legacy path until 7 slots exist). */
+    val homeShowMissedCallsButton: Boolean = false,
+    val homeShowContactsListButton: Boolean = false,
+    val homeShowDialerButton: Boolean = false,
     val homeMissedCallsButtonColor: Long? = null,   // ARGB, null = theme default
     val homeContactsListButtonColor: Long? = null,  // ARGB, null = theme default
-    // Level 1: Simple missed call return button (one button for most recent grey list missed call)
+    val homeDialerButtonColor: Long? = null,        // ARGB, null = pastel green default
+    /** Mirrored from slots when layout is saved. */
     val homeShowMissedCallReturnButton: Boolean = false,
     // Actual number of contacts configured (updated when contacts change)
     // Used for screen-first layout scaling
     val homeContactCount: Int = 2,                  // Number of contact buttons on home screen
     // Ordered slot assignments for 7 home slots (slot 8 = Emergency fixed). Empty list = use legacy toggles.
-    // Values: "" empty, "c:123" contact id, "mcr" missed call return, "mcl" missed calls list, "oc" contacts list, "so" screen off
+    // Values: "" empty, "c:123" contact id, "mcr" missed call return, "mcl" missed calls list, "oc" contacts list, "dial" dialer, "so" screen off
     val homeSlotAssignments: List<String> = emptyList(),
 
     // ========== CALL HANDLING ==========
@@ -97,8 +99,7 @@ data class CarerSettings(
     val listTextAlignment: ListTextAlignment = ListTextAlignment.CENTER,
     // LEVEL 1: Show time in status text (simple format, e.g., "12:45")
     val showTimeInStatus: Boolean = false,
-    // LEVEL 2: Display Off button - helps users who can't find power button
-    // Hidden during calls and missed call nag
+    /** Mirrored from slots when layout is saved. */
     val showDisplayOffButton: Boolean = false,
     
     // ========== AUDIO & TTS ==========
@@ -119,7 +120,7 @@ data class CarerSettings(
     
     // ========== EMERGENCY SETTINGS ==========
     // UK default emergency number
-    val emergencyNumber: String = "999",
+    val emergencyNumber: String = "112",
     // SAFETY: 3 taps required for emergency (prevents accidental calls)
     val emergencyTapCount: Int = 3,
     // SAFETY: Test mode ON by default - prevents accidental real calls during setup
@@ -258,19 +259,19 @@ enum class ButtonActivationPreset(
 ) {
     ON_RELEASE(
         displayName = "Tap and Release",
-        description = "Traditional: tap, then lift finger to activate",
+        description = "Lift finger to activate",
         minHoldMs = 50,
         activateOnRelease = true
     ),
     ON_PRESS(
         displayName = "Press to Activate", 
-        description = "Activates after brief hold - no need to release. Good for users who hold until something happens.",
+        description = "Fires after a short hold — no need to lift",
         minHoldMs = 350,
         activateOnRelease = false
     ),
     ACCUMULATED_TAP(
         displayName = "Accumulated Tap",
-        description = "Multiple touches add up. Forgiving for shaky hands - any touches on the button count toward activation.",
+        description = "Touch time on the button adds up — good for shaky hands",
         minHoldMs = 50,
         activateOnRelease = true,
         isAccumulatedMode = true,
@@ -419,17 +420,30 @@ enum class MissedCallNagInterval(
  * Includes:
  * - Contact buttons (homeContactCount)
  * - Missed call return row (if that slot / toggle is on)
- * - Display Off button (if enabled at Level 2+)
- * - Menu buttons paired into rows (if enabled at Level 2+)
+ * - Display Off row (if that slot is set)
+ * - Menu buttons paired into rows (missed list, contacts, dial)
  */
 val CarerSettings.homeButtonRowCount: Int
     get() {
+        val slots = homeSlotAssignments
+        if (slots.size == HomeSlotAssignments.SLOT_COUNT) {
+            var rows = slots.count { HomeSlotAssignments.isContact(it) }.coerceAtLeast(1)
+            if (slots.contains(HomeSlotAssignments.MISSED_CALL_RETURN)) rows += 1
+            if (slots.contains(HomeSlotAssignments.SCREEN_OFF)) rows += 1
+            var menuButtons = 0
+            if (slots.contains(HomeSlotAssignments.MISSED_CALLS_LIST)) menuButtons++
+            if (slots.contains(HomeSlotAssignments.OTHER_CONTACTS)) menuButtons++
+            if (slots.contains(HomeSlotAssignments.DIALER)) menuButtons++
+            rows += (menuButtons + 1) / 2
+            return rows
+        }
         var rows = homeContactCount.coerceAtLeast(1)
         if (homeShowMissedCallReturnButton) rows += 1
         if (showDisplayOffButton) rows += 1
         var menuButtons = 0
         if (homeShowMissedCallsButton) menuButtons++
         if (homeShowContactsListButton) menuButtons++
-        rows += (menuButtons + 1) / 2  // Pair into rows
+        if (homeShowDialerButton) menuButtons++
+        rows += (menuButtons + 1) / 2
         return rows
     }

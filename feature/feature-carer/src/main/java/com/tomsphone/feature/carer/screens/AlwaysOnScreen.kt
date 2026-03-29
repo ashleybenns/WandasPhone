@@ -25,7 +25,6 @@ fun AlwaysOnScreen(
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     
     Surface(
@@ -36,13 +35,9 @@ fun AlwaysOnScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Dev level indicator
-                DevLevelIndicator(level = featureLevel)
-                
-                // Breadcrumb
                 CarerBreadcrumb(
-                    title = "Always On Mode",
-                    parentTitle = "Assistant Settings",
+                    title = "Always On",
+                    parentTitle = "Settings",
                     onBack = onBack
                 )
                 
@@ -55,16 +50,9 @@ fun AlwaysOnScreen(
                     verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
                 ) {
                     Text(
-                        text = "For use on a charging stand. Keeps the phone visible and ready at all times.",
+                        text = "Best on a charging stand — screen stays ready. If unplugged with low battery, the display sleeps and a voice reminder repeats until it’s charging again.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
-                    )
-                    
-                    Text(
-                        text = "If the phone is not charging and battery is low, the screen will turn off to save power. A voice reminder will repeat until the phone is back on charge.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(top = 8.dp)
                     )
                     
                     // Pinned Mode
@@ -97,7 +85,7 @@ fun AlwaysOnScreen(
                     SettingCard(title = "Volume") {
                         SettingToggle(
                             title = "Lock Volume Buttons",
-                            description = "When OFF: volume keys work during calls only (protects ringtone when idle)",
+                            description = "Off: hardware volume only during calls (idle ringtone protected)",
                             checked = settings.lockVolumeButtons,
                             onCheckedChange = { enabled ->
                                 viewModel.setLockVolumeButtons(enabled)

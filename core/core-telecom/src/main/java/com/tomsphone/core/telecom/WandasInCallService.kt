@@ -6,7 +6,6 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.util.Log
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.CallLogEntry
@@ -302,33 +301,18 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
     }
     
     /**
-     * Enable speakerphone based on feature level and settings
-     * 
-     * Level 1: Always speaker (no choice)
-     * Level 2+ with speaker button: Use speakerDefaultOn setting
-     * Level 2+ without speaker button: Use speakerphoneAlwaysOn setting
+     * Default speaker route at call start from carer settings.
+     * (Feature tier is unified; [CarerSettings.featureLevel] is reserved for future use.)
      */
     private suspend fun enableSpeakerBasedOnSettings() {
         val settings = settingsRepository.getSettings().first()
-        
-        val shouldEnableSpeaker = when (settings.featureLevel) {
-            FeatureLevel.MINIMAL -> {
-                // Level 1: ALWAYS on speaker, no exceptions
-                Log.d(TAG, "Level 1: Forcing speakerphone ON")
-                true
-            }
-            else -> {
-                // Level 2+: Check if speaker button is enabled
-                if (settings.showSpeakerButton) {
-                    // Speaker button visible - use speakerDefaultOn setting
-                    Log.d(TAG, "Level 2+ with speaker button: Using speakerDefaultOn=${settings.speakerDefaultOn}")
-                    settings.speakerDefaultOn
-                } else {
-                    // No speaker button - use legacy speakerphoneAlwaysOn
-                    Log.d(TAG, "Level 2+ no speaker button: Using speakerphoneAlwaysOn=${settings.speakerphoneAlwaysOn}")
-                    settings.speakerphoneAlwaysOn
-                }
-            }
+
+        val shouldEnableSpeaker = if (settings.showSpeakerButton) {
+            Log.d(TAG, "Speaker button on: speakerDefaultOn=${settings.speakerDefaultOn}")
+            settings.speakerDefaultOn
+        } else {
+            Log.d(TAG, "No speaker button: speakerphoneAlwaysOn=${settings.speakerphoneAlwaysOn}")
+            settings.speakerphoneAlwaysOn
         }
         
         // Always explicitly set the speaker state (on OR off)
@@ -705,7 +689,7 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                 // Announce change (only if user toggled it at Level 2+ and TTS enabled)
                 serviceScope.launch {
                     val settings = settingsRepository.getSettings().first()
-                    if (settings.featureLevel != FeatureLevel.MINIMAL && settings.ttsAnnouncementsEnabled) {
+                    if (settings.ttsAnnouncementsEnabled) {
                         if (enabled) {
                             tts.speak(TTSScripts.speakerOn())
                         } else {

@@ -16,7 +16,6 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import android.Manifest
 import com.tomsphone.core.config.CarerSettings
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.MissedCallNagInterval
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
@@ -38,7 +37,6 @@ fun CallHandlingScreen(
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
 
     // When opening this screen, sync device volumes to saved settings
@@ -54,13 +52,9 @@ fun CallHandlingScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Dev level indicator
-                DevLevelIndicator(level = featureLevel)
-                
-                // Breadcrumb
                 CarerBreadcrumb(
                     title = "Call Handling",
-                    parentTitle = "Assistant Settings",
+                    parentTitle = "Settings",
                     onBack = onBack
                 )
                 
@@ -75,7 +69,7 @@ fun CallHandlingScreen(
                     // Volume - ringtone and call volume without leaving the app
                     SettingCard(title = "Volume") {
                         Text(
-                            text = "Adjust ringtone and call volume here so you don't need to leave the app.",
+                            text = "Ringtone and in-call volume without leaving the app.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 12.dp)
@@ -86,7 +80,7 @@ fun CallHandlingScreen(
                             color = MaterialTheme.wandasColors.onSurface
                         )
                         Text(
-                            text = "Volume for incoming call ring. ${settings.ringtoneVolume}%",
+                            text = "Incoming ring. ${settings.ringtoneVolume}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 4.dp)
@@ -109,7 +103,7 @@ fun CallHandlingScreen(
                             color = MaterialTheme.wandasColors.onSurface
                         )
                         Text(
-                            text = "Volume during calls. Restored when each call ends. ${settings.speakerVolume}%",
+                            text = "During calls (reset when the call ends). ${settings.speakerVolume}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 4.dp)
@@ -163,7 +157,7 @@ fun CallHandlingScreen(
                     // Voice Announcements (Level 1)
                     SettingCard(title = "Voice Announcements") {
                         Text(
-                            text = "Spoken feedback for actions like calling, speaker toggle, and battery alerts. Separate from ringtone and missed call reminders.",
+                            text = "Spoken prompts for actions (not the ringtone or missed-call reminders).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -171,7 +165,7 @@ fun CallHandlingScreen(
                         
                         SettingToggle(
                             title = "Enable Announcements",
-                            description = "Greeting, calling, call ended, speaker, mute, battery",
+                            description = "Calling, ended, speaker, mute, battery, etc.",
                             checked = settings.ttsAnnouncementsEnabled,
                             onCheckedChange = { enabled ->
                                 viewModel.setTtsAnnouncementsEnabled(enabled)
@@ -183,42 +177,36 @@ fun CallHandlingScreen(
                         )
                     }
                     
-                    // Speaker Toggle Button - Level 2+ only
-                    LevelGatedContent(
-                        minLevel = FeatureLevel.BASIC,
-                        currentLevel = featureLevel
-                    ) {
-                        SettingCard(title = "Speaker Button") {
-                            Text(
-                                text = "Show a button during calls to toggle speaker on/off. Double-tap required to prevent accidents. Speaker returns to default after each call.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            
+                    SettingCard(title = "Speaker Button") {
+                        Text(
+                            text = "Double-tap to toggle. Default speaker state resets after each call.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        SettingToggle(
+                            title = "Show Speaker Button",
+                            description = "On in-call screens",
+                            checked = settings.showSpeakerButton,
+                            onCheckedChange = { enabled ->
+                                viewModel.setShowSpeakerButton(enabled)
+                                saveToastState.show("Speaker button ${if (enabled) "enabled" else "disabled"}")
+                            }
+                        )
+
+                        if (settings.showSpeakerButton) {
+                            Spacer(modifier = Modifier.height(12.dp))
+
                             SettingToggle(
-                                title = "Show Speaker Button",
-                                description = "Display speaker toggle on call screens",
-                                checked = settings.showSpeakerButton,
+                                title = "Speaker On by Default",
+                                description = "Start each call with speaker on",
+                                checked = settings.speakerDefaultOn,
                                 onCheckedChange = { enabled ->
-                                    viewModel.setShowSpeakerButton(enabled)
-                                    saveToastState.show("Speaker button ${if (enabled) "enabled" else "disabled"}")
+                                    viewModel.setSpeakerDefaultOn(enabled)
+                                    saveToastState.show("Default speaker ${if (enabled) "on" else "off"}")
                                 }
                             )
-                            
-                            if (settings.showSpeakerButton) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                
-                                SettingToggle(
-                                    title = "Speaker On by Default",
-                                    description = "Start each call with speaker on",
-                                    checked = settings.speakerDefaultOn,
-                                    onCheckedChange = { enabled ->
-                                        viewModel.setSpeakerDefaultOn(enabled)
-                                        saveToastState.show("Default speaker ${if (enabled) "on" else "off"}")
-                                    }
-                                )
-                            }
                         }
                     }
                     
@@ -251,9 +239,7 @@ fun CallHandlingScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Auto-Answer allows assistants to call and listen without the user pressing Answer. " +
-                                               "The user will hear a ringtone and announcement when a call is answered automatically. " +
-                                               "This feature requires the user's informed consent.",
+                                        text = "Callers you allow can connect without the user pressing Answer. They still hear ring and a prompt. Use only with their consent.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color(0xFF5D4037) // Brown text
                                     )
@@ -264,7 +250,7 @@ fun CallHandlingScreen(
                             
                             SettingToggle(
                                 title = "Enable Auto-Answer",
-                                description = "Automatically answer calls from enabled assistants",
+                                description = "For contacts you mark for auto-answer",
                                 checked = settings.autoAnswerEnabled,
                                 onCheckedChange = { enabled ->
                                     viewModel.setAutoAnswer(enabled, settings.autoAnswerDelaySeconds)
@@ -296,7 +282,7 @@ fun CallHandlingScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 
                                 Text(
-                                    text = "Configure which assistants have auto-answer in Assistants.",
+                                    text = "Turn on per contact in All contacts.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
                                 )
@@ -307,7 +293,7 @@ fun CallHandlingScreen(
                     SettingCard(title = "Missed Call Reminders") {
                         SettingToggle(
                             title = "Enable Reminders",
-                            description = "Remind user to call back missed calls from assistants",
+                            description = "Nudge to return assistant missed calls",
                             checked = settings.missedCallNagEnabled,
                             onCheckedChange = { enabled ->
                                 viewModel.setMissedCallNagEnabled(enabled)
@@ -383,14 +369,14 @@ private fun BatteryAlertSmsCard(
 
     SettingCard(title = "Battery alert texts") {
         Text(
-            text = "Send a text to assistants when battery is low or when the device is plugged in after low battery. Turn on \"Notify for battery alerts\" for each assistant in Assistants.",
+            text = "SMS when battery is low or power returns after a low warning. Enable “Notify for battery alerts” per contact in All contacts.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.padding(bottom = 8.dp)
         )
         SettingToggle(
             title = "Send battery alert texts",
-            description = "Low battery and device connected after low battery",
+            description = "Low battery and plugged-in after low",
             checked = settings.batteryAlertSmsEnabled,
             onCheckedChange = { enabled ->
                 if (enabled) {

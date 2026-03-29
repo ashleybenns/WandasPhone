@@ -5,16 +5,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
-import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
-import com.tomsphone.feature.carer.components.DevLevelIndicator
 
 /**
  * Tom's Phone description — the story and philosophy behind the app.
@@ -23,12 +18,8 @@ import com.tomsphone.feature.carer.components.DevLevelIndicator
  */
 @Composable
 fun TomsPhoneDescriptionScreen(
-    onBack: () -> Unit,
-    viewModel: CarerSettingsViewModel = hiltViewModel()
+    onBack: () -> Unit
 ) {
-    val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
-
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.wandasColors.background
@@ -36,11 +27,9 @@ fun TomsPhoneDescriptionScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            DevLevelIndicator(level = featureLevel)
-
             CarerBreadcrumb(
-                title = "Tom's Phone Description",
-                parentTitle = "Assistant Settings",
+                title = "About",
+                parentTitle = "Settings",
                 onBack = onBack
             )
 
@@ -52,48 +41,42 @@ fun TomsPhoneDescriptionScreen(
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
             ) {
                 DescriptionParagraph(
-                    "I originally created this Phone App for my Mother. Mum has struggled with other 'Senior' devices — she can't learn another one, and so this is it. No more learning or remembering what to do."
+                    "I built this for my mother. Other “senior” phones meant starting over; this one is meant to stay — minimal learning, minimal remembering."
                 )
 
                 DescriptionParagraph(
-                    "It's a One Touch phone and on Level 1 the Home Screen is always on. Up to 4 assistants can be called from the Home Screen with One Touch, and there's an Emergency button. Even the tap response can be customised with three different tap responses available."
+                    "Level 1 keeps the home screen front and centre: one-touch calls to assistants, emergency, and tap styles you can match to the user."
                 )
 
-                SectionTitle("One Touch calling and answering")
-                DescriptionParagraph("One Touch makes a phone call to an Assistant. Loud and on Speaker.")
-                DescriptionParagraph("One Touch answers a call. Loud and On Speaker.")
+                SectionTitle("Calls")
+                DescriptionParagraph("One touch dials an assistant — loud, on speaker.")
+                DescriptionParagraph("One touch answers — loud, on speaker.")
                 DescriptionParagraph(
-                    "The ringtone includes Mum's name: \"Wanda, that's your phone ringing\" to grab her attention."
+                    "The ringtone can use their name (e.g. “Wanda, that’s your phone ringing”)."
                 )
 
-                SectionTitle("Missed call reminders")
+                SectionTitle("Missed calls")
                 DescriptionParagraph(
-                    "If Mum misses a call from an Assistant there's a persistent reminder until she returns the call: \"Wanda, you missed a call. Please Call Fred Now\". One Touch will return the call and cancel the reminder."
-                )
-                DescriptionParagraph(
-                    "This works great — as Mum said, she can follow an instruction, she knows to call back and knows how to call back."
+                    "If they miss an assistant’s call, a reminder stays until they call back — e.g. “Wanda, you missed a call. Please call Fred now.” One touch returns the call and clears it."
                 )
 
-                SectionTitle("Incoming calls and contacts")
-                DescriptionParagraph("Incoming calls can be allowed or restricted to a contacts list.")
-                DescriptionParagraph("The most recent missed call from the contact list can be returned from the Home Screen.")
+                SectionTitle("Who can call in")
+                DescriptionParagraph("You can allow only contacts or allow anyone.")
+                DescriptionParagraph("The latest missed call from contacts can be one-tapped from home (when enabled).")
 
                 SectionTitle("Emergency")
                 DescriptionParagraph(
-                    "The Emergency button opens a confirmation screen to prevent accidental calls. The Emergency information screen opens when an emergency call is made."
+                    "Emergency needs confirmation to avoid pocket dials. Medical and address details show when a real emergency call goes out."
                 )
 
-                SectionTitle("Level 2 — Two Touch")
+                SectionTitle("Level 2")
                 DescriptionParagraph(
-                    "Now at Level 2 I've added Two Touch complexity. This allows a separate screen for a bigger contacts list and the missed calls list, plus toggle buttons such as screen-off and speaker on/off controls."
-                )
-                DescriptionParagraph(
-                    "Everything is customisable but an elderly person's capability can vary a lot during the day, so the Assistant call buttons are always in the same place, always One Touch from the Home Screen and the phone returns to its Home Screen and default settings. Wanda doesn't use Level 2 but others find it useful."
+                    "Adds simple second screens: full contacts list, missed-calls list, screen off, in-call speaker toggle, and more — still with fixed assistant buttons on home."
                 )
 
                 SectionTitle("Feedback")
                 DescriptionParagraph(
-                    "If you think of an adjustment or setting that would make the phone easier for your Senior, let me know and I'll incorporate it. Your feedback will improve the experience for everyone. More information and suggestions — contact me."
+                    "Ideas that help your user usually help everyone. Use Support in settings to send a message."
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))

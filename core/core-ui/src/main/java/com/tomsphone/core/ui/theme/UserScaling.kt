@@ -57,8 +57,10 @@ fun UserScalingProvider(
     val optimalScale = calculateOptimalScale(buttonRowCount)
     
     // Apply carer's reduction preference
-    val effectiveScale = optimalScale * userScaleReduction.coerceIn(0.5f, 1.0f)
-    
+    val rawEffective = optimalScale * userScaleReduction.coerceIn(0.5f, 1.0f)
+    val effectiveScale =
+        if (rawEffective.isFinite() && rawEffective > 0f) rawEffective else 1f
+
     CompositionLocalProvider(LocalUserScale provides effectiveScale) {
         content()
     }
@@ -142,7 +144,8 @@ fun calculateOptimalScale(buttonRowCount: Int): Float {
     // Minimum for readability
     val minScale = 0.7f
     
-    return calculatedScale.coerceIn(minScale, maxScale)
+    val bounded = calculatedScale.coerceIn(minScale, maxScale)
+    return if (bounded.isFinite()) bounded else minScale
 }
 
 /**
@@ -177,7 +180,8 @@ object ScaledDimensions {
     @Composable
     fun scaledSp(baseSp: Float): TextUnit {
         val scale = LocalUserScale.current
-        return (baseSp * scale).sp
+        val safe = if (scale.isFinite() && scale > 0f) scale else 1f
+        return (baseSp * safe).sp
     }
     
     /**

@@ -2,7 +2,6 @@ package com.tomsphone.feature.phone
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tomsphone.core.config.FeatureLevel
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.repository.ContactRepository
@@ -22,7 +21,7 @@ import javax.inject.Inject
  * Handles:
  * - Call state management
  * - Contact name resolution
- * - Call controls (Level 1: end only, Level 2+: speaker/mute/volume)
+ * - Call controls (speaker, mute, end)
  */
 @HiltViewModel
 class InCallViewModel @Inject constructor(
@@ -38,14 +37,6 @@ class InCallViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
-        )
-    
-    // Feature level (controls what buttons are shown)
-    val featureLevel: StateFlow<FeatureLevel> = settingsRepository.getFeatureLevel()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = FeatureLevel.MINIMAL
         )
     
     // TTS announcements enabled
@@ -102,7 +93,7 @@ class InCallViewModel @Inject constructor(
     }
     
     /**
-     * Toggle speaker (Level 2+)
+     * Toggle speaker
      */
     fun onToggleSpeaker() {
         viewModelScope.launch {
@@ -116,7 +107,7 @@ class InCallViewModel @Inject constructor(
     }
     
     /**
-     * Toggle mute (Level 2+)
+     * Toggle mute
      */
     fun onToggleMute() {
         viewModelScope.launch {
@@ -130,7 +121,7 @@ class InCallViewModel @Inject constructor(
     }
     
     /**
-     * Adjust volume (Level 2+)
+     * Adjust volume
      */
     fun onVolumeUp() {
         // Will be implemented with actual audio control

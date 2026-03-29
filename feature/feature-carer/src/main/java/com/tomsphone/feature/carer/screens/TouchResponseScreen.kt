@@ -38,7 +38,6 @@ fun TouchResponseScreen(
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     val saveToastState = rememberSaveToastState()
     
     Surface(
@@ -49,13 +48,9 @@ fun TouchResponseScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Dev level indicator
-                DevLevelIndicator(level = featureLevel)
-                
-                // Breadcrumb
                 CarerBreadcrumb(
                     title = "Touch Response",
-                    parentTitle = "Assistant Settings",
+                    parentTitle = "Settings",
                     onBack = onBack
                 )
                 
@@ -70,17 +65,9 @@ fun TouchResponseScreen(
                     // Introduction
                     SettingCard(title = "How should buttons respond?") {
                         Text(
-                            text = "Watch how the user naturally touches the screen, then pick the mode that matches their behavior.",
+                            text = "Match the mode to how they already touch — don’t expect them to learn a new style.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        
-                        Text(
-                            text = "Tip: You cannot train new behaviors - adapt to how they already interact.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.5f),
-                            fontWeight = FontWeight.Medium
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
                         )
                     }
                     
@@ -100,7 +87,7 @@ fun TouchResponseScreen(
                     if (settings.buttonActivation == ButtonActivationPreset.ACCUMULATED_TAP) {
                         SettingCard(title = "Tune Accumulated Tap") {
                             Text(
-                                text = "Accumulated tap adds up the time from multiple touches. Each touch must be held long enough to count (shake protection), then the total touch time must reach the threshold before the timeout expires.",
+                                text = "Short touches add up if each is long enough to count; total must hit the threshold before the idle timeout.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                                 modifier = Modifier.padding(bottom = 12.dp)
@@ -113,7 +100,7 @@ fun TouchResponseScreen(
                                 color = MaterialTheme.wandasColors.onSurface
                             )
                             Text(
-                                text = "Touches shorter than this are ignored as accidental.",
+                                text = "Shorter touches ignored as brushes.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.5f),
                                 modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
@@ -272,7 +259,7 @@ fun TouchResponseScreen(
                     if (settings.buttonActivation != ButtonActivationPreset.ACCUMULATED_TAP) {
                         SettingCard(title = "Shake Protection") {
                             Text(
-                                text = "Ignore very brief touches to filter accidental brushes from shaky hands.",
+                                text = "Ignore very brief touches (accidental brushes).",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                                 modifier = Modifier.padding(bottom = 12.dp)
@@ -339,7 +326,7 @@ fun TouchResponseScreen(
                     // Special buttons note
                     SettingCard(title = "Special Buttons") {
                         Text(
-                            text = "Some buttons have extra protection regardless of this setting:",
+                            text = "Always stricter, whatever you choose above:",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -349,12 +336,12 @@ fun TouchResponseScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "• End Call: Always requires accumulated tap",
+                                text = "• End call: accumulated tap",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface
                             )
                             Text(
-                                text = "• Emergency: Always requires 3 taps + confirmation",
+                                text = "• Emergency: 3 taps + confirm",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface
                             )

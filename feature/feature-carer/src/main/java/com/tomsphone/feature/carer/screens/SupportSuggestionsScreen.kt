@@ -18,7 +18,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
-import com.tomsphone.feature.carer.components.DevLevelIndicator
 import com.tomsphone.feature.carer.support.SupportAnnouncement
 import com.tomsphone.feature.carer.support.SupportThread
 import com.tomsphone.feature.carer.support.SupportSuggestionsViewModel
@@ -58,10 +57,9 @@ fun SupportSuggestionsScreen(
             }
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                DevLevelIndicator(level = com.tomsphone.core.config.FeatureLevel.MINIMAL)
                 CarerBreadcrumb(
-                    title = "Support & suggestions",
-                    parentTitle = "Assistant Settings",
+                    title = "Support",
+                    parentTitle = "Settings",
                     onBack = onBack
                 )
                 LazyColumn(
@@ -71,7 +69,7 @@ fun SupportSuggestionsScreen(
                 ) {
                     item {
                         Text(
-                            text = "Anonymous. Your threads are only visible to you and support.",
+                            text = "Anonymous — only you and support see your threads.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f),
                             modifier = Modifier.padding(bottom = 8.dp)

@@ -14,14 +14,17 @@ import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
+import android.content.Context
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
+import com.tomsphone.core.telecom.EmergencyNumberResolver
 import com.tomsphone.core.telecom.MissedCallNagManager
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
 import com.tomsphone.core.analytics.AnalyticsManager
 import com.tomsphone.core.analytics.AnalyticsEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -30,6 +33,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+
+private fun CarerSettings.hasMissedCallReturnForStatus(): Boolean =
+    if (homeSlotAssignments.size == HomeSlotAssignments.SLOT_COUNT) {
+        homeSlotAssignments.contains(HomeSlotAssignments.MISSED_CALL_RETURN)
+    } else {
+        homeShowMissedCallReturnButton
+    }
 
 /**
  * ViewModel for home screen
@@ -45,6 +55,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val settingsRepository: SettingsRepository,
     private val contactRepository: ContactRepository,
     private val callLogRepository: CallLogRepository,
@@ -70,14 +81,6 @@ class HomeViewModel @Inject constructor(
     private val missedCallsListCount: Flow<Int> = callLogRepository
         .getOutstandingMissedCallsPerCaller(MISSED_CALLS_COUNT_QUERY_LIMIT)
         .map { it.size }
-    
-    // Current feature level
-    val featureLevel: StateFlow<FeatureLevel> = settingsRepository.getFeatureLevel()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = FeatureLevel.MINIMAL
-        )
     
     // User name
     val userName: StateFlow<String> = settingsRepository.getUserName()
@@ -251,6 +254,8 @@ class HomeViewModel @Inject constructor(
         primaryMissedReturn: PrimaryMissedReturnCall?,
         missedCallListCount: Int
     ): List<HomeButtonConfig> {
+        val emergencyDigits =
+            EmergencyNumberResolver.resolve(appContext, settings.emergencyNumber).dialDigits
         val slots = settings.homeSlotAssignments
         // Validate slots: must be exactly SLOT_COUNT, otherwise use legacy mode
         if (slots.size == HomeSlotAssignments.SLOT_COUNT) {
@@ -260,15 +265,28 @@ class HomeViewModel @Inject constructor(
                     settings,
                     primaryMissedReturn,
                     slots,
-                    missedCallListCount
+                    missedCallListCount,
+                    emergencyDigits
                 )
             } catch (e: Exception) {
                 // If building from slots fails, fall back to legacy mode
                 android.util.Log.e("HomeViewModel", "Error building buttons from slots, using legacy mode", e)
-                buildHomeButtonsLegacy(contacts, settings, primaryMissedReturn, missedCallListCount)
+                buildHomeButtonsLegacy(
+                    contacts,
+                    settings,
+                    primaryMissedReturn,
+                    missedCallListCount,
+                    emergencyDigits
+                )
             }
         }
-        return buildHomeButtonsLegacy(contacts, settings, primaryMissedReturn, missedCallListCount)
+        return buildHomeButtonsLegacy(
+            contacts,
+            settings,
+            primaryMissedReturn,
+            missedCallListCount,
+            emergencyDigits
+        )
     }
 
     private fun buildHomeButtonsFromSlots(
@@ -276,7 +294,8 @@ class HomeViewModel @Inject constructor(
         settings: CarerSettings,
         primaryMissedReturn: PrimaryMissedReturnCall?,
         slotAssignments: List<String>,
-        missedCallListCount: Int
+        missedCallListCount: Int,
+        emergencyDigits: String
     ): List<HomeButtonConfig> {
         val buttons = mutableListOf<HomeButtonConfig>()
         val contactById = contacts.associateBy { it.id }
@@ -329,13 +348,25 @@ class HomeViewModel @Inject constructor(
                         )
                     )
                 }
+                value == HomeSlotAssignments.DIALER -> {
+                    buttons.add(
+                        HomeButtonConfig.MenuButton(
+                            id = HomeButtonConfig.MenuButton.ID_DIALER,
+                            label = "Dial",
+                            color = settings.homeDialerButtonColor,
+                            isHalfWidth = false
+                        )
+                    )
+                }
                 value == HomeSlotAssignments.SCREEN_OFF -> {
                     buttons.add(HomeButtonConfig.DisplayOffButton())
                 }
             }
         }
         if (settings.homeShowEmergencyButton) {
-            buttons.add(HomeButtonConfig.EmergencyButton())
+            buttons.add(
+                HomeButtonConfig.EmergencyButton(dialDigitsDisplay = emergencyDigits)
+            )
         }
         return buttons
     }
@@ -344,13 +375,15 @@ class HomeViewModel @Inject constructor(
         contacts: List<Contact>,
         settings: CarerSettings,
         primaryMissedReturn: PrimaryMissedReturnCall?,
-        missedCallListCount: Int
+        missedCallListCount: Int,
+        emergencyDigits: String
     ): List<HomeButtonConfig> {
         val buttons = mutableListOf<HomeButtonConfig>()
         val missedCallReturnEnabled = settings.homeShowMissedCallReturnButton
         val slotsForOthers = (if (missedCallReturnEnabled) 1 else 0) +
             (if (settings.homeShowMissedCallsButton) 1 else 0) +
             (if (settings.homeShowContactsListButton) 1 else 0) +
+            (if (settings.homeShowDialerButton) 1 else 0) +
             (if (settings.showDisplayOffButton) 1 else 0)
         val maxContactSlots = (6 - slotsForOthers).coerceAtLeast(0)
         val callableContacts = contacts
@@ -399,11 +432,23 @@ class HomeViewModel @Inject constructor(
                 )
             )
         }
+        if (settings.homeShowDialerButton) {
+            buttons.add(
+                HomeButtonConfig.MenuButton(
+                    id = HomeButtonConfig.MenuButton.ID_DIALER,
+                    label = "Dial",
+                    color = settings.homeDialerButtonColor,
+                    isHalfWidth = false
+                )
+            )
+        }
         if (settings.showDisplayOffButton) {
             buttons.add(HomeButtonConfig.DisplayOffButton())
         }
         if (settings.homeShowEmergencyButton) {
-            buttons.add(HomeButtonConfig.EmergencyButton())
+            buttons.add(
+                HomeButtonConfig.EmergencyButton(dialDigitsDisplay = emergencyDigits)
+            )
         }
         return buttons
     }
@@ -419,6 +464,7 @@ class HomeViewModel @Inject constructor(
         if (settings.homeShowMissedCallReturnButton) list.add(HomeSlotAssignments.MISSED_CALL_RETURN)
         if (settings.homeShowMissedCallsButton) list.add(HomeSlotAssignments.MISSED_CALLS_LIST)
         if (settings.homeShowContactsListButton) list.add(HomeSlotAssignments.OTHER_CONTACTS)
+        if (settings.homeShowDialerButton) list.add(HomeSlotAssignments.DIALER)
         if (settings.showDisplayOffButton) list.add(HomeSlotAssignments.SCREEN_OFF)
         while (list.size < HomeSlotAssignments.SLOT_COUNT) list.add(HomeSlotAssignments.EMPTY)
         return list.take(HomeSlotAssignments.SLOT_COUNT)
@@ -452,7 +498,7 @@ class HomeViewModel @Inject constructor(
         val baseMessage = when {
             callingMsg != null -> callingMsg
             carerMissedMsg != null -> carerMissedMsg
-            primaryMissed != null && carerSettings.homeShowMissedCallReturnButton ->
+            primaryMissed != null && carerSettings.hasMissedCallReturnForStatus() ->
                 "Missed call from ${primaryMissed.callerName}"
             else -> "$name's phone"
         }
@@ -469,9 +515,15 @@ class HomeViewModel @Inject constructor(
         initialValue = "Tom's phone"
     )
     
-    // Display Off button enabled when setting on (controls space reservation)
+    // Display Off row: from slot when layout migrated, else legacy toggle
     val displayOffButtonEnabled: StateFlow<Boolean> = settings
-        .map { it.showDisplayOffButton }
+        .map { s ->
+            if (s.homeSlotAssignments.size == HomeSlotAssignments.SLOT_COUNT) {
+                s.homeSlotAssignments.contains(HomeSlotAssignments.SCREEN_OFF)
+            } else {
+                s.showDisplayOffButton
+            }
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -513,11 +565,14 @@ class HomeViewModel @Inject constructor(
     
     private val _showContactsList = MutableStateFlow(false)
     val showContactsList: StateFlow<Boolean> = _showContactsList.asStateFlow()
+
+    private val _showDialer = MutableStateFlow(false)
+    val showDialer: StateFlow<Boolean> = _showDialer.asStateFlow()
     
     // Emergency settings for the confirm/call screens
     val emergencyNumber: StateFlow<String> = settingsRepository.getSettings()
         .map { it.emergencyNumber }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "999")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "112")
     
     val emergencyRequiredTaps: StateFlow<Int> = settingsRepository.getSettings()
         .map { it.emergencyTapCount }
@@ -537,10 +592,10 @@ class HomeViewModel @Inject constructor(
             
             // Track app launch
             analytics.logEvent(AnalyticsEvent.AppLaunched(
-                featureLevel = settings.featureLevel.level,
+                featureLevel = FeatureLevel.EFFECTIVE_PRODUCT_TIER.level,
                 contactCount = contacts.size
             ))
-            analytics.setCrashlyticsKey("feature_level", settings.featureLevel.level)
+            analytics.setCrashlyticsKey("feature_level", FeatureLevel.EFFECTIVE_PRODUCT_TIER.level)
             analytics.setCrashlyticsKey("contact_count", contacts.size)
             
             if (settings.ttsAnnouncementsEnabled) {
@@ -709,6 +764,9 @@ class HomeViewModel @Inject constructor(
             HomeButtonConfig.MenuButton.ID_CONTACTS_LIST -> {
                 _showContactsList.value = true
             }
+            HomeButtonConfig.MenuButton.ID_DIALER -> {
+                _showDialer.value = true
+            }
         }
     }
     
@@ -785,6 +843,10 @@ class HomeViewModel @Inject constructor(
     
     fun dismissContactsList() {
         _showContactsList.value = false
+    }
+
+    fun dismissDialer() {
+        _showDialer.value = false
     }
     
     /**

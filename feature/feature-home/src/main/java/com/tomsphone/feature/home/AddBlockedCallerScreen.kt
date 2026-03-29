@@ -18,6 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.tomsphone.core.ui.components.LocalSecondaryScreenIdleReset
+import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -27,6 +29,8 @@ import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.ui.components.ListScreenLayout
 import com.tomsphone.core.ui.theme.PastelColors
+
+private const val INACTIVITY_TIMEOUT_MS = 30_000L
 
 /**
  * Add a blocked (unknown) caller as an answer-only contact or Assistant inside Wanda's Phone only
@@ -50,6 +54,8 @@ fun AddBlockedCallerScreen(
     }
     var saving by remember { mutableStateOf(false) }
 
+    SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onBack) {
+    val resetIdle = LocalSecondaryScreenIdleReset.current
     ListScreenLayout(
         backgroundColor = PastelColors.lightYellow,
         title = "Add to Wanda's Phone",
@@ -90,6 +96,7 @@ fun AddBlockedCallerScreen(
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
+                    resetIdle()
                     if (saving) return@Button
                     saving = true
                     viewModel.addContact(phoneNumber, displayName, ContactType.GREY_LIST) { result ->
@@ -116,6 +123,7 @@ fun AddBlockedCallerScreen(
             }
             Button(
                 onClick = {
+                    resetIdle()
                     if (saving) return@Button
                     saving = true
                     viewModel.addContact(phoneNumber, displayName, ContactType.CARER) { result ->
@@ -141,5 +149,6 @@ fun AddBlockedCallerScreen(
                 Text("Add as Assistant")
             }
         }
+    }
     }
 }

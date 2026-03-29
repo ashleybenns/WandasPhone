@@ -2,7 +2,7 @@ package com.tomsphone.core.data.util
 
 import com.google.i18n.phonenumbers.NumberParseException
 import com.google.i18n.phonenumbers.PhoneNumberUtil
-import com.google.i18n.phonenumbers.Phonenumber
+import com.google.i18n.phonenumbers.ShortNumberInfo
 
 /**
  * Utility functions for phone number matching and normalization.
@@ -120,6 +120,61 @@ object PhoneNumberUtils {
             region to national
         } catch (_: NumberParseException) {
             null
+        }
+    }
+
+    private val shortNumberInfo: ShortNumberInfo by lazy { ShortNumberInfo.getInstance() }
+
+    /**
+     * Dialer UX: input is a **complete, dialable** national/international subscriber number, or a known
+     * **emergency / short** code for [regionCode] (e.g. UK 999, 112).
+     *
+     * When true: enable Call; [dialerInputToE164OrNull] should return non-null.
+     *
+     * Strings containing `*` or `#` are never "complete valid" here (USSD/MMI); user clears digits to edit.
+     */
+    fun isDialerInputCompleteAndValid(rawInput: String?, regionCode: String): Boolean {
+        if (rawInput.isNullOrBlank()) return false
+        val trimmed = rawInput.trim()
+        if (trimmed.isEmpty()) return false
+        if (trimmed.any { it == '*' || it == '#' }) return false
+
+        return try {
+            val parsed = phoneUtil.parse(trimmed, regionCode)
+            phoneUtil.isValidNumber(parsed)
+        } catch (_: NumberParseException) {
+            val digitsOnly = trimmed.filter { it.isDigit() }
+            digitsOnly.isNotEmpty() && shortNumberInfo.isEmergencyNumber(digitsOnly, regionCode)
+        }
+    }
+
+    /**
+     * E.164 for placing a call from the dialer when [isDialerInputCompleteAndValid] is true.
+     * Returns null if the number cannot be normalized (should not happen when paired with the check above).
+     */
+    fun dialerInputToE164OrNull(rawInput: String?, regionCode: String): String? {
+        if (rawInput.isNullOrBlank()) return null
+        val trimmed = rawInput.trim()
+        if (trimmed.any { it == '*' || it == '#' }) return null
+
+        return try {
+            val parsed = phoneUtil.parse(trimmed, regionCode)
+            if (!phoneUtil.isValidNumber(parsed)) return null
+            phoneUtil.format(parsed, PhoneNumberUtil.PhoneNumberFormat.E164)
+        } catch (_: NumberParseException) {
+            val digitsOnly = trimmed.filter { it.isDigit() }
+            if (digitsOnly.isEmpty() || !shortNumberInfo.isEmergencyNumber(digitsOnly, regionCode)) return null
+            try {
+                val parsed = phoneUtil.parse(digitsOnly, regionCode)
+                if (phoneUtil.isValidNumber(parsed)) {
+                    phoneUtil.format(parsed, PhoneNumberUtil.PhoneNumberFormat.E164)
+                } else {
+                    // tel: URI — use national short code (e.g. 999), not a fake +999 country code.
+                    digitsOnly
+                }
+            } catch (_: NumberParseException) {
+                digitsOnly
+            }
         }
     }
 }

@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,8 +52,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.max
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.ui.theme.ScaledDimensions
@@ -182,9 +187,18 @@ fun EmergencyButton(
         tapCount > 0 -> "$tapCount / $requiredTaps"
         else -> subtitle
     }
-    
+
+    // Same width rule as ListButton ("No Missed Calls"): scale min width from label length so text stays on one line
+    val charWidth = textSize.value * 0.6f
+    val longestLineChars = max(
+        text.length,
+        displaySubtitle?.length ?: 0
+    ).coerceIn(10, 20)
+    val minButtonWidth = (charWidth * longestLineChars + 12).dp
+
     Surface(
         modifier = modifier
+            .widthIn(min = minButtonWidth)
             .height(buttonHeight)
             .clip(RoundedCornerShape(WandasDimensions.CornerRadiusMedium))
             .indication(interactionSource, rememberRipple())
@@ -205,26 +219,37 @@ fun EmergencyButton(
             contentAlignment = androidx.compose.ui.Alignment.Center
         ) {
             Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
                 horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
             ) {
                 Text(
                     text = text,
                     style = TextStyle(
                         fontSize = textSize,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = textSize
                     ),
                     color = MaterialTheme.wandasColors.onEmergencyButton,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 if (displaySubtitle != null) {
                     Text(
                         text = displaySubtitle,
                         style = TextStyle(
-                            fontSize = textSize * 0.7f,
-                            fontWeight = if (tapCount > 0) FontWeight.Bold else FontWeight.Normal
+                            fontSize = textSize,
+                            fontWeight = if (tapCount > 0) FontWeight.Bold else FontWeight.Medium,
+                            lineHeight = textSize
                         ),
                         color = MaterialTheme.wandasColors.onEmergencyButton,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -571,6 +596,7 @@ fun DisplayOffButton(
  * @param fillColor Pastel background color (use PastelColors.lightBlue, etc.)
  * @param onClick Action when tapped
  * @param textAlignment Left or center alignment for text
+ * @param trailingContent Optional icon (etc.) to the right of [label]
  * @param activationPreset How the button responds to touch
  * @param debounceMs Minimum touch duration to filter accidental brushes
  */
@@ -581,6 +607,7 @@ fun ListButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     textAlignment: ListTextAlignment = ListTextAlignment.CENTER,
+    trailingContent: (@Composable () -> Unit)? = null,
     activationPreset: ButtonActivationPreset = ButtonActivationPreset.ON_RELEASE,
     debounceMs: Int = 150,
     accumulatedThresholdMs: Int = 500,
@@ -601,7 +628,8 @@ fun ListButton(
     
     // Width scales with label: "No Missed Calls" / "N Missed Calls" / "Contacts", etc.
     val charWidth = textSize.value * 0.6f  // Approximate character width
-    val charCount = label.length.coerceIn(10, 20)
+    val trailingSlots = if (trailingContent != null) 4 else 0
+    val charCount = (label.length + trailingSlots).coerceIn(10, 20)
     val buttonWidth = (charWidth * charCount + 12).dp
     
     // Interaction source for ripple effect
@@ -638,17 +666,43 @@ fun ListButton(
                     .padding(horizontal = 4.dp),  // Minimal padding
                 contentAlignment = boxAlignment
             ) {
-                Text(
-                    text = label,
-                    style = TextStyle(
-                        fontSize = textSize,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = textSize  // Tight line height
-                    ),
-                    color = Color.Black,
-                    textAlign = textAlign,
-                    maxLines = 1  // Prevent wrapping
-                )
+                if (trailingContent == null) {
+                    Text(
+                        text = label,
+                        style = TextStyle(
+                            fontSize = textSize,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = textSize  // Tight line height
+                        ),
+                        color = Color.Black,
+                        textAlign = textAlign,
+                        maxLines = 1  // Prevent wrapping
+                    )
+                } else {
+                    val rowArrangement = when (textAlignment) {
+                        ListTextAlignment.LEFT -> Arrangement.Start
+                        ListTextAlignment.CENTER -> Arrangement.Center
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = rowArrangement
+                    ) {
+                        Text(
+                            text = label,
+                            style = TextStyle(
+                                fontSize = textSize,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = textSize
+                            ),
+                            color = Color.Black,
+                            textAlign = TextAlign.Start,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        trailingContent()
+                    }
+                }
             }
         }
     }

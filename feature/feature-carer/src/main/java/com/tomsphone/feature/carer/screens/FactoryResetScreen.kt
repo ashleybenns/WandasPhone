@@ -21,8 +21,6 @@ import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
-import com.tomsphone.feature.carer.components.DevLevelIndicator
-
 /**
  * Factory Reset screen.
  * 
@@ -39,8 +37,6 @@ fun FactoryResetScreen(
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
-    val settings by viewModel.settings.collectAsState()
-    val featureLevel = settings.featureLevel
     var showConfirmDialog by remember { mutableStateOf(false) }
     var isResetting by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -52,13 +48,9 @@ fun FactoryResetScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Dev level indicator
-            DevLevelIndicator(level = featureLevel)
-            
-            // Breadcrumb
             CarerBreadcrumb(
                 title = "Factory Reset",
-                parentTitle = "Assistant Settings",
+                parentTitle = "Settings",
                 onBack = onBack
             )
             
@@ -130,9 +122,8 @@ fun FactoryResetScreen(
                         containerColor = Color(0xFFE3F2FD)  // Light blue
                     )
                 ) {
-                    Text(
-                        text = "Use this before giving the phone to a new user. " +
-                               "No copies of this data are kept in cloud backups.",
+                        Text(
+                            text = "Use before handing the phone to someone new. App data isn’t in your cloud backup.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF1565C0),  // Dark blue
                         modifier = Modifier.padding(WandasDimensions.SpacingMedium)

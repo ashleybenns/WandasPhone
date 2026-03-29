@@ -30,6 +30,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.SettingsRepository
+import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -142,12 +143,6 @@ fun EmergencyConfirmScreen(
     // Tap count for 3-tap activation
     val tapCount by viewModel.tapCount.collectAsState()
     
-    // Auto-cancel after 30 seconds of inactivity
-    LaunchedEffect(Unit) {
-        delay(INACTIVITY_TIMEOUT_MS)
-        onCancel()
-    }
-    
     // Reset taps on leaving screen
     DisposableEffect(Unit) {
         onDispose {
@@ -162,6 +157,7 @@ fun EmergencyConfirmScreen(
         }
     }
     
+    SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onCancel) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = emergencyRed
@@ -308,6 +304,7 @@ fun EmergencyConfirmScreen(
             Spacer(modifier = Modifier.height(48.dp))
         }
     }
+    }
 }
 
 /**
@@ -325,6 +322,7 @@ fun EmergencyConfirmScreen(
  */
 @Composable
 fun EmergencyCallScreen(
+    emergencyDialDigits: String,
     userName: String,
     userSurname: String,
     userPhotoUri: String?,
@@ -412,7 +410,7 @@ fun EmergencyCallScreen(
             // Call status - only show when call is active
             if (isCallActive) {
                 Text(
-                    text = if (isTestMode) "Test Call Active" else "999 CALL ACTIVE",
+                    text = if (isTestMode) "Test Call Active" else "${emergencyDialDigits} CALL ACTIVE",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = emergencyRed,
