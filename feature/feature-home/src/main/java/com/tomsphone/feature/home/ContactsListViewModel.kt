@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.CarerSettings
+import com.tomsphone.core.config.homeButtonRowCount
 import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
-import com.tomsphone.core.data.model.ContactType
+import com.tomsphone.core.data.model.sortedCarerCallableForHome
+import com.tomsphone.core.data.model.sortedForContactList
 import com.tomsphone.core.data.repository.ContactRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
@@ -34,6 +37,19 @@ class ContactsListViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = CarerSettings()
         )
+
+    /**
+     * Weighted row count on the home grid (from settings). Must match how [HomeScreen] splits space —
+     * not MainActivity’s `coerceIn(2, 6)`, which only caps scale in [UserScalingProvider]; the real home
+     * layout can have 7+ rows, so using 6 here made list rows taller than home.
+     */
+    val homeButtonRowCountForLayout: StateFlow<Int> = settings
+        .map { s -> s.homeButtonRowCount.coerceIn(1, 12) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 4
+        )
     
     // All contacts for home button count (slots may reference any contact)
     private val allContactsForCount: StateFlow<List<Contact>> = contactRepository.getContacts(200)
@@ -44,7 +60,7 @@ class ContactsListViewModel @Inject constructor(
         )
     
     // Calculate contacts per page: number of non-empty home buttons + 1 (emergency)
-    private val contactsPerPage: StateFlow<Int> = combine(
+    private val defaultContactsPerPage: StateFlow<Int> = combine(
         settings,
         allContactsForCount
     ) { s, contacts ->
@@ -55,16 +71,45 @@ class ContactsListViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = HomeSlotAssignments.TOTAL_SLOTS // fallback to 8
         )
+
+    private val _contactsPerPageOverride = MutableStateFlow<Int?>(null)
+
+    private val contactsPerPage: StateFlow<Int> = combine(
+        defaultContactsPerPage,
+        _contactsPerPageOverride
+    ) { fallback, override ->
+        (override ?: fallback).coerceIn(1, 50)
+    }
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = HomeSlotAssignments.TOTAL_SLOTS
+        )
     
     private val allContacts: StateFlow<List<Contact>> = contactRepository.getContacts(200)
-        .map { everyone ->
-            everyone.sortedWith(compareBy<Contact> { it.buttonPosition }.thenBy { it.name.lowercase() })
-        }
+        .map { everyone -> everyone.sortedForContactList() }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    init {
+        // If page size or total contacts changes, clamp to the last valid page so we never "lose" rows.
+        viewModelScope.launch {
+            combine(
+                allContacts.map { it.size }.distinctUntilChanged(),
+                contactsPerPage
+            ) { total, perPage -> total to perPage }
+                .collect { (total, perPage) ->
+                    val lastPage = if (total <= 0) 0 else (total - 1) / perPage.coerceAtLeast(1)
+                    val current = _currentPage.value
+                    if (current > lastPage) _currentPage.value = lastPage
+                    if (_currentPage.value < 0) _currentPage.value = 0
+                }
+        }
+    }
     
     // Paginated contacts for current page
     val contacts: StateFlow<List<Contact>> = combine(
@@ -103,24 +148,9 @@ class ContactsListViewModel @Inject constructor(
      */
     private fun countNonEmptyHomeButtons(settings: CarerSettings, contacts: List<Contact>): Int {
         val slots = settings.homeSlotAssignments
-        return if (slots.size == HomeSlotAssignments.SLOT_COUNT) {
-            slots.count { it.isNotEmpty() }
-        } else {
-            // Legacy mode: count enabled toggles + contacts
-            var count = 0
-            if (settings.homeShowMissedCallReturnButton) count++
-            if (settings.homeShowMissedCallsButton) count++
-            if (settings.homeShowContactsListButton) count++
-            if (settings.homeShowDialerButton) count++
-            if (settings.showDisplayOffButton) count++
-            val slotsForOthers = count
-            val maxContactSlots = (6 - slotsForOthers).coerceAtLeast(0)
-            val callableContacts = contacts
-                .filter { it.contactType == ContactType.CARER }
-                .sortedBy { it.buttonPosition }
-                .take(maxContactSlots)
-            callableContacts.size + count
-        }
+        // Single layout model: count the non-empty assigned home slots.
+        // HomeViewModel migrates legacy installs to a valid slot list.
+        return slots.count { it.isNotEmpty() }
     }
     
     /** Shown when the list has at least one row */
@@ -141,6 +171,25 @@ class ContactsListViewModel @Inject constructor(
     fun nextPage() {
         _currentPage.value++
     }
+
+    /**
+     * Set by the UI when it can measure how many rows fit in the list viewport.
+     * This replaces the home-based fallback paging on the contacts list only.
+     */
+    fun setContactsPerPageFromLayout(perPage: Int) {
+        val v = perPage.coerceIn(1, 50)
+        if (_contactsPerPageOverride.value != v) {
+            _contactsPerPageOverride.value = v
+        }
+    }
+    
+    /** @return true if back was consumed (moved to previous page); false if already on first page — caller should pop navigation. */
+    fun goBackWithinList(): Boolean {
+        val p = _currentPage.value
+        if (p <= 0) return false
+        _currentPage.value = p - 1
+        return true
+    }
     
     // Text alignment for list items
     val listTextAlignment: StateFlow<ListTextAlignment> = settingsRepository.getSettings()
@@ -158,6 +207,14 @@ class ContactsListViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ButtonActivationPreset.ON_RELEASE
+        )
+
+    val autoAnswerEnabled: StateFlow<Boolean> = settingsRepository.getSettings()
+        .map { it.autoAnswerEnabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
         )
     
     // Debounce duration for accidental touch protection

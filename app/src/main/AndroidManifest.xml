@@ -160,6 +160,16 @@
         </receiver>
         
         <!-- Boot receiver -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.transferfileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/transfer_file_paths" />
+        </provider>
+
         <receiver
             android:name="com.tomsphone.feature.kiosk.BootReceiver"
             android:enabled="true"

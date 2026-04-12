@@ -6,7 +6,6 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.util.Log
-import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.CallLogEntry
 import com.tomsphone.core.data.model.CallType
@@ -418,7 +417,8 @@ class WandasInCallService : InCallService(), CallManagerImpl.InCallServiceBridge
                 }
 
                 val settings = settingsRepository.getSettings().first()
-                val onHome = contact.id in HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+                val contacts = contactRepository.getContacts(200).first()
+                val onHome = contact.id in contactIdsWithHomeCallButton(settings)
                 if (!onHome) {
                     Log.d(TAG, "Auto-answer: contact not on a home button slot ${contact.name}")
                     return@launch

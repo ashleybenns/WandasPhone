@@ -91,5 +91,11 @@ class LocalCallLogRepository @Inject constructor(
             callLogDao.deleteMissedCallsOlderThan(timestamp)
         }
     }
+
+    override suspend fun deleteAllCallLogs(): Result<Unit> {
+        return runCatching {
+            callLogDao.deleteAll()
+        }
+    }
 }
 

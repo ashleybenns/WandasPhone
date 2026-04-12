@@ -63,9 +63,9 @@ fun TouchResponseScreen(
                     verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
                 ) {
                     // Introduction
-                    SettingCard(title = "How should buttons respond?") {
+                    SettingCard(title = "How buttons respond") {
                         Text(
-                            text = "Match the mode to how they already touch — don’t expect them to learn a new style.",
+                            text = "Match the mode to how they already touch — don’t expect them to learn a new technique.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f)
                         )
@@ -336,12 +336,12 @@ fun TouchResponseScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "• End call: accumulated tap",
+                                text = "• End call: 2 taps",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface
                             )
                             Text(
-                                text = "• Emergency: 3 taps + confirm",
+                                text = "• Emergency: 3 taps to confirm",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.wandasColors.onSurface
                             )

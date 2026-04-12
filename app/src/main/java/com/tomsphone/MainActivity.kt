@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.ContactsContract
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import android.view.KeyEvent
@@ -405,9 +406,6 @@ fun WandasPhoneApp(
     val settings by settingsRepository.getSettings().collectAsState(initial = null)
     val userTextScale = settings?.ui?.userTextSize?.scale ?: 1.0f  // Default to NORMAL (100%)
     
-    // Track the last outgoing contact name for navigation
-    var lastOutgoingContactName by remember { mutableStateOf("Caller") }
-    
     // Emergency mode from CallManager - shared with CallScreeningService
     val isEmergencyMode by callManager.isEmergencyMode.collectAsState()
     
@@ -430,17 +428,6 @@ fun WandasPhoneApp(
     LaunchedEffect(isCharging) {
         if (isCharging) {
             onRestoreScreen()
-        }
-    }
-    
-    // Update contact name when we have call info
-    LaunchedEffect(currentCall) {
-        currentCall?.let { call ->
-            if (call.direction == CallDirection.OUTGOING) {
-                call.contactName?.let { name ->
-                    lastOutgoingContactName = name
-                }
-            }
         }
     }
     
@@ -505,9 +492,13 @@ fun WandasPhoneApp(
                 if (isEmergencyMode) {
                     Log.d("WandasPhoneApp", ">>> Emergency mode active - staying on emergency screen")
                 } else if (currentRoute != "endOutgoing" && !currentRoute.orEmpty().startsWith("endOutgoing")) {
-                    val contactName = call.contactName ?: lastOutgoingContactName
-                    Log.d("WandasPhoneApp", ">>> Outgoing call - navigating to endOutgoing ($contactName)")
-                    navController.navigate("endOutgoing/$contactName") {
+                    // Prefer live call fields only — never fall back to a previous call's name (e.g. after emergency).
+                    val rawLabel = call.contactName?.takeIf { it.isNotBlank() }
+                        ?: call.phoneNumber.takeIf { it.isNotBlank() && it != "Unknown" }
+                        ?: "Caller"
+                    val encoded = Uri.encode(rawLabel, null)
+                    Log.d("WandasPhoneApp", ">>> Outgoing call - navigating to endOutgoing ($rawLabel)")
+                    navController.navigate("endOutgoing/$encoded") {
                         popUpTo("home") { inclusive = false }
                         launchSingleTop = true
                     }
@@ -528,7 +519,9 @@ fun WandasPhoneApp(
     }
     
     // Button row count from home layout (slots when migrated, else legacy toggles)
-    val homeButtonRowCount = settings?.homeButtonRowCount?.coerceIn(2, 6) ?: 4
+    // Match [CarerSettings.homeButtonRowCount] / row-height math (1–12); do not cap at 6 or scale and
+    // [ScaledDimensions.homeContactRowInnerHeight] disagree (Contacts vs home button height).
+    val homeButtonRowCount = settings?.homeButtonRowCount?.coerceIn(1, 12) ?: 4
     
     WandasPhoneTheme(themeOption = ThemeOption.HIGH_CONTRAST_LIGHT) {
         NavHost(
@@ -581,11 +574,13 @@ fun WandasPhoneApp(
                 ) {
                     val addContactContext = LocalContext.current
                     com.tomsphone.feature.home.MissedCallsListScreen(
-                        onBack = {
+                        onBack = exitMissedCalls@{
                             // #region agent log
                             debugLog("MainActivity.kt:414", "H1", "missedCalls onBack called", mapOf("canPopBack" to navController.previousBackStackEntry?.destination?.route))
                             // #endregion
-                            navController.popBackStack()
+                            val nav = navController
+                            if (nav.currentDestination?.route != "missedCalls") return@exitMissedCalls
+                            nav.popBackStack()
                         },
                         onCallContact = { _, phoneNumber ->
                             navController.popBackStack()
@@ -690,15 +685,20 @@ fun WandasPhoneApp(
             // Contacts List (Level 2+)
             composable("contactsList") {
                 val scope = rememberCoroutineScope()
+                // Pop only while this route is current — avoids double-tap removing "home" from the stack.
+                val exitContactsToHome: () -> Unit = exitContacts@{
+                    val nav = navController
+                    if (nav.currentDestination?.route != "contactsList") return@exitContacts
+                    nav.popBackStack()
+                }
                 UserScalingProvider(
                     buttonRowCount = homeButtonRowCount,
                     userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
                 ) {
                     com.tomsphone.feature.home.ContactsListScreen(
-                        onBack = { navController.popBackStack() },
-                        onCallContact = { name, phoneNumber ->
-                            // Navigate back to home and place call
-                            navController.popBackStack()
+                        onBack = exitContactsToHome,
+                        onCallContact = { _, phoneNumber ->
+                            exitContactsToHome()
                             scope.launch {
                                 callManager.placeCall(phoneNumber)
                             }
@@ -852,14 +852,12 @@ fun WandasPhoneApp(
             }
             
             // End call screen for OUTGOING
-            composable("endOutgoing/{contactName}") { backStackEntry ->
-                val contactName = backStackEntry.arguments?.getString("contactName") ?: "Caller"
+            composable("endOutgoing/{contactName}") {
                 UserScalingProvider(
                     buttonRowCount = homeButtonRowCount,
                     userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
                 ) {
                     EndOutgoingCallScreen(
-                        contactName = contactName,
                         onCallEnded = {
                             navController.popBackStack("home", inclusive = false)
                         }
@@ -869,10 +867,15 @@ fun WandasPhoneApp(
             
             // CARER SCREEN - NO scaling, uses normal text size for readability
             composable("carer") {
+                // Leaving carer: pop to home, not a blind popBackStack(). Rapid taps on "Back" at the
+                // main menu used to call pop twice — second pop removed "home" and caused white screen / crash.
+                val exitCarerToHome: () -> Unit = exitCarerToHome@{
+                    val nav = navController
+                    if (nav.currentDestination?.route == "home") return@exitCarerToHome
+                    nav.popBackStack("home", inclusive = false)
+                }
                 com.tomsphone.feature.carer.CarerScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    },
+                    onNavigateBack = exitCarerToHome,
                     onExitApp = onExitApp
                 )
             }

@@ -55,7 +55,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.math.max
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.ui.theme.ScaledDimensions
@@ -188,17 +187,9 @@ fun EmergencyButton(
         else -> subtitle
     }
 
-    // Same width rule as ListButton ("No Missed Calls"): scale min width from label length so text stays on one line
-    val charWidth = textSize.value * 0.6f
-    val longestLineChars = max(
-        text.length,
-        displaySubtitle?.length ?: 0
-    ).coerceIn(10, 20)
-    val minButtonWidth = (charWidth * longestLineChars + 12).dp
-
     Surface(
         modifier = modifier
-            .widthIn(min = minButtonWidth)
+            .fillMaxWidth()
             .height(buttonHeight)
             .clip(RoundedCornerShape(WandasDimensions.CornerRadiusMedium))
             .indication(interactionSource, rememberRipple())
@@ -214,46 +205,16 @@ fun EmergencyButton(
         shape = RoundedCornerShape(WandasDimensions.CornerRadiusMedium),
         shadowElevation = WandasDimensions.ElevationLarge
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = androidx.compose.ui.Alignment.Center
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = text,
-                    style = TextStyle(
-                        fontSize = textSize,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = textSize
-                    ),
-                    color = MaterialTheme.wandasColors.onEmergencyButton,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (displaySubtitle != null) {
-                    Text(
-                        text = displaySubtitle,
-                        style = TextStyle(
-                            fontSize = textSize,
-                            fontWeight = if (tapCount > 0) FontWeight.Bold else FontWeight.Medium,
-                            lineHeight = textSize
-                        ),
-                        color = MaterialTheme.wandasColors.onEmergencyButton,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
+        FittedEmergencyTwoLinesInBox(
+            title = text,
+            subtitleOrProgress = displaySubtitle,
+            color = MaterialTheme.wandasColors.onEmergencyButton,
+            maxFontSize = textSize,
+            secondLineBold = tapCount > 0,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp)
+        )
     }
 }
 
@@ -417,10 +378,6 @@ fun CallingStateButton(
         label = "calling_fade"
     )
 
-    val boxAlignment = when (textAlignment) {
-        ListTextAlignment.LEFT -> Alignment.CenterStart
-        ListTextAlignment.CENTER -> Alignment.Center
-    }
     val textAlign = when (textAlignment) {
         ListTextAlignment.LEFT -> TextAlign.Start
         ListTextAlignment.CENTER -> TextAlign.Center
@@ -434,19 +391,19 @@ fun CallingStateButton(
             .background(
                 color = backgroundColor,
                 shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
-            ),
-        contentAlignment = boxAlignment
+            )
     ) {
-        Text(
+        // Same label fitting as [ConfigurableButton] so home standby and calling animation match.
+        FittedLabelInBox(
             text = contactName,
-            style = TextStyle(
-                fontSize = textSize,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = textSize
-            ),
             color = Color.White,
             textAlign = textAlign,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            maxFontSize = textSize,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            maxLines = LabelFitPolicy.DEFAULT_MAX_LINES,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
@@ -590,9 +547,9 @@ fun DisplayOffButton(
  * - Square corners (4dp radius)
  * - Black border and text
  * - Same text size as call buttons for readability
- * - Fixed width for 12 characters (consistent sizing)
- * 
- * @param label Button text (max 12 chars recommended)
+ * - Full width of the row; label follows [LabelFitPolicy] (up to 2 lines, ellipsis, soft char cap).
+ *
+ * @param label Button text (long strings are clipped per [LabelFitPolicy.SOFT_MAX_DISPLAY_CHARS])
  * @param fillColor Pastel background color (use PastelColors.lightBlue, etc.)
  * @param onClick Action when tapped
  * @param textAlignment Left or center alignment for text
@@ -615,27 +572,14 @@ fun ListButton(
 ) {
     val textSize = ScaledDimensions.buttonTextSize
     val borderColor = Color.Black
-    
-    // Convert setting to Compose alignment
-    val boxAlignment = when (textAlignment) {
-        ListTextAlignment.LEFT -> Alignment.CenterStart
-        ListTextAlignment.CENTER -> Alignment.Center
-    }
+
     val textAlign = when (textAlignment) {
         ListTextAlignment.LEFT -> TextAlign.Start
         ListTextAlignment.CENTER -> TextAlign.Center
     }
-    
-    // Width scales with label: "No Missed Calls" / "N Missed Calls" / "Contacts", etc.
-    val charWidth = textSize.value * 0.6f  // Approximate character width
-    val trailingSlots = if (trailingContent != null) 4 else 0
-    val charCount = (label.length + trailingSlots).coerceIn(10, 20)
-    val buttonWidth = (charWidth * charCount + 12).dp
-    
-    // Interaction source for ripple effect
+
     val interactionSource = remember { MutableInteractionSource() }
-    
-    // Container fills parent, centers the button
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -644,7 +588,7 @@ fun ListButton(
     ) {
         Surface(
             modifier = Modifier
-                .width(buttonWidth)
+                .fillMaxWidth()
                 .fillMaxHeight(0.85f)
                 .clip(RoundedCornerShape(4.dp))
                 .indication(interactionSource, rememberRipple())
@@ -658,48 +602,48 @@ fun ListButton(
                 ),
             shape = RoundedCornerShape(4.dp),
             color = fillColor,
-            border = BorderStroke(1.dp, borderColor)  // Thinner border
+            border = BorderStroke(1.dp, borderColor)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 4.dp),  // Minimal padding
-                contentAlignment = boxAlignment
-            ) {
-                if (trailingContent == null) {
-                    Text(
+            if (trailingContent == null) {
+                FittedLabelInBox(
+                    text = label,
+                    color = Color.Black,
+                    textAlign = textAlign,
+                    maxFontSize = textSize,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 4.dp),
+                    maxLines = LabelFitPolicy.DEFAULT_MAX_LINES,
+                    fontWeight = FontWeight.Bold
+                )
+            } else {
+                val rowArrangement = when (textAlignment) {
+                    ListTextAlignment.LEFT -> Arrangement.Start
+                    ListTextAlignment.CENTER -> Arrangement.Center
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = rowArrangement
+                ) {
+                    FittedLabelInBox(
                         text = label,
-                        style = TextStyle(
-                            fontSize = textSize,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = textSize  // Tight line height
-                        ),
                         color = Color.Black,
-                        textAlign = textAlign,
-                        maxLines = 1  // Prevent wrapping
+                        textAlign = if (textAlignment == ListTextAlignment.LEFT) TextAlign.Start else TextAlign.Center,
+                        maxFontSize = textSize,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        maxLines = LabelFitPolicy.DEFAULT_MAX_LINES,
+                        fontWeight = FontWeight.Bold
                     )
-                } else {
-                    val rowArrangement = when (textAlignment) {
-                        ListTextAlignment.LEFT -> Arrangement.Start
-                        ListTextAlignment.CENTER -> Arrangement.Center
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = rowArrangement
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier.wrapContentWidth(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = label,
-                            style = TextStyle(
-                                fontSize = textSize,
-                                fontWeight = FontWeight.Bold,
-                                lineHeight = textSize
-                            ),
-                            color = Color.Black,
-                            textAlign = TextAlign.Start,
-                            maxLines = 1
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
                         trailingContent()
                     }
                 }

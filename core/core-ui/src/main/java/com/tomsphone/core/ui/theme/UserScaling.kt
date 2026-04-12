@@ -230,8 +230,8 @@ object ScaledDimensions {
     val endCallButtonSize: Dp
         @Composable get() {
             val scale = LocalUserScale.current
-            // Base size 120dp, scales with user setting
-            return (120f * scale).dp
+            // Base ~128dp — slightly larger than contact-name line height so bold "End" fits with descenders
+            return (128f * scale).dp
         }
     
     /**
@@ -273,4 +273,30 @@ object ScaledDimensions {
      */
     val buttonSpacing: Dp
         @Composable get() = 8.dp
+
+    /**
+     * Inner height of one home contact row (the drawable button), derived from the same vertical budget
+     * as the home screen: battery strip, status box, inert bottom inset, inner padding, emergency row +
+     * spacer, then equal [weight(1f)] slots with 4.dp vertical padding above and below each slot.
+     *
+     * [buttonRowCount] must be the **actual** number of weighted rows on home (from settings’
+     * home button row count), not the 2–6 cap used only for [UserScalingProvider] scale — otherwise
+     * list pages divide the same pool by too few rows and look oversized.
+     */
+    @Composable
+    fun homeContactRowInnerHeight(buttonRowCount: Int): Dp {
+        val rows = buttonRowCount.coerceIn(1, 12)
+        val configuration = LocalConfiguration.current
+        val screenH = configuration.screenHeightDp.dp
+        // Matches calculateOptimalScale top gutter (battery / warnings strip)
+        val belowStatus = screenH - 40.dp - statusBoxHeight
+        val inertContentH = belowStatus - WandasDimensions.InertBorderBottom
+        val innerColumnMax = inertContentH - edgePadding
+        val bottomSection = buttonSpacing + emergencyButtonHeight
+        val middlePool = innerColumnMax - bottomSection
+        if (middlePool <= 0.dp) return contactButtonHeight
+        val perSlot = middlePool / rows
+        val inner = perSlot - 8.dp
+        return if (inner > 0.dp) inner else contactButtonHeight
+    }
 }

@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
-import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.tts.WandasTTS
@@ -227,19 +226,15 @@ class BatteryMonitor @Inject constructor(
     }
     
     private fun startLowBatteryMode() {
-        // Send low-battery SMS once (if enabled and we have permission)
+        // Send low-battery SMS once (if SMS permission and home-slot recipients with notify on)
         scope.launch {
             try {
                 val settings = settingsRepository.getSettings().first()
-                if (!settings.batteryAlertSmsEnabled) {
-                    Log.d(TAG, "Low battery: SMS alerts disabled in settings")
-                    return@launch
-                }
                 if (!batteryAlertSmsSender.hasSmsPermission()) {
                     Log.w(TAG, "Low battery: SMS permission not granted - alerts not sent")
                     return@launch
                 }
-                val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+                val onHome = contactIdsWithHomeCallButton(settings)
                 val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
                     .filter { it.id in onHome }
                 val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
@@ -328,15 +323,14 @@ class BatteryMonitor @Inject constructor(
         scope.launch {
             try {
                 val settings = settingsRepository.getSettings().first()
-                if (settings.batteryAlertSmsEnabled) {
-                    val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
-                    val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
-                        .filter { it.id in onHome }
-                    val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
-                    if (numbers.isNotEmpty()) {
-                        Log.d(TAG, "Sending device connected alert to ${numbers.size} assistant(s) using stored numbers")
-                        batteryAlertSmsSender.sendDeviceConnectedAlert(numbers, settings.userName)
-                    }
+                if (!batteryAlertSmsSender.hasSmsPermission()) return@launch
+                val onHome = contactIdsWithHomeCallButton(settings)
+                val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
+                    .filter { it.id in onHome }
+                val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
+                if (numbers.isNotEmpty()) {
+                    Log.d(TAG, "Sending device connected alert to ${numbers.size} assistant(s) using stored numbers")
+                    batteryAlertSmsSender.sendDeviceConnectedAlert(numbers, settings.userName)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Device connected SMS error: ${e.message}")

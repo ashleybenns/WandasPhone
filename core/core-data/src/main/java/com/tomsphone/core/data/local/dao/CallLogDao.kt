@@ -54,5 +54,8 @@ interface CallLogDao {
     
     @Query("DELETE FROM call_logs WHERE type = 'MISSED' AND timestamp < :timestamp")
     suspend fun deleteMissedCallsOlderThan(timestamp: Long)
+
+    @Query("DELETE FROM call_logs")
+    suspend fun deleteAll()
 }
 

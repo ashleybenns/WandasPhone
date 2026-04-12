@@ -67,10 +67,6 @@ data class CarerSettings(
     // SAFETY: Reject unknown calls by default (scam protection)
     val rejectUnknownCalls: Boolean = true,
     
-    // ========== BATTERY ALERT SMS (Level 1) ==========
-    // Send SMS to carers (with "Notify for battery alerts" on) for low battery and device connected after low battery
-    val batteryAlertSmsEnabled: Boolean = false,
-    
     // ========== MISSED CALL NAGGING ==========
     // SAFE: Reminders on - helps user return important calls
     val missedCallNagEnabled: Boolean = true,
@@ -426,24 +422,15 @@ enum class MissedCallNagInterval(
 val CarerSettings.homeButtonRowCount: Int
     get() {
         val slots = homeSlotAssignments
-        if (slots.size == HomeSlotAssignments.SLOT_COUNT) {
-            var rows = slots.count { HomeSlotAssignments.isContact(it) }.coerceAtLeast(1)
-            if (slots.contains(HomeSlotAssignments.MISSED_CALL_RETURN)) rows += 1
-            if (slots.contains(HomeSlotAssignments.SCREEN_OFF)) rows += 1
-            var menuButtons = 0
-            if (slots.contains(HomeSlotAssignments.MISSED_CALLS_LIST)) menuButtons++
-            if (slots.contains(HomeSlotAssignments.OTHER_CONTACTS)) menuButtons++
-            if (slots.contains(HomeSlotAssignments.DIALER)) menuButtons++
-            rows += (menuButtons + 1) / 2
-            return rows
-        }
-        var rows = homeContactCount.coerceAtLeast(1)
-        if (homeShowMissedCallReturnButton) rows += 1
-        if (showDisplayOffButton) rows += 1
+        // Single layout model: derive rows from slot list.
+        // HomeViewModel ensures legacy installs are migrated to a valid 7-entry slot list.
+        var rows = slots.count { HomeSlotAssignments.isContact(it) }.coerceAtLeast(1)
+        if (slots.contains(HomeSlotAssignments.MISSED_CALL_RETURN)) rows += 1
+        if (slots.contains(HomeSlotAssignments.SCREEN_OFF)) rows += 1
         var menuButtons = 0
-        if (homeShowMissedCallsButton) menuButtons++
-        if (homeShowContactsListButton) menuButtons++
-        if (homeShowDialerButton) menuButtons++
+        if (slots.contains(HomeSlotAssignments.MISSED_CALLS_LIST)) menuButtons++
+        if (slots.contains(HomeSlotAssignments.OTHER_CONTACTS)) menuButtons++
+        if (slots.contains(HomeSlotAssignments.DIALER)) menuButtons++
         rows += (menuButtons + 1) / 2
         return rows
     }

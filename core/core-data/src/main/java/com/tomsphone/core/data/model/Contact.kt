@@ -38,3 +38,29 @@ data class Contact(
      */
     val canCallOut: Boolean get() = contactType == ContactType.CARER
 }
+
+/**
+ * Carer contacts shown on the legacy home row: [Contact.buttonPosition] first, then
+ * [Contact.updatedAt] / [Contact.id] descending so many contacts sharing position `0`
+ * (common for older data) do not freeze ordering as DB priority/name — new contacts surface.
+ */
+fun Collection<Contact>.sortedCarerCallableForHome(): List<Contact> =
+    asSequence()
+        .filter { it.contactType == ContactType.CARER }
+        .sortedWith(
+            compareBy<Contact> { it.buttonPosition }
+                .thenByDescending { it.updatedAt }
+                .thenByDescending { it.id }
+        )
+        .toList()
+
+/**
+ * Full contact list UIs (paginated list, pickers): same position tie-break as home.
+ */
+fun Collection<Contact>.sortedForContactList(): List<Contact> =
+    sortedWith(
+        compareBy<Contact> { it.buttonPosition }
+            .thenByDescending { it.updatedAt }
+            .thenByDescending { it.id }
+            .thenBy { it.name.lowercase() }
+    )

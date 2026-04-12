@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -138,85 +139,106 @@ fun EndIncomingCallScreen(
                 }
             }
             
-            // Button area - divided into TWO equal zones
+            // Button area — slightly more space above (end call) than speaker zone
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = WandasDimensions.SpacingLarge)
             ) {
-                // TOP ZONE: End call button (always in top half)
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(1.2f)
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        // End call instruction - scaled text
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(ScaledDimensions.endCallInstructionHeight),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = instructionText,
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.statusTextSize,
-                                    fontWeight = FontWeight.Medium,
-                                    lineHeight = ScaledDimensions.statusTextSize * 1.2f
-                                ),
-                                color = Color.Black.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(WandasDimensions.SpacingMedium))
-                        
-                        // End call button - round, red, scaled size
-                        // Uses activation gesture for consistent touch response
-                        val endCallInteractionSource = remember { MutableInteractionSource() }
-                        Surface(
-                            modifier = Modifier
-                                .size(ScaledDimensions.endCallButtonSize)
-                                .clip(CircleShape)
-                                .indication(endCallInteractionSource, rememberRipple())
-                                .activationGesture(
-                                    preset = buttonActivation,
-                                    debounceMs = touchDebounceMs,
-                                    accumulatedThresholdMs = accumulatedThresholdMs,
-                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
-                                    onActivate = { viewModel.onEndCallTap() },
-                                    interactionSource = endCallInteractionSource
-                                ),
-                            shape = CircleShape,
-                            color = Color(0xFFD32F2F)
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val spacing = WandasDimensions.SpacingMedium
+                        val instructionH = ScaledDimensions.endCallInstructionHeight
+                        val rawDiameter = ScaledDimensions.endCallButtonSize
+                        val minCircleForContactNameText =
+                            ScaledDimensions.heightForLines(1, 32f) * 1.65f
+                        val desiredDiameter = maxOf(rawDiameter, minCircleForContactNameText)
+                        val available = maxHeight - 8.dp
+                        val roomForCircle =
+                            (available - spacing - instructionH).coerceAtLeast(0.dp)
+                        val diameter = minOf(desiredDiameter, roomForCircle)
+
+                        val endLabelSize = ScaledDimensions.contactNameTextSize
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Box(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(instructionH),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "End",
+                                    text = instructionText,
                                     style = TextStyle(
-                                        fontSize = ScaledDimensions.contactNameTextSize,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = ScaledDimensions.statusTextSize,
+                                        fontWeight = FontWeight.Medium,
+                                        lineHeight = ScaledDimensions.statusTextSize * 1.2f,
+                                        platformStyle = PlatformTextStyle(
+                                            includeFontPadding = false
+                                        )
                                     ),
-                                    color = Color.White
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2
                                 )
+                            }
+
+                            Spacer(modifier = Modifier.height(spacing))
+
+                            val endCallInteractionSource = remember { MutableInteractionSource() }
+                            Surface(
+                                modifier = Modifier
+                                    .size(diameter)
+                                    .clip(CircleShape)
+                                    .indication(endCallInteractionSource, rememberRipple())
+                                    .activationGesture(
+                                        preset = buttonActivation,
+                                        debounceMs = touchDebounceMs,
+                                        accumulatedThresholdMs = accumulatedThresholdMs,
+                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                        onActivate = { viewModel.onEndCallTap() },
+                                        interactionSource = endCallInteractionSource
+                                    ),
+                                shape = CircleShape,
+                                color = Color(0xFFD32F2F)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "End",
+                                        style = TextStyle(
+                                            fontSize = endLabelSize,
+                                            fontWeight = FontWeight.Bold,
+                                            lineHeight = endLabelSize * 1.1f,
+                                            platformStyle = PlatformTextStyle(
+                                                includeFontPadding = false
+                                            )
+                                        ),
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 
-                // BOTTOM ZONE: Speaker toggle (always takes equal space)
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.8f)
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {

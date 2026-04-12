@@ -28,6 +28,16 @@ object HomeSlotAssignments {
     fun isContact(value: String): Boolean = value.startsWith(PREFIX_CONTACT)
 
     /**
+     * True when assignments are a real 7-slot layout (at least one non-empty entry).
+     * Seven empty strings are invalid persisted state: home should use legacy rules instead.
+     */
+    fun isEffectiveSlotMode(assignments: List<String>): Boolean =
+        assignments.size == SLOT_COUNT && assignments.any { it.isNotEmpty() }
+
+    /** True when assignments have correct length (may be all-empty). */
+    fun isValidSlotList(assignments: List<String>): Boolean = assignments.size == SLOT_COUNT
+
+    /**
      * Contact IDs that currently have a home call button (assistant / elevated slots).
      * Missed-call nag, auto-answer eligibility, and battery SMS use this — not [ContactType] alone.
      */

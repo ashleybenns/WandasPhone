@@ -9,18 +9,23 @@ import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
+import com.tomsphone.core.data.model.sortedCarerCallableForHome
+import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.config.ThemeOption
-import com.tomsphone.core.telecom.BatteryAlertSmsSender
 import com.tomsphone.core.telecom.DEFAULT_EMERGENCY_FALLBACK
 import com.tomsphone.core.telecom.EmergencyNumberResolver
+import com.tomsphone.core.telecom.contactIdsWithHomeCallButton
 import com.tomsphone.core.analytics.AnalyticsManager
 import com.tomsphone.core.analytics.AnalyticsEvent
 import com.tomsphone.core.analytics.RemoteConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.tomsphone.feature.carer.transfer.AppDataTransfer
+import com.tomsphone.feature.carer.transfer.toNewContact
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 import javax.inject.Inject
 
@@ -39,14 +44,15 @@ private const val BYPASS_PIN = true
  * - Adjust settings
  * - Select theme
  * - Configure auto-answer
- * - Factory reset (wipe all data)
+ * - App reset (wipe this app’s data only)
  */
 @HiltViewModel
 class CarerSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val contactRepository: ContactRepository,
-    private val batteryAlertSmsSender: BatteryAlertSmsSender,
+    private val callLogRepository: CallLogRepository,
+    private val json: Json,
     private val analytics: AnalyticsManager,
     private val remoteConfig: RemoteConfigManager
 ) : ViewModel() {
@@ -245,7 +251,9 @@ class CarerSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val contactType = if (contact.contactType == ContactType.CARER) "carer" else "grey_list"
             if (contact.id == 0L) {
-                val maxPosition = contacts.first().maxOfOrNull { it.buttonPosition } ?: -1
+                val maxPosition = contacts.first()
+                    .filter { it.contactType == ContactType.CARER }
+                    .maxOfOrNull { it.buttonPosition } ?: -1
                 val contactToSave = contact.copy(buttonPosition = maxPosition + 1)
                 val result = contactRepository.addContact(contactToSave)
                 if (result.isSuccess) {
@@ -322,10 +330,7 @@ class CarerSettingsViewModel @Inject constructor(
      */
     private fun buildLegacySlotAssignments(contactsList: List<Contact>, current: CarerSettings): List<String> {
         val list = mutableListOf<String>()
-        val carerCallable = contactsList
-            .filter { it.contactType == ContactType.CARER }
-            .sortedBy { it.buttonPosition }
-            .take(HomeSlotAssignments.SLOT_COUNT)
+        val carerCallable = contactsList.sortedCarerCallableForHome().take(HomeSlotAssignments.SLOT_COUNT)
         carerCallable.forEach { list.add(HomeSlotAssignments.contactSlot(it.id)) }
         if (current.homeShowMissedCallReturnButton) list.add(HomeSlotAssignments.MISSED_CALL_RETURN)
         if (current.homeShowMissedCallsButton) list.add(HomeSlotAssignments.MISSED_CALLS_LIST)
@@ -337,22 +342,30 @@ class CarerSettingsViewModel @Inject constructor(
     }
 
     /**
-     * Run migration when opening Home Screen Layout: if homeSlotAssignments is empty or size != 7,
+     * Run migration when opening Home Screen Layout: if size != 7, empty list, or seven empty strings,
      * build from current contacts + toggles and save.
      */
     fun ensureMigrationOnLayoutOpen() {
         viewModelScope.launch {
             val current = settingsRepository.getSettings().first()
             val list = current.homeSlotAssignments
-            if (list.size != HomeSlotAssignments.SLOT_COUNT) {
-                val contactsList = contacts.first()
-                val migrated = buildLegacySlotAssignments(contactsList, current)
-                settingsRepository.updateSettings(current.withSlotsSynced(migrated))
-            } else {
-                val trimmed = list.take(HomeSlotAssignments.SLOT_COUNT)
-                val synced = current.withSlotsSynced(trimmed)
-                if (synced != current) {
-                    settingsRepository.updateSettings(synced)
+            when {
+                list.size != HomeSlotAssignments.SLOT_COUNT -> {
+                    val contactsList = contacts.first()
+                    val migrated = buildLegacySlotAssignments(contactsList, current)
+                    settingsRepository.updateSettings(current.withSlotsSynced(migrated))
+                }
+                list.all { it.isEmpty() } -> {
+                    val contactsList = contacts.first()
+                    val migrated = buildLegacySlotAssignments(contactsList, current)
+                    settingsRepository.updateSettings(current.withSlotsSynced(migrated))
+                }
+                else -> {
+                    val trimmed = list.take(HomeSlotAssignments.SLOT_COUNT)
+                    val synced = current.withSlotsSynced(trimmed)
+                    if (synced != current) {
+                        settingsRepository.updateSettings(synced)
+                    }
                 }
             }
         }
@@ -442,51 +455,6 @@ class CarerSettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Toggle battery alert SMS (low battery and device connected after low battery).
-     * Carers must have "Notify for battery alerts" enabled on their contact.
-     */
-    fun setBatteryAlertSmsEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            val current = settingsRepository.getSettings().first()
-            settingsRepository.updateSettings(current.copy(batteryAlertSmsEnabled = enabled))
-        }
-    }
-
-    /** On-screen status for battery alert card: (SMS permission granted, number of recipients with valid number). */
-    private val _batteryAlertStatus = MutableStateFlow(Pair(false, 0))
-    val batteryAlertStatus: StateFlow<Pair<Boolean, Int>> = _batteryAlertStatus.asStateFlow()
-
-    /** Refresh permission and recipient count for the battery alert card. Call when the card is shown. */
-    fun refreshBatteryAlertStatus() {
-        viewModelScope.launch {
-            val hasPermission = batteryAlertSmsSender.hasSmsPermission()
-            val settings = settingsRepository.getSettings().first()
-            val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
-            val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
-                .filter { it.id in onHome }
-            val count = recipients.count { it.phoneNumber.isNotBlank() }
-            _batteryAlertStatus.value = hasPermission to count
-        }
-    }
-
-    /**
-     * Send a test battery alert SMS to all assistants with "Notify for battery alerts" enabled.
-     * Returns a result message for the UI (success or failure reason).
-     */
-    fun sendTestBatteryAlertSms(onResult: (String) -> Unit) {
-        viewModelScope.launch {
-            val settings = settingsRepository.getSettings().first()
-            val onHome = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
-            val recipients = contactRepository.getContactsWithBatteryAlertsEnabled()
-                .filter { it.id in onHome }
-            val numbers = recipients.map { it.phoneNumber }.filter { it.isNotBlank() }
-            val message = batteryAlertSmsSender.sendTestBatteryAlert(numbers, settings.userName)
-            onResult(message)
-            refreshBatteryAlertStatus()
-        }
-    }
-    
     /**
      * Set default call volume (0-100 percent).
      * Restored when call ends; used as preset when call starts.
@@ -766,10 +734,41 @@ class CarerSettingsViewModel @Inject constructor(
         return bytes.joinToString("") { "%02x".format(it) }
     }
     
-    // ========== FACTORY RESET ==========
+    // ========== TRANSFER (EXPORT / IMPORT) ==========
+
+    /**
+     * JSON snapshot for sharing to another device or keeping before [factoryReset].
+     * Contains contacts and carer settings; photos use device URIs and may not work on a new phone.
+     */
+    suspend fun buildTransferExportJson(): String {
+        val contactList = contactRepository.getContacts(500).first()
+        val currentSettings = settingsRepository.getSettings().first()
+        return AppDataTransfer.exportJson(contactList, currentSettings, json)
+    }
+
+    /**
+     * Replace all contacts and carer settings from a transfer file. Clears in-app call history.
+     * Does not change data outside this app.
+     */
+    suspend fun importTransferFromJson(jsonString: String): Result<Unit> {
+        val payload = AppDataTransfer.parseTransfer(jsonString, json).getOrElse { return Result.failure(it) }
+        contactRepository.deleteAllContacts().getOrElse { return Result.failure(it) }
+        callLogRepository.deleteAllCallLogs().getOrElse { return Result.failure(it) }
+        val sorted = payload.contacts.sortedBy { it.exportId }
+        val exportToLocal = LinkedHashMap<Long, Long>()
+        for (ec in sorted) {
+            val newId = contactRepository.addContact(ec.toNewContact()).getOrElse { return Result.failure(it) }
+            exportToLocal[ec.exportId] = newId
+        }
+        val finalSettings = AppDataTransfer.remapImportedSettings(payload.settings, exportToLocal)
+        settingsRepository.updateSettings(finalSettings).getOrElse { return Result.failure(it) }
+        return Result.success(Unit)
+    }
+
+    // ========== APP RESET ==========
     
     /**
-     * Factory reset - wipe ALL app data.
+     * App reset — wipe all data stored by this app only (not the device, not other apps’ contacts).
      * 
      * This deletes:
      * - All settings (DataStore)
@@ -802,7 +801,7 @@ class CarerSettingsViewModel @Inject constructor(
                 onComplete()
                 
             } catch (e: Exception) {
-                android.util.Log.e("CarerSettingsVM", "Factory reset failed: ${e.message}")
+                android.util.Log.e("CarerSettingsVM", "App reset failed: ${e.message}")
                 // Still call onComplete to allow app restart attempt
                 onComplete()
             }

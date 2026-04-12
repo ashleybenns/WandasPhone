@@ -695,7 +695,7 @@ private fun RenderContactButton(
     ConfigurableButton(
         label = button.name,
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().fillMaxHeight(),
         backgroundColor = button.color?.let { Color(it) } 
             ?: MaterialTheme.wandasColors.primaryButton,
         textColor = MaterialTheme.wandasColors.onPrimaryButton,
@@ -728,7 +728,7 @@ private fun RenderMissedCallReturnButton(
     ConfigurableButton(
         label = button.label,
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().fillMaxHeight(),
         // Use primary button colors (same as contact buttons)
         backgroundColor = MaterialTheme.wandasColors.primaryButton,
         textColor = MaterialTheme.wandasColors.onPrimaryButton,
@@ -737,9 +737,7 @@ private fun RenderMissedCallReturnButton(
         activationPreset = activationPreset,
         debounceMs = debounceMs,
         accumulatedThresholdMs = accumulatedThresholdMs,
-        accumulatedTimeoutMs = accumulatedTimeoutMs,
-        autoScaleLabelToFit = true,
-        autoScaleMaxLines = 2
+        accumulatedTimeoutMs = accumulatedTimeoutMs
     )
 }
 

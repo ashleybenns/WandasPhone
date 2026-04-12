@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
@@ -47,9 +48,11 @@ dependencies {
     implementation(project(":core:core-telecom"))
     implementation(project(":core:core-analytics"))
     implementation(libs.datastore.preferences)
+    implementation(libs.kotlinx.serialization.json)
     
     // Compose
     implementation(platform(libs.compose.bom))
+    implementation(libs.androidx.activity.compose)
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)

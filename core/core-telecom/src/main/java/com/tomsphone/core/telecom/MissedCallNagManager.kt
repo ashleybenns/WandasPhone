@@ -8,7 +8,6 @@ import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import com.tomsphone.core.tts.TTSScripts
 import com.tomsphone.core.tts.WandasTTS
-import com.tomsphone.core.config.HomeSlotAssignments
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -73,11 +72,12 @@ class MissedCallNagManager @Inject constructor(
         scope.launch {
             combine(
                 callLogRepository.getCallsForNagReminder(10).map { calls -> calls.filter { !it.isRead } },
-                settingsRepository.getSettings()
-            ) { missedCalls, settings -> missedCalls to settings }
-                .collect { (missedCalls, settings) ->
+                settingsRepository.getSettings(),
+                contactRepository.getContacts(200)
+            ) { missedCalls, settings, contacts -> Triple(missedCalls, settings, contacts) }
+                .collect { (missedCalls, settings, contacts) ->
                     Log.d(TAG, "getCallsForNagReminder returned ${missedCalls.size} unread calls: ${missedCalls.map { "${it.id}:${it.contactName}" }}")
-                    val onHomeIds = HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+                    val onHomeIds = contactIdsWithHomeCallButton(settings)
                     val assistantMissedCalls = mutableListOf<CallLogEntry>()
                     for (call in missedCalls) {
                         val contact = when {
@@ -332,7 +332,8 @@ class MissedCallNagManager @Inject constructor(
             callLogRepository.logCall(entry)
             
             val settings = settingsRepository.getSettings().first()
-            val onHome = contact != null && contact.id in HomeSlotAssignments.contactIdsOnHome(settings.homeSlotAssignments)
+            val contacts = contactRepository.getContacts(200).first()
+            val onHome = contact != null && contact.id in contactIdsWithHomeCallButton(settings)
             if (onHome && contact != null) {
                 Log.d(TAG, "Logged missed call from home-slot contact ${contact.name} - nag will start")
             } else {

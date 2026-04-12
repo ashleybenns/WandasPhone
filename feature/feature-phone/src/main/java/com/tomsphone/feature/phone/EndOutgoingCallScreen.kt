@@ -18,14 +18,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.ButtonActivationPreset
+import com.tomsphone.core.telecom.CallDirection
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.ui.components.activationGesture
@@ -43,20 +46,21 @@ import javax.inject.Inject
  * 
  * Layout:
  * - Status text at top (same position as HomeScreen)
- * - Button area divided into TWO equal zones:
- *   - Top zone: End call button (always visible)
- *   - Bottom zone: Speaker toggle (may or may not be visible)
+ * - Button area: end-call zone slightly taller than speaker zone (1.2 : 0.8) so the red circle
+ *   can grow to fit contact-name-sized “End” text; instruction height yields first if space is tight.
+ *   - Top: End call button (always visible)
+ *   - Bottom: Speaker toggle (may or may not be visible)
  * 
  * The end call button position is FIXED regardless of speaker toggle visibility.
  * This ensures familiarity - user always taps the same spot to end call.
  */
 @Composable
 fun EndOutgoingCallScreen(
-    contactName: String,
     onCallEnded: () -> Unit,
     viewModel: EndOutgoingCallViewModel = hiltViewModel()
 ) {
     val callState by viewModel.callState.collectAsState()
+    val callerLabel by viewModel.outgoingCallerLabel.collectAsState()
     val confirmPending by viewModel.confirmPending.collectAsState()
     val showSpeakerToggle by viewModel.showSpeakerToggle.collectAsState()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsState()
@@ -67,10 +71,10 @@ fun EndOutgoingCallScreen(
     val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
     val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     
-    // Status message - ONE LINE like HomeScreen
+    // Status message - ONE LINE like HomeScreen (label follows live CallInfo, not stale nav arg)
     val statusMessage = when (callState) {
-        CallState.ACTIVE -> "On call with $contactName"
-        else -> "Calling $contactName"
+        CallState.ACTIVE -> "On call with $callerLabel"
+        else -> "Calling $callerLabel"
     }
     
     // End call instruction - break at comma for readability
@@ -118,89 +122,111 @@ fun EndOutgoingCallScreen(
                 )
             }
             
-            // Button area - divided into TWO equal zones
-            // This ensures end call button stays in same position
-            // regardless of speaker toggle visibility
+            // Button area — slightly more space above (end call) than speaker zone
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = WandasDimensions.SpacingLarge)
             ) {
-                // TOP ZONE: End call button (always in top half)
+                // TOP ZONE: End call (larger weight so circle can match contact-name text size)
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(1.2f)
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        // End call instruction - scaled text
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(ScaledDimensions.endCallInstructionHeight),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = instructionText,
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.statusTextSize,
-                                    fontWeight = FontWeight.Medium,
-                                    lineHeight = ScaledDimensions.statusTextSize * 1.2f
-                                ),
-                                color = Color.Black.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(WandasDimensions.SpacingMedium))
-                        
-                        // End call button - round, red, scaled size
-                        // Uses activation gesture for consistent touch response
-                        val endCallInteractionSource = remember { MutableInteractionSource() }
-                        Surface(
-                            modifier = Modifier
-                                .size(ScaledDimensions.endCallButtonSize)
-                                .clip(CircleShape)
-                                .indication(endCallInteractionSource, rememberRipple())
-                                .activationGesture(
-                                    preset = buttonActivation,
-                                    debounceMs = touchDebounceMs,
-                                    accumulatedThresholdMs = accumulatedThresholdMs,
-                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
-                                    onActivate = { viewModel.onEndCallTap() },
-                                    interactionSource = endCallInteractionSource
-                                ),
-                            shape = CircleShape,
-                            color = Color(0xFFD32F2F)
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val spacing = WandasDimensions.SpacingMedium
+                        // Always reserve full height for two lines of instruction (never shrink to 48dp — that clipped the text).
+                        val instructionH = ScaledDimensions.endCallInstructionHeight
+                        val rawDiameter = ScaledDimensions.endCallButtonSize
+                        val minCircleForContactNameText =
+                            ScaledDimensions.heightForLines(1, 32f) * 1.65f
+                        val desiredDiameter = maxOf(rawDiameter, minCircleForContactNameText)
+                        val available = maxHeight - 8.dp
+                        // Room left after full instruction + spacer — do not force 72dp minimum here;
+                        // that made column taller than the zone and clipped the instruction when centered.
+                        val roomForCircle =
+                            (available - spacing - instructionH).coerceAtLeast(0.dp)
+                        val diameter = minOf(desiredDiameter, roomForCircle)
+
+                        val endLabelSize = ScaledDimensions.contactNameTextSize
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Box(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(instructionH),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "End",
+                                    text = instructionText,
                                     style = TextStyle(
-                                        fontSize = ScaledDimensions.contactNameTextSize,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = ScaledDimensions.statusTextSize,
+                                        fontWeight = FontWeight.Medium,
+                                        lineHeight = ScaledDimensions.statusTextSize * 1.2f,
+                                        platformStyle = PlatformTextStyle(
+                                            includeFontPadding = false
+                                        )
                                     ),
-                                    color = Color.White
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2
                                 )
+                            }
+
+                            Spacer(modifier = Modifier.height(spacing))
+
+                            val endCallInteractionSource = remember { MutableInteractionSource() }
+                            Surface(
+                                modifier = Modifier
+                                    .size(diameter)
+                                    .clip(CircleShape)
+                                    .indication(endCallInteractionSource, rememberRipple())
+                                    .activationGesture(
+                                        preset = buttonActivation,
+                                        debounceMs = touchDebounceMs,
+                                        accumulatedThresholdMs = accumulatedThresholdMs,
+                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                        onActivate = { viewModel.onEndCallTap() },
+                                        interactionSource = endCallInteractionSource
+                                    ),
+                                shape = CircleShape,
+                                color = Color(0xFFD32F2F)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "End",
+                                        style = TextStyle(
+                                            fontSize = endLabelSize,
+                                            fontWeight = FontWeight.Bold,
+                                            lineHeight = endLabelSize * 1.1f,
+                                            platformStyle = PlatformTextStyle(
+                                                includeFontPadding = false
+                                            )
+                                        ),
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 
-                // BOTTOM ZONE: Speaker toggle (always takes equal space)
-                // Button is only visible if showSpeakerToggle is true
-                // But space is ALWAYS reserved to keep end call in same position
+                // BOTTOM ZONE: Speaker toggle
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.8f)
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
@@ -267,16 +293,33 @@ fun EndOutgoingCallScreen(
 @HiltViewModel
 class EndOutgoingCallViewModel @Inject constructor(
     private val callManager: CallManager,
-    private val settingsRepository: com.tomsphone.core.config.SettingsRepository
+    private val settingsRepository: com.tomsphone.core.config.SettingsRepository,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     
     companion object {
         private const val TAG = "EndOutgoingCallVM"
     }
+
+    private val navArgFallback: String =
+        savedStateHandle.get<String>("contactName").orEmpty().ifBlank { "Caller" }
     
     val callState: StateFlow<CallState> = callManager.currentCall
         .map { it?.state ?: CallState.IDLE }
         .stateIn(viewModelScope, SharingStarted.Eagerly, CallState.IDLE)
+
+    /**
+     * Display name for status text — always from the current outgoing [CallInfo] when present
+     * (contact name, else phone number). Avoids showing a previous call's name after emergency flow.
+     */
+    val outgoingCallerLabel: StateFlow<String> = callManager.currentCall
+        .map { call ->
+            if (call == null || call.direction != CallDirection.OUTGOING) return@map navArgFallback
+            call.contactName?.takeIf { it.isNotBlank() }
+                ?: call.phoneNumber.takeIf { it.isNotBlank() && it != "Unknown" }
+                ?: navArgFallback
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), navArgFallback)
     
     // Speaker toggle visibility - based on new showSpeakerButton setting (Level 2+)
     val showSpeakerToggle: StateFlow<Boolean> = settingsRepository.getSettings()

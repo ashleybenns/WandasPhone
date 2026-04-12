@@ -39,5 +39,8 @@ interface CallLogRepository {
     suspend fun deleteOlderThan(timestamp: Long): Result<Unit>
     
     suspend fun deleteMissedCallsOlderThan(timestamp: Long): Result<Unit>
+
+    /** Clear all call history rows (e.g. after transfer import so IDs stay consistent). */
+    suspend fun deleteAllCallLogs(): Result<Unit>
 }
 

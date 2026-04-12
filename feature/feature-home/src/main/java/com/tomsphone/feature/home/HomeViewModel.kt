@@ -10,8 +10,10 @@ import com.tomsphone.core.config.HomeButtonConfig
 import com.tomsphone.core.config.HomeSlotAssignments
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.SettingsRepository
+import com.tomsphone.core.config.withSlotsSynced
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
+import com.tomsphone.core.data.model.sortedCarerCallableForHome
 import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import android.content.Context
@@ -35,7 +37,7 @@ import java.util.Locale
 import javax.inject.Inject
 
 private fun CarerSettings.hasMissedCallReturnForStatus(): Boolean =
-    if (homeSlotAssignments.size == HomeSlotAssignments.SLOT_COUNT) {
+    if (HomeSlotAssignments.isEffectiveSlotMode(homeSlotAssignments)) {
         homeSlotAssignments.contains(HomeSlotAssignments.MISSED_CALL_RETURN)
     } else {
         homeShowMissedCallReturnButton
@@ -64,6 +66,8 @@ class HomeViewModel @Inject constructor(
     private val tts: WandasTTS,
     private val analytics: AnalyticsManager
 ) : ViewModel() {
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     
     companion object {
         private const val TAG = "HomeViewModel"
@@ -225,28 +229,48 @@ class HomeViewModel @Inject constructor(
      * 
      * Each underlying setting is discrete for remote sync and paywall gating.
      */
-    val homeButtons: StateFlow<List<HomeButtonConfig>> = combine(
-        contacts,
-        settings,
-        primaryMissedReturnCall,
-        missedCallsListCount
-    ) { contactList, carerSettings, primaryMissed, missedCount ->
-        buildHomeButtons(
-            contactList,
-            carerSettings,
-            primaryMissed,
-            missedCount
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val homeButtons: StateFlow<List<HomeButtonConfig>> =
+        combine(
+            contacts,
+            settings,
+            primaryMissedReturnCall,
+            missedCallsListCount
+        ) { contactList, carerSettings, primaryMissed, missedCount ->
+            HomeButtonsInput(contactList, carerSettings, primaryMissed, missedCount)
+        }
+            .transformLatest { input ->
+                val ensured = ensureHomeSlotsReady(input.contacts, input.settings)
+                if (ensured != input.settings) {
+                    // Persist migration so the rest of the app has a single layout model.
+                    settingsRepository.updateSettings(ensured)
+                }
+                emit(
+                    buildHomeButtons(
+                        input.contacts,
+                        ensured,
+                        input.primaryMissed,
+                        input.missedCount
+                    )
+                )
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+
+    private data class HomeButtonsInput(
+        val contacts: List<Contact>,
+        val settings: CarerSettings,
+        val primaryMissed: PrimaryMissedReturnCall?,
+        val missedCount: Int
     )
     
     /**
      * Build the list of buttons for the home screen.
-     * If [CarerSettings.homeSlotAssignments] has 7 entries, order and content come from that list.
-     * Otherwise uses legacy toggles and contact order.
+     * If [CarerSettings.homeSlotAssignments] is effective slot mode (7 entries, at least one filled),
+     * order and content come from that list. Otherwise uses legacy toggles and contact order.
      */
     private fun buildHomeButtons(
         contacts: List<Contact>,
@@ -257,36 +281,35 @@ class HomeViewModel @Inject constructor(
         val emergencyDigits =
             EmergencyNumberResolver.resolve(appContext, settings.emergencyNumber).dialDigits
         val slots = settings.homeSlotAssignments
-        // Validate slots: must be exactly SLOT_COUNT, otherwise use legacy mode
-        if (slots.size == HomeSlotAssignments.SLOT_COUNT) {
-            return try {
-                buildHomeButtonsFromSlots(
-                    contacts,
-                    settings,
-                    primaryMissedReturn,
-                    slots,
-                    missedCallListCount,
-                    emergencyDigits
-                )
-            } catch (e: Exception) {
-                // If building from slots fails, fall back to legacy mode
-                android.util.Log.e("HomeViewModel", "Error building buttons from slots, using legacy mode", e)
-                buildHomeButtonsLegacy(
-                    contacts,
-                    settings,
-                    primaryMissedReturn,
-                    missedCallListCount,
-                    emergencyDigits
-                )
-            }
+        // Single layout model: always build from slots. If slots aren't a valid 7-entry list yet,
+        // migrate them first (see ensureHomeSlotsReady()).
+        return try {
+            buildHomeButtonsFromSlots(
+                contacts,
+                settings,
+                primaryMissedReturn,
+                slots,
+                missedCallListCount,
+                emergencyDigits
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("HomeViewModel", "Error building buttons from slots", e)
+            emptyList()
         }
-        return buildHomeButtonsLegacy(
-            contacts,
-            settings,
-            primaryMissedReturn,
-            missedCallListCount,
-            emergencyDigits
-        )
+    }
+
+    /**
+     * Ensure we always have a 7-entry slot list (slot mode), migrating from legacy toggles if needed.
+     * Called from [homeButtons] pipeline so runtime layout never uses legacy calculations.
+     */
+    private suspend fun ensureHomeSlotsReady(contacts: List<Contact>, settings: CarerSettings): CarerSettings {
+        val slots = settings.homeSlotAssignments
+        return when {
+            !HomeSlotAssignments.isValidSlotList(slots) -> settings.withSlotsSynced(buildLegacySlotAssignments(contacts, settings))
+            // Treat "seven empty strings" as unmigrated legacy state; generate a sane default layout.
+            slots.all { it.isEmpty() } -> settings.withSlotsSynced(buildLegacySlotAssignments(contacts, settings))
+            else -> settings
+        }
     }
 
     private fun buildHomeButtonsFromSlots(
@@ -386,10 +409,7 @@ class HomeViewModel @Inject constructor(
             (if (settings.homeShowDialerButton) 1 else 0) +
             (if (settings.showDisplayOffButton) 1 else 0)
         val maxContactSlots = (6 - slotsForOthers).coerceAtLeast(0)
-        val callableContacts = contacts
-            .filter { it.contactType == ContactType.CARER }
-            .sortedBy { it.buttonPosition }
-            .take(maxContactSlots)
+        val callableContacts = contacts.sortedCarerCallableForHome().take(maxContactSlots)
 
         callableContacts.forEach { contact ->
             buttons.add(
@@ -459,7 +479,7 @@ class HomeViewModel @Inject constructor(
      */
     private fun buildLegacySlotAssignments(contacts: List<Contact>, settings: CarerSettings): List<String> {
         val list = mutableListOf<String>()
-        val callable = contacts.filter { it.contactType == ContactType.CARER }.sortedBy { it.buttonPosition }.take(7)
+        val callable = contacts.sortedCarerCallableForHome().take(7)
         callable.forEach { list.add(HomeSlotAssignments.contactSlot(it.id)) }
         if (settings.homeShowMissedCallReturnButton) list.add(HomeSlotAssignments.MISSED_CALL_RETURN)
         if (settings.homeShowMissedCallsButton) list.add(HomeSlotAssignments.MISSED_CALLS_LIST)
@@ -518,7 +538,7 @@ class HomeViewModel @Inject constructor(
     // Display Off row: from slot when layout migrated, else legacy toggle
     val displayOffButtonEnabled: StateFlow<Boolean> = settings
         .map { s ->
-            if (s.homeSlotAssignments.size == HomeSlotAssignments.SLOT_COUNT) {
+            if (HomeSlotAssignments.isEffectiveSlotMode(s.homeSlotAssignments)) {
                 s.homeSlotAssignments.contains(HomeSlotAssignments.SCREEN_OFF)
             } else {
                 s.showDisplayOffButton

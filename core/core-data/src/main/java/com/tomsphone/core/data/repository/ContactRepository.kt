@@ -44,6 +44,9 @@ interface ContactRepository {
     suspend fun updateContact(contact: Contact): Result<Unit>
     
     suspend fun removeContact(id: Long): Result<Unit>
+
+    /** Remove every contact (used when restoring from a transfer file). */
+    suspend fun deleteAllContacts(): Result<Unit>
     
     suspend fun getContactCount(): Int
     

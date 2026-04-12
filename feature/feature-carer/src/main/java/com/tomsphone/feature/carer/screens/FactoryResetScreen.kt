@@ -22,18 +22,14 @@ import com.tomsphone.core.ui.theme.wandasColors
 import com.tomsphone.feature.carer.CarerSettingsViewModel
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
 /**
- * Factory Reset screen.
- * 
- * Allows carer to completely wipe all app data before giving
- * the phone to a new user.
- * 
- * SECURITY: This is critical for:
- * - Protecting previous user's contacts
- * - Ensuring auto-answer is disabled for new user
- * - Removing any personal data
+ * App Reset screen — wipes this app’s local data and settings only.
+ *
+ * Does not reset the device or remove contacts stored in other apps
+ * (e.g. Google Contacts, Phone app).
  */
 @Composable
 fun FactoryResetScreen(
+    onNavigateToDataTransfer: () -> Unit = {},
     onBack: () -> Unit,
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
@@ -49,7 +45,7 @@ fun FactoryResetScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             CarerBreadcrumb(
-                title = "Factory Reset",
+                title = "App Reset",
                 parentTitle = "Settings",
                 onBack = onBack
             )
@@ -75,7 +71,7 @@ fun FactoryResetScreen(
                 
                 // Title
                 Text(
-                    text = "Reset to Factory Settings",
+                    text = "Reset this app",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.wandasColors.onBackground,
@@ -93,7 +89,7 @@ fun FactoryResetScreen(
                         modifier = Modifier.padding(WandasDimensions.SpacingMedium)
                     ) {
                         Text(
-                            text = "This will permanently delete:",
+                            text = "This will permanently delete only inside this app:",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.wandasColors.onSurface
                         )
@@ -101,10 +97,10 @@ fun FactoryResetScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         
                         listOf(
-                            "• All contacts",
-                            "• All settings (including PIN)",
-                            "• Call history",
-                            "• Auto-answer configuration"
+                            "• Contacts saved in this app",
+                            "• All settings for this app",
+                            "• Call history in this app",
+                            "• Auto-answer and layout configuration"
                         ).forEach { item ->
                             Text(
                                 text = item,
@@ -123,7 +119,7 @@ fun FactoryResetScreen(
                     )
                 ) {
                         Text(
-                            text = "Use before handing the phone to someone new. App data isn’t in your cloud backup.",
+                            text = "Does not reset the phone. Does not remove contacts in other apps (e.g. Google Contacts). Use before handing the phone to someone new. This app’s data is not in your normal phone cloud backup.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF1565C0),  // Dark blue
                         modifier = Modifier.padding(WandasDimensions.SpacingMedium)
@@ -131,7 +127,14 @@ fun FactoryResetScreen(
                 }
                 
                 Spacer(modifier = Modifier.weight(1f))
-                
+
+                TextButton(
+                    onClick = onNavigateToDataTransfer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Save data with Transfer first")
+                }
+
                 // Reset button
                 Button(
                     onClick = { showConfirmDialog = true },
@@ -151,7 +154,7 @@ fun FactoryResetScreen(
                         )
                     } else {
                         Text(
-                            text = "Factory Reset",
+                            text = "App Reset",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -169,13 +172,14 @@ fun FactoryResetScreen(
             onDismissRequest = { showConfirmDialog = false },
             title = {
                 Text(
-                    text = "Confirm Factory Reset",
+                    text = "Confirm App Reset",
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
                     "Are you sure? This cannot be undone.\n\n" +
+                    "Only this app’s data is removed. Your phone, photos, and contacts in other apps are not affected.\n\n" +
                     "The app will restart as if newly installed."
                 )
             },
@@ -199,7 +203,7 @@ fun FactoryResetScreen(
                         containerColor = Color(0xFFD32F2F)
                     )
                 ) {
-                    Text("Reset Everything")
+                    Text("Erase app data")
                 }
             },
             dismissButton = {

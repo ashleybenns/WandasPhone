@@ -82,6 +82,12 @@ class LocalContactRepository @Inject constructor(
             contactDao.deleteById(id)
         }
     }
+
+    override suspend fun deleteAllContacts(): Result<Unit> {
+        return runCatching {
+            contactDao.deleteAll()
+        }
+    }
     
     override suspend fun getContactCount(): Int {
         return contactDao.getContactCount()

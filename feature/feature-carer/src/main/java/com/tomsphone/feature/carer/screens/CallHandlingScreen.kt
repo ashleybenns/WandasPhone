@@ -12,9 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.rememberPermissionState
-import android.Manifest
 import com.tomsphone.core.config.CarerSettings
 import com.tomsphone.core.config.MissedCallNagInterval
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -27,9 +24,10 @@ import com.tomsphone.feature.carer.components.*
  * 
  * Contains:
  * - Reject unknown calls
- * - Speakerphone settings
+ * - Speakerphone and speaker button settings
  * - Auto-answer settings (Level 2+ per-contact)
  * - Missed call nag settings
+ * (Battery alert SMS is configured per Assistant in Contacts, not here.)
  */
 @Composable
 fun CallHandlingScreen(
@@ -134,13 +132,6 @@ fun CallHandlingScreen(
                         )
                     }
 
-                    // Battery alert SMS (Level 1)
-                    BatteryAlertSmsCard(
-                        settings = settings,
-                        viewModel = viewModel,
-                        saveToastState = saveToastState
-                    )
-                    
                     // Speakerphone
                     SettingCard(title = "Speakerphone") {
                         SettingToggle(
@@ -153,30 +144,7 @@ fun CallHandlingScreen(
                             }
                         )
                     }
-                    
-                    // Voice Announcements (Level 1)
-                    SettingCard(title = "Voice Announcements") {
-                        Text(
-                            text = "Spoken prompts for actions (not the ringtone or missed-call reminders).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        
-                        SettingToggle(
-                            title = "Enable Announcements",
-                            description = "Calling, ended, speaker, mute, battery, etc.",
-                            checked = settings.ttsAnnouncementsEnabled,
-                            onCheckedChange = { enabled ->
-                                viewModel.setTtsAnnouncementsEnabled(enabled)
-                                saveToastState.show(
-                                    if (enabled) "Voice announcements enabled"
-                                    else "Voice announcements disabled"
-                                )
-                            }
-                        )
-                    }
-                    
+
                     SettingCard(title = "Speaker Button") {
                         Text(
                             text = "Double-tap to toggle. Default speaker state resets after each call.",
@@ -208,6 +176,29 @@ fun CallHandlingScreen(
                                 }
                             )
                         }
+                    }
+                    
+                    // Voice Announcements (Level 1)
+                    SettingCard(title = "Voice Announcements") {
+                        Text(
+                            text = "Spoken prompts for actions (not the ringtone or missed-call reminders).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        SettingToggle(
+                            title = "Enable Announcements",
+                            description = "Calling, ended, speaker, mute, battery, etc.",
+                            checked = settings.ttsAnnouncementsEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setTtsAnnouncementsEnabled(enabled)
+                                saveToastState.show(
+                                    if (enabled) "Voice announcements enabled"
+                                    else "Voice announcements disabled"
+                                )
+                            }
+                        )
                     }
                     
                     // Auto-Answer - Available at Level 1 (requires no user interaction)
@@ -344,77 +335,6 @@ fun CallHandlingScreen(
                 message = saveToastState.message,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalPermissionsApi::class)
-@Composable
-private fun BatteryAlertSmsCard(
-    settings: CarerSettings,
-    viewModel: CarerSettingsViewModel,
-    saveToastState: SaveToastState
-) {
-    val smsPermissionState = rememberPermissionState(Manifest.permission.SEND_SMS)
-    val batteryAlertStatus by viewModel.batteryAlertStatus.collectAsState()
-    val (hasSmsPermission, recipientCount) = batteryAlertStatus
-    var testSending by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        viewModel.refreshBatteryAlertStatus()
-    }
-    LaunchedEffect(smsPermissionState.status) {
-        viewModel.refreshBatteryAlertStatus()
-    }
-
-    SettingCard(title = "Battery alert texts") {
-        Text(
-            text = "SMS when battery is low or power returns after a low warning. Enable “Notify for battery alerts” per contact in All contacts.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        SettingToggle(
-            title = "Send battery alert texts",
-            description = "Low battery and plugged-in after low",
-            checked = settings.batteryAlertSmsEnabled,
-            onCheckedChange = { enabled ->
-                if (enabled) {
-                    viewModel.setBatteryAlertSmsEnabled(true)
-                    smsPermissionState.launchPermissionRequest()
-                    saveToastState.show("Battery alerts on. Grant SMS when prompted.")
-                } else {
-                    viewModel.setBatteryAlertSmsEnabled(false)
-                    saveToastState.show("Battery alert texts disabled")
-                }
-            }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "SMS permission: ${if (hasSmsPermission) "granted" else "denied"}",
-            style = MaterialTheme.typography.bodySmall,
-            color = if (hasSmsPermission) MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f) else Color(0xFFB00020),
-            modifier = Modifier.padding(bottom = 2.dp)
-        )
-        Text(
-            text = "Battery alert recipients: $recipientCount",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.7f),
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Button(
-            onClick = {
-                if (testSending) return@Button
-                testSending = true
-                viewModel.sendTestBatteryAlertSms { message ->
-                    saveToastState.show(message)
-                    testSending = false
-                }
-            },
-            enabled = !testSending,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (testSending) "Sending…" else "Send test text")
         }
     }
 }

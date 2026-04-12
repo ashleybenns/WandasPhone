@@ -67,10 +67,9 @@ interface SettingsRepository {
     suspend fun setPin(hashedPin: String): Result<Unit>
     
     /**
-     * Clear all settings (factory reset)
-     * 
-     * SECURITY: This permanently deletes all settings.
-     * Used during factory reset to ensure no user data remains.
+     * Clear all settings for this app (app reset).
+     *
+     * Used when erasing this app’s data; does not affect the rest of the device.
      */
     suspend fun clearAllSettings(): Result<Unit>
 }

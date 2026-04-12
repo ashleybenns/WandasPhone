@@ -3,6 +3,7 @@ package com.tomsphone.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.ButtonActivationPreset
+import com.tomsphone.core.config.homeButtonRowCount
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.data.model.CallLogEntry
@@ -85,6 +86,15 @@ class MissedCallsListViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 3000
+        )
+
+    /** Actual home weighted row count (see [ContactsListViewModel.homeButtonRowCountForLayout]). */
+    val homeButtonRowCountForLayout: StateFlow<Int> = settingsRepository.getSettings()
+        .map { settings -> settings.homeButtonRowCount.coerceIn(1, 12) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 4
         )
 
     private fun resolveContact(

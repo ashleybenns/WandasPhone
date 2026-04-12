@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.tomsphone.core.config.HomeSlotAssignments
+import com.tomsphone.core.telecom.contactIdsWithHomeCallButton
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -36,9 +36,10 @@ fun ContactsScreen(
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val contacts by viewModel.contacts.collectAsState()
-    val homeSlots by viewModel.homeSlotAssignments.collectAsState()
-    // Always derive from current slots (no remember) so home status can’t go stale after edits
-    val onHomeIds = HomeSlotAssignments.contactIdsOnHome(homeSlots)
+    val settings by viewModel.settings.collectAsState()
+    val onHomeIds = remember(settings, contacts) {
+        contactIdsWithHomeCallButton(settings)
+    }
 
     val sortedAll = remember(contacts) {
         contacts.sortedWith(compareBy<Contact> { it.buttonPosition }.thenBy { it.name.lowercase() })

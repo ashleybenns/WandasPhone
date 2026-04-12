@@ -32,6 +32,7 @@ fun CarerMainMenuScreen(
     onNavigateToHomeLayout: () -> Unit,
     onNavigateToAlwaysOn: () -> Unit,
     onNavigateToFactoryReset: () -> Unit,
+    onNavigateToDataTransfer: () -> Unit,
     onNavigateToSupportSuggestions: () -> Unit,
     onExitApp: () -> Unit,
     onBack: () -> Unit,
@@ -80,7 +81,7 @@ fun CarerMainMenuScreen(
                 )
                 CarerMenuButton(
                     title = "Call Handling",
-                    description = "Volumes, Unknown Callers, Speakerphone, Auto-answer, Reminders, Battery texts, Voice Announcements",
+                    description = "Volumes, Unknown Callers, Speakerphone, Auto-answer, Reminders, Voice Announcements",
                     onClick = onNavigateToCallHandling
                 )
                 CarerMenuButton(
@@ -112,6 +113,12 @@ fun CarerMainMenuScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                CarerMenuButton(
+                    title = "Transfer data",
+                    description = "Export or import contacts and settings (new phone or backup)",
+                    onClick = onNavigateToDataTransfer
+                )
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 Button(
@@ -126,13 +133,13 @@ fun CarerMainMenuScreen(
                     )
                 ) {
                     Text(
-                        text = "Factory Reset",
+                        text = "App Reset",
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
 
                 Text(
-                    text = "Wipes data before giving the phone to a new user",
+                    text = "Erases this app’s data only — not your phone, not contacts in other apps",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.padding(top = 4.dp)

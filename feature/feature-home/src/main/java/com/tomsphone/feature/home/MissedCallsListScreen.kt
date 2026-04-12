@@ -15,12 +15,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
 import com.tomsphone.core.data.model.CallType
 import com.tomsphone.core.data.model.Contact
+import com.tomsphone.core.ui.components.FittedLabelInBox
 import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.components.ListScreenLayout
@@ -54,6 +58,8 @@ fun MissedCallsListScreen(
     val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
     val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
     val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
+    val homeRowCount by viewModel.homeButtonRowCountForLayout.collectAsState()
+    val callRowHeight = ScaledDimensions.homeContactRowInnerHeight(homeRowCount)
 
     SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onBack) {
     ListScreenLayout(
@@ -73,6 +79,7 @@ fun MissedCallsListScreen(
                 contact = row.contact,
                 mainLabel = call.contactName ?: call.phoneNumber,
                 timestamp = call.timestamp,
+                callRowHeight = callRowHeight,
                 textAlignment = listTextAlignment,
                 activationPreset = buttonActivation,
                 debounceMs = touchDebounceMs,
@@ -103,6 +110,7 @@ private fun MissedCallListItem(
     contact: Contact?,
     mainLabel: String,
     timestamp: Long,
+    callRowHeight: Dp,
     textAlignment: ListTextAlignment,
     activationPreset: ButtonActivationPreset,
     debounceMs: Int,
@@ -112,9 +120,9 @@ private fun MissedCallListItem(
     onAddToDeviceContacts: (() -> Unit)?,
     onAddBlockedToApp: (() -> Unit)?
 ) {
-    val textSize = ScaledDimensions.buttonTextSize
-    val timeSize = textSize * 0.78f
+    val nameMaxSize = ScaledDimensions.contactNameTextSize
     val timeText = formatRelativeTimeMissed(timestamp)
+    val timeFontSp = nameMaxSize.value * 0.72f
     val rowColors = missedCallRowColors(contact)
 
     val boxAlignment = when (textAlignment) {
@@ -139,7 +147,7 @@ private fun MissedCallListItem(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight()
+                .height(callRowHeight)
                 .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
                 .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
                 .indication(callInteractionSource, rememberRipple())
@@ -154,33 +162,41 @@ private fun MissedCallListItem(
             color = rowColors.background,
             shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                contentAlignment = boxAlignment
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalAlignment = columnAlignment
             ) {
-                Column(horizontalAlignment = columnAlignment) {
-                    Text(
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = boxAlignment
+                ) {
+                    FittedLabelInBox(
                         text = mainLabel,
-                        style = TextStyle(
-                            fontSize = textSize,
-                            fontWeight = FontWeight.Bold
-                        ),
                         color = rowColors.onBackground,
-                        textAlign = textAlign
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = timeText,
-                        style = TextStyle(
-                            fontSize = timeSize,
-                            fontWeight = FontWeight.Normal
-                        ),
-                        color = rowColors.onBackground.copy(alpha = 0.88f),
-                        textAlign = textAlign
+                        textAlign = textAlign,
+                        maxFontSize = nameMaxSize,
+                        modifier = Modifier.fillMaxSize(),
+                        maxLines = 2,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
+                Text(
+                    text = timeText,
+                    style = TextStyle(
+                        fontSize = timeFontSp.sp,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = timeFontSp.sp
+                    ),
+                    color = rowColors.onBackground.copy(alpha = 0.88f),
+                    textAlign = textAlign,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
@@ -191,6 +207,7 @@ private fun MissedCallListItem(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(callRowHeight)
                     .padding(bottom = 8.dp)
                     .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
                     .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
@@ -206,18 +223,22 @@ private fun MissedCallListItem(
                 color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
             ) {
-                Text(
-                    text = "Add to Contacts or Assistants (in this app)",
-                    style = TextStyle(
-                        fontSize = timeSize,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = textAlign,
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = boxAlignment
+                ) {
+                    FittedLabelInBox(
+                        text = "Add to Contacts or Assistants (in this app)",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = textAlign,
+                        maxFontSize = nameMaxSize,
+                        modifier = Modifier.fillMaxSize(),
+                        maxLines = 2,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
         if (onAddToDeviceContacts != null) {
@@ -225,6 +246,7 @@ private fun MissedCallListItem(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(callRowHeight)
                     .padding(bottom = 8.dp)
                     .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
                     .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
@@ -240,18 +262,22 @@ private fun MissedCallListItem(
                 color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
             ) {
-                Text(
-                    text = "Add to phone contacts",
-                    style = TextStyle(
-                        fontSize = timeSize,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = textAlign,
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = boxAlignment
+                ) {
+                    FittedLabelInBox(
+                        text = "Add to phone contacts",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = textAlign,
+                        maxFontSize = nameMaxSize,
+                        modifier = Modifier.fillMaxSize(),
+                        maxLines = 2,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

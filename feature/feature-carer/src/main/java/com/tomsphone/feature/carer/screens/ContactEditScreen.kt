@@ -18,6 +18,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.config.ButtonColor
 import com.tomsphone.core.data.util.PhoneNumberUtils
 import com.tomsphone.core.config.HomeSlotAssignments
+import com.tomsphone.core.telecom.contactIdsWithHomeCallButton
 import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.data.model.ContactType
 import androidx.compose.foundation.background
@@ -36,6 +37,10 @@ import com.tomsphone.feature.carer.phone.PhoneCountry
 import com.tomsphone.feature.carer.phone.validateAndToE164
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.ExperimentalMaterial3Api
+import android.Manifest
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 
 /**
  * Contact edit screen.
@@ -49,7 +54,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
  * - Button color
  * - Auto-answer (Carers only, Level 1+)
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun ContactEditScreen(
     contactId: Long,
@@ -64,8 +69,10 @@ fun ContactEditScreen(
     viewModel: CarerSettingsViewModel = hiltViewModel()
 ) {
     val contacts by viewModel.contacts.collectAsState()
-    val homeSlots by viewModel.homeSlotAssignments.collectAsState()
-    val onHomeIds = remember(homeSlots) { HomeSlotAssignments.contactIdsOnHome(homeSlots) }
+    val settings by viewModel.settings.collectAsState()
+    val onHomeIds = remember(settings, contacts) {
+        contactIdsWithHomeCallButton(settings)
+    }
     val saveToastState = rememberSaveToastState()
     
     val isNewContact = contactId == 0L
@@ -74,12 +81,16 @@ fun ContactEditScreen(
     // Use existing contact's type if editing, otherwise use passed type
     val effectiveContactType = existingContact?.contactType ?: contactType
 
-    /** Auto-answer & battery: existing contact on a slot, or new contact being added for a layout slot. */
+    /** Auto-answer: existing contact on a slot, or new contact being added for a layout slot. */
     val showAssistantDeviceOptions = remember(isNewContact, existingContact, onHomeIds, homeSlotPendingIndex) {
         (!isNewContact && existingContact != null && existingContact.id in onHomeIds) ||
             (isNewContact && homeSlotPendingIndex >= 0)
     }
+    /** Battery SMS: offered for every Assistant contact (no separate Call Handling master switch). */
+    val showBatteryAlertsOption = effectiveContactType == ContactType.CARER
     val usesHomeButton = !isNewContact && existingContact != null && existingContact.id in onHomeIds
+
+    val smsPermissionState = rememberPermissionState(Manifest.permission.SEND_SMS)
 
     val context = LocalContext.current
     val defaultRegion = remember(context) { getDefaultPhoneRegion(context) }
@@ -300,7 +311,7 @@ fun ContactEditScreen(
                                 isNewContact && homeSlotPendingIndex >= 0 ->
                                     "You're adding this person for home slot ${homeSlotPendingIndex + 1}. After you save, that slot will get their call button and the options below will apply."
                                 else ->
-                                    "No home slot yet — normal contact. Open Home screen layout and assign them to a slot for a large call button on the user’s phone; remove the slot to demote."
+                                    "Add the contact to a slot on the Home Screen promote it to an Assistant. Remove from the slot to demote it."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.85f)
@@ -384,8 +395,8 @@ saveContact(
                         }
                     }
 
-                    // Notify for battery alerts (home-slot contacts only, Level 1)
-                    if (showAssistantDeviceOptions) {
+                    // Notify for battery alerts (all Assistant contacts; SMS only sent when on a home slot + permission)
+                    if (showBatteryAlertsOption) {
                         SettingCard(title = "Battery alerts") {
                             SettingToggle(
                                 title = "Notify for battery alerts",
@@ -393,15 +404,29 @@ saveContact(
                                 checked = notifyBatteryAlerts,
                                 onCheckedChange = { enabled ->
                                     notifyBatteryAlerts = enabled
+                                    if (enabled) {
+                                        smsPermissionState.launchPermissionRequest()
+                                        saveToastState.show("Grant SMS when prompted so alerts can be sent")
+                                    }
                                     if (!isNewContact) {
-saveContact(
-                                        viewModel, existingContact, name, phoneForSave,
-                                        effectiveContactType, autoAnswerEnabled, notifyBatteryAlerts, selectedColor
-                                    )
-                                        saveToastState.show("$name's battery alerts ${if (enabled) "on" else "off"}")
+                                        saveContact(
+                                            viewModel, existingContact, name, phoneForSave,
+                                            effectiveContactType, autoAnswerEnabled, notifyBatteryAlerts, selectedColor
+                                        )
+                                        if (!enabled) {
+                                            saveToastState.show("$name's battery alerts off")
+                                        }
                                     }
                                 }
                             )
+                            if (!smsPermissionState.status.isGranted) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "SMS permission is required on the phone for low-battery texts to be sent.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.65f)
+                                )
+                            }
                         }
                     }
                     

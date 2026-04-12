@@ -34,7 +34,8 @@ import com.tomsphone.core.ui.theme.WandasDimensions
  * - Inert gutter around edges (same size as home screen)
  * - Back button at top middle
  * - Title below back button
- * - Scrollable content area for list items
+ * - Content area: [contentScrollable] adds vertical scroll (default). When false, no scroll — use
+ *   pagination + [footer] (e.g. Next) pinned at the bottom for seniors who cannot scroll reliably.
  */
 @Composable
 fun ListScreenLayout(
@@ -44,10 +45,16 @@ fun ListScreenLayout(
     isEmpty: Boolean,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    contentScrollable: Boolean = true,
     activationPreset: ButtonActivationPreset = ButtonActivationPreset.ON_RELEASE,
     debounceMs: Int = 150,
     accumulatedThresholdMs: Int = 500,
     accumulatedTimeoutMs: Int = 3000,
+    /** Space between list rows; use [Arrangement.Top] when rows supply their own vertical padding (e.g. contacts). */
+    listVerticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(12.dp),
+    /** Optional modifier applied to the list viewport (the weighted content area, excluding header/footer). */
+    listViewportModifier: Modifier = Modifier,
+    footer: @Composable ColumnScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
     // Use larger contact name size for back button and title
@@ -121,13 +128,25 @@ fun ListScreenLayout(
                 )
             }
             
-            // Content area (scrollable)
+            // Main list area — optional scroll; footer stays below and does not scroll
+            val listModifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = if (contentScrollable) {
+                    listModifier
+                        .then(listViewportModifier)
+                        .verticalScroll(rememberScrollState())
+                } else {
+                    listModifier.then(listViewportModifier)
+                },
+                verticalArrangement = listVerticalArrangement,
                 content = content
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                content = footer
             )
         }
     }

@@ -17,6 +17,16 @@ import com.tomsphone.core.ui.components.LocalSecondaryScreenIdleReset
 import com.tomsphone.feature.carer.screens.*
 
 /**
+ * Single-level back within the carer [NavHost]. A second [NavController.popBackStack] while already
+ * on [CarerRoutes.MAIN_MENU] would remove the start destination and leave an empty graph (white screen).
+ */
+private fun NavHostController.popCarerBack() {
+    if (previousBackStackEntry != null) {
+        popBackStack()
+    }
+}
+
+/**
  * Navigation routes for carer settings.
  */
 object CarerRoutes {
@@ -35,6 +45,7 @@ object CarerRoutes {
     const val HOME_LAYOUT = "carer_home_layout"
     const val ALWAYS_ON = "carer_always_on"
     const val FACTORY_RESET = "carer_factory_reset"
+    const val DATA_TRANSFER = "carer_data_transfer"
     const val SUPPORT_SUGGESTIONS = "carer_support_suggestions"
     const val SUPPORT_THREAD = "carer_support_thread/{threadId}"
     const val SUPPORT_NEW = "carer_support_new"
@@ -98,6 +109,7 @@ fun CarerNavigation(
                 onNavigateToHomeLayout = { navController.navigate(CarerRoutes.HOME_LAYOUT) },
                 onNavigateToAlwaysOn = { navController.navigate(CarerRoutes.ALWAYS_ON) },
                 onNavigateToFactoryReset = { navController.navigate(CarerRoutes.FACTORY_RESET) },
+                onNavigateToDataTransfer = { navController.navigate(CarerRoutes.DATA_TRANSFER) },
                 onNavigateToSupportSuggestions = { navController.navigate(CarerRoutes.SUPPORT_SUGGESTIONS) },
                 onExitApp = onExitApp,
                 onBack = onExitCarerSettings
@@ -107,7 +119,7 @@ fun CarerNavigation(
         // Tom's Phone Description
         composable(CarerRoutes.TOMS_PHONE_DESCRIPTION) {
             TomsPhoneDescriptionScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
 
@@ -115,7 +127,7 @@ fun CarerNavigation(
         composable(CarerRoutes.USER_PROFILE) {
             UserProfileScreen(
                 onNavigateToPhotoCapture = { navController.navigate(CarerRoutes.PHOTO_CAPTURE) },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
         
@@ -125,9 +137,9 @@ fun CarerNavigation(
                 onPhotoCaptured = { photoUri ->
                     // Photo captured and saved via ViewModel in the screen
                     android.util.Log.d("CarerNav", "Photo captured: $photoUri, navigating back")
-                    navController.popBackStack()
+                    navController.popCarerBack()
                 },
-                onCancel = { navController.popBackStack() }
+                onCancel = { navController.popCarerBack() }
             )
         }
         
@@ -136,7 +148,7 @@ fun CarerNavigation(
             AssistantsSettingsHubScreen(
                 onNavigateToAllContacts = { navController.navigate(CarerRoutes.CONTACTS_LIST) },
                 onNavigateToRecentCalls = { navController.navigate(CarerRoutes.RECENT_CALLS) },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
 
@@ -146,7 +158,7 @@ fun CarerNavigation(
                 onNavigateToContactEdit = { contactId, contactType ->
                     navController.navigate(CarerRoutes.contactEdit(contactId, contactType))
                 },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
         
@@ -186,35 +198,35 @@ fun CarerNavigation(
                 homeSlotPendingIndex = homeSlotPendingIndex,
                 initialPhoneFromCallLog = initialPhone,
                 parentBreadcrumbTitle = parentBreadcrumb,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
         
         // Call Handling
         composable(CarerRoutes.CALL_HANDLING) {
             CallHandlingScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
         
         // Touch Response
         composable(CarerRoutes.TOUCH_RESPONSE) {
             TouchResponseScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
         
         // Appearance
         composable(CarerRoutes.APPEARANCE) {
             AppearanceScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
 
         // Home screen layout (7 assignable slots + Emergency)
         composable(CarerRoutes.HOME_LAYOUT) {
             HomeScreenLayoutScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popCarerBack() },
                 onNavigateToContactAfterSlot = { id, type ->
                     navController.navigate(CarerRoutes.contactEdit(id, type, homeSlotPendingIndex = -1))
                 },
@@ -229,7 +241,7 @@ fun CarerNavigation(
         // Recent calls (read-only, same DB as user list; for carer review / future sync)
         composable(CarerRoutes.RECENT_CALLS) {
             CarerRecentCallsScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popCarerBack() },
                 onAddUnknownCallerToContacts = { phone ->
                     navController.navigate(
                         CarerRoutes.contactEdit(
@@ -247,21 +259,28 @@ fun CarerNavigation(
         // Always On Mode
         composable(CarerRoutes.ALWAYS_ON) {
             AlwaysOnScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
         
-        // Factory Reset
+        // App Reset (erase this app’s data only)
         composable(CarerRoutes.FACTORY_RESET) {
             FactoryResetScreen(
-                onBack = { navController.popBackStack() }
+                onNavigateToDataTransfer = { navController.navigate(CarerRoutes.DATA_TRANSFER) },
+                onBack = { navController.popCarerBack() }
+            )
+        }
+
+        composable(CarerRoutes.DATA_TRANSFER) {
+            DataTransferScreen(
+                onBack = { navController.popCarerBack() }
             )
         }
         
         // Support & suggestions (inbox)
         composable(CarerRoutes.SUPPORT_SUGGESTIONS) {
             SupportSuggestionsScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popCarerBack() },
                 onThreadClick = { threadId -> navController.navigate(CarerRoutes.supportThread(threadId)) },
                 onNewMessage = { navController.navigate(CarerRoutes.SUPPORT_NEW) }
             )
@@ -272,16 +291,16 @@ fun CarerNavigation(
             val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
             SupportThreadDetailScreen(
                 threadId = threadId,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popCarerBack() }
             )
         }
 
         // New message form
         composable(CarerRoutes.SUPPORT_NEW) {
             SupportNewMessageScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popCarerBack() },
                 onSent = { threadId ->
-                    navController.popBackStack()
+                    navController.popCarerBack()
                     if (threadId != null) navController.navigate(CarerRoutes.supportThread(threadId))
                 }
             )
