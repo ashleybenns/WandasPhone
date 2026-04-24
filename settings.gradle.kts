@@ -26,6 +26,7 @@ include(":core:core-config")
 include(":core:core-data")
 include(":core:core-telecom")
 include(":core:core-analytics")
+include(":core:core-billing")
 
 // Feature modules
 include(":feature:feature-home")

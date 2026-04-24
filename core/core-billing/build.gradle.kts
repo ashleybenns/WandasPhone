@@ -6,40 +6,29 @@ plugins {
 }
 
 android {
-    namespace = "com.tomsphone.core.tts"
+    namespace = "com.tomsphone.core.billing"
     compileSdk = 35
-    
+
     defaultConfig {
         minSdk = 26
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-    }
-    
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    
+
     kotlinOptions {
         jvmTarget = "17"
     }
 }
 
 dependencies {
-    // AndroidX
     implementation(libs.androidx.core.ktx)
-    
-    // Coroutines
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.coroutines.core)
-    
-    // Hilt
+    implementation(libs.datastore.preferences)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-}
 
+    api("com.android.billingclient:billing-ktx:7.1.1")
+}

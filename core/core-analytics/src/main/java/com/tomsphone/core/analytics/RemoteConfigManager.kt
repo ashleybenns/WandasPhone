@@ -42,6 +42,8 @@ class RemoteConfigManager @Inject constructor(
         private const val KEY_FEATURE_LEVEL_GUIDE = "feature_level_guide"
         private const val KEY_SETTING_DESCRIPTIONS = "setting_descriptions"
         private const val KEY_RECOMMENDED_DEFAULTS = "recommended_defaults"
+        /** Single secret string for Play review / internal bypass (enter on paywall). */
+        private const val KEY_PLAY_REVIEW_LICENSE = "play_review_license"
         
         // Default JSON content (declared BEFORE defaultValues map)
         private const val DEFAULT_ONBOARDING_TIPS = """
@@ -129,7 +131,8 @@ class RemoteConfigManager @Inject constructor(
             KEY_ONBOARDING_TIPS to DEFAULT_ONBOARDING_TIPS,
             KEY_FEATURE_LEVEL_GUIDE to DEFAULT_FEATURE_LEVEL_GUIDE,
             KEY_SETTING_DESCRIPTIONS to DEFAULT_SETTING_DESCRIPTIONS,
-            KEY_RECOMMENDED_DEFAULTS to DEFAULT_RECOMMENDED_DEFAULTS
+            KEY_RECOMMENDED_DEFAULTS to DEFAULT_RECOMMENDED_DEFAULTS,
+            KEY_PLAY_REVIEW_LICENSE to ""
         )
     }
     
@@ -254,6 +257,19 @@ class RemoteConfigManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get available profiles", e)
             emptyList()
+        }
+    }
+
+    /**
+     * License phrase for Play Console reviewers (and internal testers).
+     * Set in Firebase Remote Config; optional app BuildConfig fallback is handled in the paywall layer.
+     */
+    fun getPlayReviewLicenseCode(): String {
+        return try {
+            remoteConfig.getString(KEY_PLAY_REVIEW_LICENSE).trim()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read play_review_license", e)
+            ""
         }
     }
 }

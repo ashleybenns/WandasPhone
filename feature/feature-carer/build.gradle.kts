@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.tomsphone.feature.carer"
-    compileSdk = 34
+    compileSdk = 35
     
     defaultConfig {
         minSdk = 26
@@ -47,6 +47,7 @@ dependencies {
     implementation(project(":core:core-data"))
     implementation(project(":core:core-telecom"))
     implementation(project(":core:core-analytics"))
+    implementation(project(":core:core-billing"))
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     

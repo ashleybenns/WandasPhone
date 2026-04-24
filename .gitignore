@@ -10,3 +10,8 @@ local.properties
 
 # Firebase / Google (contains API keys — get from Firebase Console per developer)
 app/google-services.json
+
+# Release signing (see keystore.properties.example)
+keystore.properties
+*.keystore
+*.jks

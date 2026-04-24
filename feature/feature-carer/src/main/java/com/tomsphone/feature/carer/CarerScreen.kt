@@ -16,6 +16,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
+import com.tomsphone.feature.carer.billing.CarerPaywallGateViewModel
+import com.tomsphone.feature.carer.screens.PaywallScreen
 
 /**
  * Carer configuration screen
@@ -29,11 +31,13 @@ import com.tomsphone.core.ui.theme.wandasColors
 fun CarerScreen(
     onNavigateBack: () -> Unit,
     onExitApp: () -> Unit,
-    viewModel: CarerSettingsViewModel = hiltViewModel()
+    viewModel: CarerSettingsViewModel = hiltViewModel(),
+    paywallGateViewModel: CarerPaywallGateViewModel = hiltViewModel()
 ) {
     val isPinVerified by viewModel.isPinVerified.collectAsState()
     val showPinDialog by viewModel.showPinDialog.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val entitlement by paywallGateViewModel.snapshot.collectAsState()
     
     // Show PIN dialog if not verified
     if (showPinDialog && !isPinVerified) {
@@ -43,14 +47,18 @@ fun CarerScreen(
         )
     }
     
-    // Once verified, show the settings navigation (idle timeout → home uses carer inactivity setting).
+    // Once verified, show paywall or settings (idle timeout → home uses carer inactivity setting).
     if (isPinVerified) {
         val timeoutMs = (settings.inactivityTimeoutSeconds * 1000L).coerceIn(15_000L, 600_000L)
         SecondaryScreenIdleEffect(timeoutMs = timeoutMs, onTimeout = onNavigateBack) {
-            CarerNavigation(
-                onExitCarerSettings = onNavigateBack,
-                onExitApp = onExitApp
-            )
+            if (entitlement.needsPaywall) {
+                PaywallScreen(onBack = onNavigateBack)
+            } else {
+                CarerNavigation(
+                    onExitCarerSettings = onNavigateBack,
+                    onExitApp = onExitApp
+                )
+            }
         }
     }
 }

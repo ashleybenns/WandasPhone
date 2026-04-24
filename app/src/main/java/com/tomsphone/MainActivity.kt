@@ -38,6 +38,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.tomsphone.core.billing.BillingCoordinator
+import com.tomsphone.core.billing.EntitlementRepository
 import com.tomsphone.core.config.SettingsRepository
 import com.tomsphone.core.config.homeButtonRowCount
 import com.tomsphone.core.telecom.CallDirection
@@ -103,6 +105,12 @@ class MainActivity : ComponentActivity() {
     
     @Inject
     lateinit var batteryMonitor: com.tomsphone.core.telecom.BatteryMonitor
+
+    @Inject
+    lateinit var entitlementRepository: EntitlementRepository
+
+    @Inject
+    lateinit var billingCoordinator: BillingCoordinator
     
     private var lockVolumeButtons = true
     private var volumeKeysAllowedDuringCall = false  // Only true when call active and lockVolumeButtons=false
@@ -129,6 +137,11 @@ class MainActivity : ComponentActivity() {
         
         // Start battery monitoring
         batteryMonitor.startMonitoring()
+
+        billingCoordinator.connectIfNeeded()
+        lifecycleScope.launch {
+            entitlementRepository.ensureTrialStarted()
+        }
         
         lifecycleScope.launch {
             applySettings()
@@ -177,7 +190,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         hideSystemBars()
-        
+        billingCoordinator.syncOwnedPurchases()
+
         // Re-check settings on each resume to respect carer changes
         lifecycleScope.launch {
             try {

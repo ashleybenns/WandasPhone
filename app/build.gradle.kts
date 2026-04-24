@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,32 +9,76 @@ plugins {
     alias(libs.plugins.firebase.crashlytics)
 }
 
+// Optional release signing: copy keystore.properties.example → keystore.properties at repo root.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "com.tomsphone"
-    compileSdk = 34
+    compileSdk = 35
     
     defaultConfig {
-        applicationId = "com.tomsphone"
+        // Must match the Android application ID in Play Console (create app / upload key there first).
+        applicationId = "com.ashbashapps.tomsphone"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 35
+        versionCode = 2
+        versionName = "1.0.2"
         // Support & suggestions API (Vercel). Rebuild app after changing.
-        buildConfigField("String", "SUPPORT_API_BASE_URL", "\"https://wandas-phone.vercel.app\"")
+        buildConfigField("String", "SUPPORT_API_BASE_URL", "\"https://toms-phone.vercel.app\"")
+        // Play Billing in-app product IDs (must match Play Console one-time products).
+        buildConfigField("String", "BILLING_PRODUCT_LIFETIME_STANDARD", "\"wandas_lifetime_standard\"")
+        buildConfigField("String", "BILLING_PRODUCT_LIFETIME_EARLY", "\"wandas_lifetime_early_adopter\"")
+        // Optional fallback if Remote Config is empty (e.g. reviewer offline). Leave default empty; set only for review builds if needed.
+        buildConfigField("String", "PLAY_REVIEW_LICENSE_FALLBACK", "\"\"")
+        buildConfigField("Boolean", "BILLING_DEBUG_ENTITLEMENT_BYPASS", "false")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+        // Native crash symbolication in Play: applies to JNI built in this module.
+        ndk {
+            debugSymbolLevel = "FULL"
+        }
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                    ?: error("keystore.properties: missing keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                    ?: error("keystore.properties: missing keyPassword")
+                storePassword = keystoreProperties.getProperty("storePassword")
+                    ?: error("keystore.properties: missing storePassword")
+                val storeFilePath = keystoreProperties.getProperty("storeFile")
+                    ?: error("keystore.properties: missing storeFile (path relative to repo root)")
+                val keystoreFile = rootProject.file(storeFilePath)
+                if (!keystoreFile.exists()) {
+                    error("keystore.properties storeFile not found: ${keystoreFile.absolutePath}")
+                }
+                storeFile = keystoreFile
+            }
+        }
     }
     
     buildTypes {
+        debug {
+            buildConfigField("Boolean", "BILLING_DEBUG_ENTITLEMENT_BYPASS", "true")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     
@@ -57,6 +103,10 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        // Prebuilt .so from dependencies (e.g. CameraX) are otherwise stripped; Play then warns about missing native symbols.
+        jniLibs {
+            keepDebugSymbols += "**/*.so"
         }
     }
 }
@@ -109,6 +159,7 @@ dependencies {
     
     // Analytics module
     implementation(project(":core:core-analytics"))
+    implementation(project(":core:core-billing"))
     
     // Testing
     testImplementation(libs.junit)

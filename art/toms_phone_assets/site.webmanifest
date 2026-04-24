@@ -1,0 +1,19 @@
+{
+  "name": "Tom's Phone",
+  "short_name": "Tom's Phone",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#9824BC",
+  "background_color": "#9824BC",
+  "display": "standalone"
+}

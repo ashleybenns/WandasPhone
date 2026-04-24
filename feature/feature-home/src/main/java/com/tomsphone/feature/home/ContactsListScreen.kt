@@ -3,7 +3,6 @@ package com.tomsphone.feature.home
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.ripple.rememberRipple
@@ -18,8 +17,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
@@ -27,11 +24,9 @@ import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.components.ConfigurableButton
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.config.ListTextAlignment
-import com.tomsphone.core.data.model.Contact
 import com.tomsphone.core.ui.components.ListScreenLayout
 import com.tomsphone.core.ui.theme.PastelColors
 import com.tomsphone.core.ui.theme.ScaledDimensions
-import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
 private const val INACTIVITY_TIMEOUT_MS = 30_000L
 
@@ -50,7 +45,6 @@ fun ContactsListScreen(
     viewModel: ContactsListViewModel = hiltViewModel()
 ) {
     val contacts by viewModel.contacts.collectAsState()
-    val screenTitle by viewModel.screenTitle.collectAsState()
     val emptyMessage by viewModel.emptyMessage.collectAsState()
     val hasNextPage by viewModel.hasNextPage.collectAsState()
     val listTextAlignment by viewModel.listTextAlignment.collectAsState()
@@ -59,15 +53,19 @@ fun ContactsListScreen(
     val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
     val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
     val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
-    // Match home: compute rows-per-page from viewport / home row count.
     val homeRows by viewModel.homeButtonRowCountForLayout.collectAsState()
 
     val density = LocalDensity.current
     var listViewportHeightPx by remember { mutableIntStateOf(0) }
 
-    val rowsThatFit = remember(listViewportHeightPx, homeRows) {
+    // Same outer slot as home: inner height from shared vertical budget + 8.dp (4.dp padding each side).
+    val rowSlotHeightDp =
+        ScaledDimensions.homeContactRowInnerHeight(homeRows) + 8.dp
+    val rowSlotHeightPx = with(density) { rowSlotHeightDp.roundToPx() }.coerceAtLeast(1)
+
+    val rowsThatFit = remember(listViewportHeightPx, rowSlotHeightPx) {
         if (listViewportHeightPx <= 0) return@remember 0
-        homeRows.coerceAtLeast(1)
+        (listViewportHeightPx / rowSlotHeightPx).coerceAtLeast(1)
     }
 
     LaunchedEffect(rowsThatFit) {
@@ -75,14 +73,6 @@ fun ContactsListScreen(
             viewModel.setContactsPerPageFromLayout(rowsThatFit)
         }
     }
-
-    val fallbackRowSlotHeightDp = ScaledDimensions.contactButtonHeight + 8.dp
-    val rowSlotHeightDp =
-        if (listViewportHeightPx > 0 && rowsThatFit > 0) {
-            with(density) { (listViewportHeightPx / rowsThatFit).toDp() }
-        } else {
-            fallbackRowSlotHeightDp
-        }
     
     val handleBack = {
         if (!viewModel.goBackWithinList()) {
@@ -93,7 +83,7 @@ fun ContactsListScreen(
     SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onBack) {
     ListScreenLayout(
         backgroundColor = PastelColors.lightYellow,
-        title = screenTitle,
+        title = "",
         emptyMessage = emptyMessage,
         isEmpty = contacts.isEmpty(),
         onBack = handleBack,
@@ -127,34 +117,53 @@ fun ContactsListScreen(
             }
         }
     ) {
-        // Same slot pattern as [HomeScreen]: outer height = inner + 8.dp padding, button fillMaxHeight
-        // so every row gets identical constraints (avoids uneven-looking blocks).
-        contacts.forEach { contact ->
+        if (contacts.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(rowSlotHeightDp)
-                    .padding(vertical = 4.dp),
+                    .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                ConfigurableButton(
-                    label = contact.name,
-                    onClick = {
-                        onCallContact(contact.name, contact.phoneNumber)
-                    },
+                Text(
+                    text = emptyMessage,
+                    style = TextStyle(
+                        fontSize = ScaledDimensions.contactNameTextSize,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        } else {
+            // Same slot pattern as [HomeScreen]: outer height = inner + 8.dp padding, button fillMaxHeight
+            contacts.forEach { contact ->
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(),
-                    backgroundColor = contact.buttonColor?.let { Color(it) }
-                        ?: MaterialTheme.wandasColors.primaryButton,
-                    textColor = MaterialTheme.wandasColors.onPrimaryButton,
-                    warningText = if (autoAnswerEnabled && contact.autoAnswerEnabled) "Auto-Answer" else null,
-                    textAlignment = listTextAlignment,
-                    activationPreset = buttonActivation,
-                    debounceMs = touchDebounceMs,
-                    accumulatedThresholdMs = accumulatedThresholdMs,
-                    accumulatedTimeoutMs = accumulatedTimeoutMs
-                )
+                        .height(rowSlotHeightDp)
+                        .padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ConfigurableButton(
+                        label = contact.name,
+                        onClick = {
+                            onCallContact(contact.name, contact.phoneNumber)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(),
+                        backgroundColor = contact.buttonColor?.let { Color(it) }
+                            ?: MaterialTheme.wandasColors.primaryButton,
+                        textColor = MaterialTheme.wandasColors.onPrimaryButton,
+                        warningText = if (autoAnswerEnabled && contact.autoAnswerEnabled) "Auto-Answer" else null,
+                        textAlignment = listTextAlignment,
+                        activationPreset = buttonActivation,
+                        debounceMs = touchDebounceMs,
+                        accumulatedThresholdMs = accumulatedThresholdMs,
+                        accumulatedTimeoutMs = accumulatedTimeoutMs
+                    )
+                }
             }
         }
     }

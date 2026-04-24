@@ -97,5 +97,23 @@ object TTSScripts {
     fun autoAnswerNotification(callerName: String): String {
         return "$callerName is calling. Answering now. Call is live."
     }
+
+    /**
+     * Spoken in carer / assistant areas when the one-month trial is in its last week.
+     * Plain language so assistants who miss on-screen banners still hear the warning.
+     */
+    fun trialEndingForAssistants(daysLeftInclusive: Int): String {
+        return when {
+            daysLeftInclusive <= 1 ->
+                "Reminder for assistants. The free trial ends tomorrow. " +
+                    "Please buy the full version in Settings so this phone keeps working."
+            daysLeftInclusive <= 3 ->
+                "Reminder for assistants. The free trial ends in $daysLeftInclusive days. " +
+                    "Open Settings and complete purchase before it ends so nothing stops working."
+            else ->
+                "Reminder for assistants. The free trial ends in $daysLeftInclusive days. " +
+                    "Plan to buy the full version from Settings before the trial ends."
+        }
+    }
 }
 

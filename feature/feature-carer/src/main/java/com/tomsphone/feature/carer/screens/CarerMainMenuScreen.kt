@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
+import com.tomsphone.feature.carer.billing.TrialAssistantNudgeViewModel
+import com.tomsphone.feature.carer.components.AssistantTrialBanner
 import com.tomsphone.feature.carer.components.CarerBreadcrumb
 import com.tomsphone.feature.carer.components.CarerMenuButton
 
@@ -36,13 +38,19 @@ fun CarerMainMenuScreen(
     onNavigateToSupportSuggestions: () -> Unit,
     onExitApp: () -> Unit,
     onBack: () -> Unit,
-    supportViewModel: com.tomsphone.feature.carer.support.SupportSuggestionsViewModel = hiltViewModel()
+    supportViewModel: com.tomsphone.feature.carer.support.SupportSuggestionsViewModel = hiltViewModel(),
+    trialNudgeViewModel: TrialAssistantNudgeViewModel = hiltViewModel()
 ) {
     val supportUnreadCount by supportViewModel.unreadCount.collectAsState(initial = 0)
+    val entitlement by trialNudgeViewModel.snapshot.collectAsState()
 
     LaunchedEffect(Unit) {
         supportViewModel.ensureDeviceId()
         supportViewModel.refreshUnreadCount()
+    }
+
+    LaunchedEffect(entitlement.trialDaysRemainingInclusive, entitlement.shouldNudgeAssistantsAboutTrial) {
+        trialNudgeViewModel.maybeSpeakAssistantTrialNudge()
     }
 
     Surface(
@@ -64,6 +72,7 @@ fun CarerMainMenuScreen(
                     .padding(WandasDimensions.SpacingMedium),
                 verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingMedium)
             ) {
+                AssistantTrialBanner(snapshot = entitlement)
                 CarerMenuButton(
                     title = "User Profile",
                     description = "User Name, Emergency, Medical info, Photo",

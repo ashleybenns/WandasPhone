@@ -44,8 +44,15 @@ fun TomsPhoneDescriptionScreen(
                     "I built this for my mother. Other “senior” phones meant starting over; this one is meant to stay — minimal learning, minimal remembering."
                 )
 
+                SectionTitle("Home screen")
                 DescriptionParagraph(
-                    "Level 1 keeps the home screen front and centre: one-touch calls to assistants, emergency, and tap styles you can match to the user."
+                    "There are no menus to get lost in. The home screen is the hub: large buttons for assistants, emergency, returning missed calls, and anything else you’ve chosen to show there."
+                )
+                DescriptionParagraph(
+                    "Some actions open a simple full-screen list (contacts, missed calls, dialer) and then take you home again — still without nested menus."
+                )
+                DescriptionParagraph(
+                    "In carer settings you can match how the user touches the screen — for example single-tap vs double-tap to place a call, and other tap patterns for ending calls or emergency, so buttons suit them rather than the other way around."
                 )
 
                 SectionTitle("Calls")
@@ -53,6 +60,11 @@ fun TomsPhoneDescriptionScreen(
                 DescriptionParagraph("One touch answers — loud, on speaker.")
                 DescriptionParagraph(
                     "The ringtone can use their name (e.g. “Wanda, that’s your phone ringing”)."
+                )
+
+                SectionTitle("Low battery texts")
+                DescriptionParagraph(
+                    "For each assistant contact you can turn on low-battery SMS alerts. When the phone runs low, trusted assistants get a text so someone can charge it before it goes flat — helpful if the user wouldn’t notice or mention it themselves."
                 )
 
                 SectionTitle("Missed calls")
@@ -67,11 +79,6 @@ fun TomsPhoneDescriptionScreen(
                 SectionTitle("Emergency")
                 DescriptionParagraph(
                     "Emergency needs confirmation to avoid pocket dials. Medical and address details show when a real emergency call goes out."
-                )
-
-                SectionTitle("Level 2")
-                DescriptionParagraph(
-                    "Adds simple second screens: full contacts list, missed-calls list, screen off, in-call speaker toggle, and more — still with fixed assistant buttons on home."
                 )
 
                 SectionTitle("Feedback")

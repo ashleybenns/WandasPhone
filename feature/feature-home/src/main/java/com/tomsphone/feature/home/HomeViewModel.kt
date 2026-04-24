@@ -498,22 +498,21 @@ class HomeViewModel @Inject constructor(
     
     // Combine with priority: calling > carer_missed > grey_list_missed > default
     // Optional time prefix when showTimeInStatus is enabled
+    // kotlinx.coroutines combine() only has tuple overloads up to 5 flows; 6+ uses vararg → Array<Any?> transform.
     val displayMessage: StateFlow<String> = combine(
-        userName, 
-        _callingStatus, 
+        userName,
+        _callingStatus,
         _missedCallStatus,
         primaryMissedReturnCall,
         settings,
         currentTime
-    ) { values ->
-        val name = values[0] as String
-        val callingMsg = values[1] as String?
-        val carerMissedMsg = values[2] as String?
-        @Suppress("UNCHECKED_CAST")
-        val primaryMissed = values[3] as PrimaryMissedReturnCall?
-        val carerSettings = values[4] as CarerSettings
-        val time = values[5] as String
-        
+    ) { emissions ->
+        val name = emissions[0] as String
+        val callingMsg = emissions[1] as String?
+        val carerMissedMsg = emissions[2] as String?
+        val primaryMissed = emissions[3] as PrimaryMissedReturnCall?
+        val carerSettings = emissions[4] as CarerSettings
+        val time = emissions[5] as String
         // Build status message with priority
         val baseMessage = when {
             callingMsg != null -> callingMsg

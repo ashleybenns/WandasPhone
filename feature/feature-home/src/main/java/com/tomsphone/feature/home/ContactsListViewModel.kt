@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
 /**
- * ViewModel for Contacts List Screen — everyone, paginated by home button row count.
+ * ViewModel for Contacts List Screen — everyone, paginated by how many home-height rows fit the list viewport.
  */
 @HiltViewModel
 class ContactsListViewModel @Inject constructor(
@@ -152,14 +152,6 @@ class ContactsListViewModel @Inject constructor(
         // HomeViewModel migrates legacy installs to a valid slot list.
         return slots.count { it.isNotEmpty() }
     }
-    
-    /** Shown when the list has at least one row */
-    val screenTitle: StateFlow<String> = flowOf("Contacts")
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = "Contacts"
-        )
     
     val emptyMessage: StateFlow<String> = flowOf("No contacts")
         .stateIn(
