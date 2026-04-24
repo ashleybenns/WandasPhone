@@ -5,13 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ripple.rememberRipple
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -30,6 +25,7 @@ import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
+import com.tomsphone.core.ui.components.InertBorderLayout
 import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -45,14 +41,7 @@ import javax.inject.Inject
  * 
  * Shown when an incoming call has been ANSWERED.
  * 
- * Layout:
- * - Status text at top (same position as HomeScreen)
- * - Button area divided into TWO equal zones:
- *   - Top zone: End call button (always visible)
- *   - Bottom zone: Speaker toggle (may or may not be visible)
- * 
- * The end call button position is FIXED regardless of speaker toggle visibility.
- * This ensures familiarity - user always taps the same spot to end call.
+ * Layout matches [IncomingCallScreen] and [EndOutgoingCallScreen] (rounded full-width buttons, two-line labels).
  */
 @Composable
 fun EndIncomingCallScreen(
@@ -75,13 +64,6 @@ fun EndIncomingCallScreen(
     // Status message - ONE LINE
     val displayName = callerName ?: "Caller"
     val statusMessage = "On call with $displayName"
-    
-    // End call instruction - break at comma for readability
-    val instructionText = if (confirmPending) {
-        "Tap again to end"
-    } else {
-        "To end call,\npress twice"
-    }
     
     // Watch for call ending
     LaunchedEffect(callState) {
@@ -139,163 +121,140 @@ fun EndIncomingCallScreen(
                 }
             }
             
-            // Button area — slightly more space above (end call) than speaker zone
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = WandasDimensions.SpacingLarge)
-            ) {
-                Box(
+            InertBorderLayout(modifier = Modifier.weight(1f)) {
+                Column(
                     modifier = Modifier
-                        .weight(1.2f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                        .fillMaxSize()
+                        .padding(WandasDimensions.SpacingLarge),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                        val spacing = WandasDimensions.SpacingMedium
-                        val instructionH = ScaledDimensions.endCallInstructionHeight
-                        val rawDiameter = ScaledDimensions.endCallButtonSize
-                        val minCircleForContactNameText =
-                            ScaledDimensions.heightForLines(1, 32f) * 1.65f
-                        val desiredDiameter = maxOf(rawDiameter, minCircleForContactNameText)
-                        val available = maxHeight - 8.dp
-                        val roomForCircle =
-                            (available - spacing - instructionH).coerceAtLeast(0.dp)
-                        val diameter = minOf(desiredDiameter, roomForCircle)
-
-                        val endLabelSize = ScaledDimensions.contactNameTextSize
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(instructionH),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = instructionText,
-                                    style = TextStyle(
-                                        fontSize = ScaledDimensions.statusTextSize,
-                                        fontWeight = FontWeight.Medium,
-                                        lineHeight = ScaledDimensions.statusTextSize * 1.2f,
-                                        platformStyle = PlatformTextStyle(
-                                            includeFontPadding = false
-                                        )
-                                    ),
-                                    color = Color.Black.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(spacing))
-
-                            val endCallInteractionSource = remember { MutableInteractionSource() }
-                            Surface(
-                                modifier = Modifier
-                                    .size(diameter)
-                                    .clip(CircleShape)
-                                    .indication(endCallInteractionSource, rememberRipple())
-                                    .activationGesture(
-                                        preset = buttonActivation,
-                                        debounceMs = touchDebounceMs,
-                                        accumulatedThresholdMs = accumulatedThresholdMs,
-                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
-                                        onActivate = { viewModel.onEndCallTap() },
-                                        interactionSource = endCallInteractionSource
-                                    ),
-                                shape = CircleShape,
-                                color = Color(0xFFD32F2F)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "End",
-                                        style = TextStyle(
-                                            fontSize = endLabelSize,
-                                            fontWeight = FontWeight.Bold,
-                                            lineHeight = endLabelSize * 1.1f,
-                                            platformStyle = PlatformTextStyle(
-                                                includeFontPadding = false
-                                            )
-                                        ),
-                                        color = Color.White,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                Box(
-                    modifier = Modifier
-                        .weight(0.8f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (showSpeakerToggle) {
-                        val speakerConfirmPending by viewModel.speakerConfirmPending.collectAsState()
-                        val speakerInteractionSource = remember { MutableInteractionSource() }
-                        
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        val endCallInteractionSource = remember { MutableInteractionSource() }
+                        Surface(
                             modifier = Modifier
-                                .indication(speakerInteractionSource, rememberRipple(bounded = false))
+                                .fillMaxWidth()
+                                .height(ScaledDimensions.contactButtonHeight)
+                                .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                                .indication(endCallInteractionSource, rememberRipple())
                                 .activationGesture(
                                     preset = buttonActivation,
                                     debounceMs = touchDebounceMs,
                                     accumulatedThresholdMs = accumulatedThresholdMs,
                                     accumulatedTimeoutMs = accumulatedTimeoutMs,
-                                    onActivate = { viewModel.onSpeakerTap() },
-                                    interactionSource = speakerInteractionSource
-                                )
+                                    onActivate = { viewModel.onEndCallTap() },
+                                    interactionSource = endCallInteractionSource
+                                ),
+                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                            color = Color(0xFFD32F2F),
+                            shadowElevation = WandasDimensions.ElevationMedium,
                         ) {
-                            // State text above icon (reduces risk of hand covering text)
-                            Text(
-                                text = if (isSpeakerOn) "Speaker on," else "Speaker off,",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.contactNameTextSize,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = Color.Black,
-                                textAlign = TextAlign.Center
-                            )
-                            
-                            Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
-                            
-                            // Instruction text
-                            Text(
-                                text = if (speakerConfirmPending) "Tap again" else "press twice",
-                                style = TextStyle(
-                                    fontSize = ScaledDimensions.statusTextSize,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = if (speakerConfirmPending) Color.Red else Color.Black.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center
-                            )
-                            
-                            Spacer(modifier = Modifier.height(WandasDimensions.SpacingSmall))
-                            
-                            // Speaker icon - large, touchable
-                            Icon(
-                                imageVector = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                                contentDescription = if (isSpeakerOn) "Speaker on" else "Speaker off",
-                                modifier = Modifier.size(ScaledDimensions.endCallButtonSize * 0.7f),
-                                tint = Color.Black
-                            )
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "End call",
+                                        style = TextStyle(
+                                            fontSize = ScaledDimensions.contactNameTextSize,
+                                            fontWeight = FontWeight.Bold,
+                                            lineHeight = ScaledDimensions.contactNameTextSize * 1.1f,
+                                            platformStyle = PlatformTextStyle(
+                                                includeFontPadding = false
+                                            ),
+                                        ),
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    Text(
+                                        text = if (confirmPending) "Tap again" else "Tap twice",
+                                        style = TextStyle(
+                                            fontSize = ScaledDimensions.statusTextSize,
+                                            fontWeight = FontWeight.Medium,
+                                            lineHeight = ScaledDimensions.statusTextSize * 1.2f,
+                                            platformStyle = PlatformTextStyle(
+                                                includeFontPadding = false
+                                            ),
+                                        ),
+                                        color = if (confirmPending) {
+                                            Color(0xFFFFEB3B)
+                                        } else {
+                                            Color.White.copy(alpha = 0.9f)
+                                        },
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showSpeakerToggle) {
+                            val speakerConfirmPending by viewModel.speakerConfirmPending.collectAsState()
+                            val speakerInteractionSource = remember { MutableInteractionSource() }
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(ScaledDimensions.contactButtonHeight)
+                                    .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                                    .indication(speakerInteractionSource, rememberRipple())
+                                    .activationGesture(
+                                        preset = buttonActivation,
+                                        debounceMs = touchDebounceMs,
+                                        accumulatedThresholdMs = accumulatedThresholdMs,
+                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                        onActivate = { viewModel.onSpeakerTap() },
+                                        interactionSource = speakerInteractionSource
+                                    ),
+                                shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                                color = Color(0xFF455A64),
+                                shadowElevation = WandasDimensions.ElevationMedium,
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = if (isSpeakerOn) "Speaker on" else "Speaker off",
+                                            style = TextStyle(
+                                                fontSize = ScaledDimensions.contactNameTextSize,
+                                                fontWeight = FontWeight.Bold,
+                                                lineHeight = ScaledDimensions.contactNameTextSize * 1.1f,
+                                                platformStyle = PlatformTextStyle(
+                                                    includeFontPadding = false
+                                                ),
+                                            ),
+                                            color = Color.White,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                        Text(
+                                            text = if (speakerConfirmPending) "Tap again" else "Tap twice",
+                                            style = TextStyle(
+                                                fontSize = ScaledDimensions.statusTextSize,
+                                                fontWeight = FontWeight.Medium,
+                                                lineHeight = ScaledDimensions.statusTextSize * 1.2f,
+                                                platformStyle = PlatformTextStyle(
+                                                    includeFontPadding = false
+                                                ),
+                                            ),
+                                            color = if (speakerConfirmPending) {
+                                                Color(0xFFFFEB3B)
+                                            } else {
+                                                Color.White.copy(alpha = 0.9f)
+                                            },
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                    // If showSpeakerToggle is false, the Box is empty but still takes space
+
+                    Spacer(modifier = Modifier.height(ScaledDimensions.emergencyButtonHeight))
                 }
             }
         }
