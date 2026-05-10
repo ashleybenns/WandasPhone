@@ -1,6 +1,7 @@
 package com.tomsphone.feature.home
 
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.ButtonActivationPreset
@@ -17,6 +18,7 @@ import com.tomsphone.core.data.model.sortedCarerCallableForHome
 import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import android.content.Context
+import com.tomsphone.core.telecom.BatteryAlertSmsSender
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
 import com.tomsphone.core.telecom.EmergencyNumberResolver
@@ -63,6 +65,7 @@ class HomeViewModel @Inject constructor(
     private val callLogRepository: CallLogRepository,
     private val callManager: CallManager,
     private val missedCallNagManager: MissedCallNagManager,
+    private val batteryAlertSmsSender: BatteryAlertSmsSender,
     private val tts: WandasTTS,
     private val analytics: AnalyticsManager
 ) : ViewModel() {
@@ -901,6 +904,44 @@ class HomeViewModel @Inject constructor(
      */
     fun onEmergencyButtonTap() {
         Log.d(TAG, "Emergency button tapped - navigating to emergency screen")
+        viewModelScope.launch {
+            try {
+                val carerSettings = settingsRepository.getSettings().first()
+                if (!carerSettings.sosSmsNotifyAssistantsEnabled) return@launch
+                if (!batteryAlertSmsSender.hasSmsPermission()) {
+                    Log.w(TAG, "SOS SMS skipped: SEND_SMS not granted — grant in User Profile → SOS or App info → Permissions")
+                    Toast.makeText(
+                        appContext,
+                        "SOS can’t send texts: allow SMS for this app (carer settings → SOS, or system app permissions).",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    return@launch
+                }
+                // CARER and GREY_LIST are the only types; new contacts are GREY_LIST until given a home slot.
+                val assistants =
+                    contactRepository.getContacts(100).first().filter {
+                        it.phoneNumber.isNotBlank()
+                    }
+                val numbers = assistants.map { it.phoneNumber }
+                if (numbers.isEmpty()) {
+                    Log.w(TAG, "SOS SMS skipped: no contacts with phone numbers")
+                    Toast.makeText(
+                        appContext,
+                        "SOS has no contacts to text — add contacts in carer settings.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    return@launch
+                }
+                val name = settingsRepository.getUserName().first()
+                batteryAlertSmsSender.sendSosPressedAlertToAssistants(
+                    recipientNumbers = numbers,
+                    userName = name,
+                    messageTemplate = carerSettings.sosSmsNotifyAssistantsMessage,
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "SOS assistant SMS failed", e)
+            }
+        }
         _showEmergencyConfirm.value = true
     }
     

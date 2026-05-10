@@ -1,6 +1,8 @@
 package com.tomsphone.core.telecom
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.telephony.SmsManager
 import android.util.Log
@@ -9,10 +11,13 @@ import com.tomsphone.core.data.util.PhoneNumberUtils
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "BatteryAlertSms"
+
+private val pendingIntentRequestCode = AtomicInteger(10_000)
 
 /**
  * Sends optional SMS to carers for low battery and device connected after low battery.
@@ -73,9 +78,36 @@ class BatteryAlertSmsSender @Inject constructor(
     }
 
     /**
-     * Send a test SMS to the same recipients as battery alerts (for quick testing).
-     * Returns a result message: success with count, or reason for failure (no permission, no recipients, or send error).
+     * Sent when the user presses SOS (before/during emergency confirm). One SMS per assistant number.
+     * [messageTemplate] empty = default text; otherwise `{userName}` / `{name}` are replaced with [userName].
      */
+    suspend fun sendSosPressedAlertToAssistants(
+        recipientNumbers: List<String>,
+        userName: String,
+        messageTemplate: String,
+    ) {
+        if (!hasSmsPermission()) {
+            Log.w(TAG, "SOS assistant SMS skipped: SEND_SMS permission not granted")
+            return
+        }
+        val numbers = normalizeRecipients(recipientNumbers)
+        if (numbers.isEmpty()) {
+            Log.w(TAG, "SOS assistant SMS skipped: no valid assistant numbers")
+            return
+        }
+        val template = messageTemplate.trim()
+        val body =
+            if (template.isEmpty()) {
+                "Tom's Phone: $userName pressed SOS. Please check on them — they may not have completed an emergency call."
+            } else {
+                template
+                    .replace("{userName}", userName)
+                    .replace("{name}", userName)
+            }
+        sendToAll(numbers, body)
+        Log.d(TAG, "SOS SMS queued for ${numbers.size} recipient(s) — watch SMS_SENT lines for carrier result")
+    }
+
     suspend fun sendTestBatteryAlert(recipientNumbers: List<String>, userName: String): String {
         if (!hasSmsPermission()) {
             Log.w(TAG, "Test SMS skipped: SEND_SMS permission not granted")
@@ -103,11 +135,64 @@ class BatteryAlertSmsSender @Inject constructor(
         val smsManager = SmsManager.getDefault()
         for (number in numbers) {
             try {
-                smsManager.sendTextMessage(number, null, message, null, null)
-                Log.d(TAG, "SMS sent to $number")
+                queueSms(smsManager, number, message)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to send SMS to $number: ${e.message}")
+                Log.e(TAG, "Failed to queue SMS to $number: ${e.message}", e)
             }
         }
+    }
+
+    private fun queueSms(smsManager: SmsManager, destination: String, body: String) {
+        val parts = smsManager.divideMessage(body)
+        val sentIntents = ArrayList<PendingIntent?>(parts.size)
+        val deliveryIntents = ArrayList<PendingIntent?>(parts.size)
+        for (i in parts.indices) {
+            sentIntents.add(
+                smsPendingIntent(
+                    destination = destination,
+                    partIndex = i,
+                    totalParts = parts.size,
+                    isDelivery = false,
+                ),
+            )
+            deliveryIntents.add(
+                smsPendingIntent(
+                    destination = destination,
+                    partIndex = i,
+                    totalParts = parts.size,
+                    isDelivery = true,
+                ),
+            )
+        }
+        if (parts.size == 1) {
+            smsManager.sendTextMessage(destination, null, body, sentIntents[0], deliveryIntents[0])
+            Log.d(TAG, "SMS queued (1 part) → $destination — awaiting SMS_SENT callback")
+        } else {
+            smsManager.sendMultipartTextMessage(destination, null, parts, sentIntents, deliveryIntents)
+            Log.d(TAG, "SMS queued (${parts.size} parts) → $destination — awaiting SMS_SENT callbacks")
+        }
+    }
+
+    private fun smsPendingIntent(
+        destination: String,
+        partIndex: Int,
+        totalParts: Int,
+        isDelivery: Boolean,
+    ): PendingIntent {
+        val req = pendingIntentRequestCode.getAndIncrement()
+        val intent =
+            Intent(context, SmsSendStatusReceiver::class.java).apply {
+                action =
+                    if (isDelivery) {
+                        SmsSendStatusReceiver.ACTION_DELIVERED
+                    } else {
+                        SmsSendStatusReceiver.ACTION_SENT
+                    }
+                putExtra(SmsSendStatusReceiver.EXTRA_DEST, destination)
+                putExtra(SmsSendStatusReceiver.EXTRA_PART, partIndex)
+                putExtra(SmsSendStatusReceiver.EXTRA_PARTS_TOTAL, totalParts)
+            }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(context, req, intent, flags)
     }
 }

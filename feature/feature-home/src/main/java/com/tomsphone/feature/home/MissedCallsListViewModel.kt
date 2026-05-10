@@ -14,9 +14,12 @@ import com.tomsphone.core.data.util.PhoneNumberUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val MISSED_CALLS_LIST_LIMIT = 200
@@ -33,7 +36,9 @@ class MissedCallsListViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    val missedCallRows: StateFlow<List<MissedCallListRow>> = combine(
+    private val _currentPage = MutableStateFlow(0)
+
+    private val allMissedCallRows: StateFlow<List<MissedCallListRow>> = combine(
         callLogRepository.getOutstandingMissedCallsPerCaller(MISSED_CALLS_LIST_LIMIT),
         contactRepository.getContacts(500)
     ) { calls, contacts ->
@@ -47,6 +52,88 @@ class MissedCallsListViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    val isMissedCallsEmpty: StateFlow<Boolean> = allMissedCallRows
+        .map { it.isEmpty() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    private val _missedCallsPerPageOverride = MutableStateFlow<Int?>(null)
+
+    private val missedCallsPerPage: StateFlow<Int> = _missedCallsPerPageOverride
+        .map { (it ?: 6).coerceIn(1, 50) }
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 6
+        )
+
+    init {
+        viewModelScope.launch {
+            combine(
+                allMissedCallRows.map { it.size }.distinctUntilChanged(),
+                missedCallsPerPage
+            ) { total, perPage -> total to perPage }
+                .collect { (total, perPage) ->
+                    val lastPage = if (total <= 0) 0 else (total - 1) / perPage.coerceAtLeast(1)
+                    val current = _currentPage.value
+                    if (current > lastPage) _currentPage.value = lastPage
+                    if (_currentPage.value < 0) _currentPage.value = 0
+                }
+        }
+    }
+
+    /** Current page of missed-call rows (same paging model as [ContactsListScreen]). */
+    val missedCallRows: StateFlow<List<MissedCallListRow>> = combine(
+        allMissedCallRows,
+        _currentPage,
+        missedCallsPerPage
+    ) { all, page, perPage ->
+        val start = page * perPage
+        val end = (start + perPage).coerceAtMost(all.size)
+        if (start >= all.size) emptyList() else all.subList(start, end)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val hasNextPage: StateFlow<Boolean> = combine(
+        allMissedCallRows,
+        _currentPage,
+        missedCallsPerPage
+    ) { all, page, perPage ->
+        val start = (page + 1) * perPage
+        start < all.size
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun nextPage() {
+        _currentPage.value++
+    }
+
+    /** Called when [rowsThatFit] is measured from the list viewport (includes caption line below each row). */
+    fun setMissedCallsPerPageFromLayout(perPage: Int) {
+        val v = perPage.coerceIn(1, 50)
+        if (_missedCallsPerPageOverride.value != v) {
+            _missedCallsPerPageOverride.value = v
+        }
+    }
+
+    /** @return true if back was consumed (previous page); false if caller should pop. */
+    fun goBackWithinList(): Boolean {
+        val p = _currentPage.value
+        if (p <= 0) return false
+        _currentPage.value = p - 1
+        return true
+    }
 
     val listTextAlignment: StateFlow<ListTextAlignment> = settingsRepository.getSettings()
         .map { settings -> settings.listTextAlignment }

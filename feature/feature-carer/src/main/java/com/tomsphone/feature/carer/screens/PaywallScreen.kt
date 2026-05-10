@@ -45,7 +45,7 @@ private fun ProductDetails.formattedOneTimePrice(): String? {
 
 /**
  * Shown after the one-month trial when the user has not purchased.
- * Marketing copy references £20 / £15; Play Console formatted price is shown when loaded.
+ * Play Console formatted price is shown when loaded (product IDs from app BuildConfig).
  */
 @Composable
 fun PaywallScreen(
@@ -103,8 +103,7 @@ fun PaywallScreen(
                 )
 
                 Text(
-                    text = "Suggested prices: £20 standard lifetime, £15 early adopter (while that offer is available in Play). " +
-                        "The buttons below use your Play Store prices.",
+                    text = "The purchase button uses the price from Google Play for your lifetime product.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.75f)
                 )
@@ -138,7 +137,7 @@ fun PaywallScreen(
                 ) {
                     val price = standardPd?.formattedOneTimePrice()
                     Text(
-                        text = if (price != null) "Lifetime — $price" else "Lifetime (standard)",
+                        text = if (price != null) "Lifetime unlock — $price" else "Lifetime unlock",
                         style = MaterialTheme.typography.titleMedium
                     )
                 }

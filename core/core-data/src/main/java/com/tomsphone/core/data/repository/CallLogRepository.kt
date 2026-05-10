@@ -1,6 +1,7 @@
 package com.tomsphone.core.data.repository
 
 import com.tomsphone.core.data.model.CallLogEntry
+import com.tomsphone.core.data.model.Contact
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -42,5 +43,11 @@ interface CallLogRepository {
 
     /** Clear all call history rows (e.g. after transfer import so IDs stay consistent). */
     suspend fun deleteAllCallLogs(): Result<Unit>
+
+    /**
+     * After a contact is saved or renamed: refresh [contactName] on rows already tied to [contact.id],
+     * and link orphan rows (no contact id) whose phone matches [contact.phoneNumber].
+     */
+    suspend fun syncCallLogsWithContact(contact: Contact): Result<Unit>
 }
 

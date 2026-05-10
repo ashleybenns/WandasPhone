@@ -50,6 +50,7 @@ class PaywallViewModel @Inject constructor(
     }
 
     fun launchEarlyAdopterPurchase(activity: Activity) {
+        if (skuConfig.earlyAdopterLifetimeProductId.isBlank()) return
         billingCoordinator.launchPurchaseFlow(activity, skuConfig.earlyAdopterLifetimeProductId)
     }
 

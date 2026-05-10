@@ -30,12 +30,6 @@ import java.security.MessageDigest
 import javax.inject.Inject
 
 /**
- * When true, carer settings are shown without requiring PIN entry.
- * Set to false to re-enable PIN protection.
- */
-private const val BYPASS_PIN = true
-
-/**
  * ViewModel for carer configuration
  * 
  * Allows carers to:
@@ -82,21 +76,19 @@ class CarerSettingsViewModel @Inject constructor(
             initialValue = emptyList()
         )
     
-    // PIN verification state
+    // PIN verification state (each visit to carer mode requires PIN unless already verified this session)
     private val _isPinVerified = MutableStateFlow(false)
-    val isPinVerified: StateFlow<Boolean> = if (BYPASS_PIN) {
-        MutableStateFlow(true).asStateFlow()
-    } else {
-        _isPinVerified.asStateFlow()
-    }
-    
-    // UI state
+    val isPinVerified: StateFlow<Boolean> = _isPinVerified.asStateFlow()
+
     private val _showPinDialog = MutableStateFlow(true)
-    val showPinDialog: StateFlow<Boolean> = if (BYPASS_PIN) {
-        MutableStateFlow(false).asStateFlow()
-    } else {
-        _showPinDialog.asStateFlow()
-    }
+    val showPinDialog: StateFlow<Boolean> = _showPinDialog.asStateFlow()
+
+    val hasCarerPin: StateFlow<Boolean> = settingsRepository.hasCarerPin()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
     
     /**
      * Get onboarding tip for a setting.
@@ -126,25 +118,96 @@ class CarerSettingsViewModel @Inject constructor(
     fun verifyPin(pin: String) {
         viewModelScope.launch {
             val hashedPin = hashPin(pin)
-            val currentSettings = settings.first()
-            
-            // If no PIN set yet, accept any 4-digit PIN and save it
-            if (currentSettings.carerPin.isEmpty()) {
-                if (pin.length == 4) {
-                    settingsRepository.setPin(hashedPin)
-                    _isPinVerified.value = true
-                    _showPinDialog.value = false
-                    // Track carer settings opened
-                    analytics.logEvent(AnalyticsEvent.CarerSettingsOpened)
+            if (pin.length != 4) return@launch
+
+            val pinExists = settingsRepository.hasCarerPin().first()
+            if (!pinExists) {
+                settingsRepository.setPin(hashedPin)
+                _isPinVerified.value = true
+                _showPinDialog.value = false
+                analytics.logEvent(AnalyticsEvent.CarerSettingsOpened)
+                return@launch
+            }
+            if (settingsRepository.verifyPin(hashedPin)) {
+                _isPinVerified.value = true
+                _showPinDialog.value = false
+                analytics.logEvent(AnalyticsEvent.CarerSettingsOpened)
+            }
+        }
+    }
+
+    /**
+     * Set or change the assistant PIN from settings. [currentPin] ignored when no PIN exists yet.
+     */
+    fun updateCarerPinFromSettings(
+        currentPin: String,
+        newPin: String,
+        confirmPin: String,
+        onResult: (ok: Boolean, message: String?) -> Unit,
+    ) {
+        viewModelScope.launch {
+            if (newPin.length != 4 || confirmPin.length != 4) {
+                onResult(false, "PIN must be exactly 4 digits")
+                return@launch
+            }
+            if (newPin != confirmPin) {
+                onResult(false, "New PIN and confirmation do not match")
+                return@launch
+            }
+            val pinExists = settingsRepository.hasCarerPin().first()
+            if (pinExists) {
+                if (currentPin.length != 4) {
+                    onResult(false, "Enter your current 4-digit PIN")
+                    return@launch
                 }
+                if (!settingsRepository.verifyPin(hashPin(currentPin))) {
+                    onResult(false, "Current PIN is incorrect")
+                    return@launch
+                }
+            }
+            settingsRepository.setPin(hashPin(newPin))
+            val latest = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(latest.copy(assistantPinRequired = true))
+            onResult(true, null)
+        }
+    }
+
+    /**
+     * Enter Assistant settings without a PIN when [CarerSettings.assistantPinRequired] is false.
+     */
+    fun enterCarerIfPinNotRequired() {
+        viewModelScope.launch {
+            _isPinVerified.value = true
+            _showPinDialog.value = false
+            analytics.logEvent(AnalyticsEvent.CarerSettingsOpened)
+        }
+    }
+
+    /**
+     * First-time (or any visit with no PIN): decline a PIN and rely on tap sequence only.
+     */
+    fun skipAssistantPinSetup() {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(assistantPinRequired = false))
+            _isPinVerified.value = true
+            _showPinDialog.value = false
+        }
+    }
+
+    /**
+     * Toggle whether a PIN is asked when opening Assistant settings.
+     * Turning off clears any stored PIN.
+     */
+    fun setAssistantPinRequired(required: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            if (!required) {
+                settingsRepository.updateSettings(
+                    current.copy(assistantPinRequired = false, carerPin = "")
+                )
             } else {
-                // Verify against stored PIN
-                if (settingsRepository.verifyPin(hashedPin)) {
-                    _isPinVerified.value = true
-                    _showPinDialog.value = false
-                    // Track carer settings opened
-                    analytics.logEvent(AnalyticsEvent.CarerSettingsOpened)
-                }
+                settingsRepository.updateSettings(current.copy(assistantPinRequired = true))
             }
         }
     }
@@ -259,11 +322,13 @@ class CarerSettingsViewModel @Inject constructor(
                 if (result.isSuccess) {
                     val newId = result.getOrNull() ?: return@launch
                     analytics.logEvent(AnalyticsEvent.ContactAdded(contactType = contactType))
+                    callLogRepository.syncCallLogsWithContact(contactToSave.copy(id = newId))
                     onNewContactSaved(newId)
                 }
             } else {
                 contactRepository.updateContact(contact)
                 analytics.logEvent(AnalyticsEvent.ContactEdited(contactType = contactType))
+                callLogRepository.syncCallLogsWithContact(contact)
             }
         }
     }
@@ -603,6 +668,22 @@ class CarerSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val current = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(current.copy(emergencyTestMode = enabled))
+        }
+    }
+
+    /** SMS all assistants when SOS is pressed (optional; requires SEND_SMS). */
+    fun setSosSmsNotifyAssistantsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(sosSmsNotifyAssistantsEnabled = enabled))
+        }
+    }
+
+    /** Custom SOS SMS body; empty uses default. Placeholders: {userName}, {name}. */
+    fun setSosSmsNotifyAssistantsMessage(message: String) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettings().first()
+            settingsRepository.updateSettings(current.copy(sosSmsNotifyAssistantsMessage = message))
         }
     }
     

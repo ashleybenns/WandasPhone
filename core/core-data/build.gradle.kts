@@ -36,6 +36,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:core-config"))
+
     // AndroidX
     implementation(libs.androidx.core.ktx)
     

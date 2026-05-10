@@ -4,17 +4,22 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -30,78 +35,150 @@ import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.components.ListScreenLayout
 import com.tomsphone.core.ui.theme.PastelColors
 import com.tomsphone.core.ui.theme.ScaledDimensions
-import com.tomsphone.core.ui.theme.WandasDimensions
 import com.tomsphone.core.ui.theme.wandasColors
+import com.tomsphone.core.ui.theme.WandasDimensions
 import java.text.SimpleDateFormat
 import java.util.*
 
 private const val INACTIVITY_TIMEOUT_MS = 30_000L
 
-/** Unknown / not-in-app number (call was allowed through screening) — solid blue row, white label. */
+/** Extra vertical space per entry: gap + single caption line below the call button (not tappable). */
+private val MISSED_ENTRY_BELOW_BUTTON_DP = 30.dp
+
+/** Unknown / not-in-app number — solid blue row, white label. */
 private val UnknownAllowedRowBlue = Color(0xFF1976D2)
 
 /**
- * **Missed calls list** (two-tap home button): **one row per caller** with an outstanding missed/declined
- * call; returning a call removes that caller. Rows use each contact’s button colour; unknown allowed numbers use blue.
+ * **Missed calls list**: paginated like [ContactsListScreen]; call buttons match home row height;
+ * a smaller non-interactive “how long ago” line sits below each button. Like [ContactsListScreen],
+ * there is no list title when there are entries; when empty, “No missed calls” is shown in the content area.
  */
 @Composable
 fun MissedCallsListScreen(
     onBack: () -> Unit,
     onCallContact: (String, String) -> Unit,
-    onAddToContacts: (String) -> Unit = {},
     onAddBlockedToApp: (String, String?) -> Unit = { _, _ -> },
-    viewModel: MissedCallsListViewModel = hiltViewModel()
+    viewModel: MissedCallsListViewModel = hiltViewModel(),
 ) {
     val missedCallRows by viewModel.missedCallRows.collectAsState()
+    val isMissedCallsEmpty by viewModel.isMissedCallsEmpty.collectAsState()
+    val hasNextPage by viewModel.hasNextPage.collectAsState()
     val listTextAlignment by viewModel.listTextAlignment.collectAsState()
     val buttonActivation by viewModel.buttonActivation.collectAsState()
     val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
     val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
     val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
     val homeRowCount by viewModel.homeButtonRowCountForLayout.collectAsState()
-    val callRowHeight = ScaledDimensions.homeContactRowInnerHeight(homeRowCount)
 
-    SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onBack) {
-    ListScreenLayout(
-        backgroundColor = PastelColors.lightBlue,
-        title = "Missed calls",
-        emptyMessage = "No missed calls",
-        isEmpty = missedCallRows.isEmpty(),
-        onBack = onBack,
-        activationPreset = buttonActivation,
-        debounceMs = touchDebounceMs,
-        accumulatedThresholdMs = accumulatedThresholdMs,
-        accumulatedTimeoutMs = accumulatedTimeoutMs
-    ) {
-        missedCallRows.forEach { row ->
-            val call = row.call
-            MissedCallListItem(
-                contact = row.contact,
-                mainLabel = call.contactName ?: call.phoneNumber,
-                timestamp = call.timestamp,
-                callRowHeight = callRowHeight,
-                textAlignment = listTextAlignment,
-                activationPreset = buttonActivation,
-                debounceMs = touchDebounceMs,
-                accumulatedThresholdMs = accumulatedThresholdMs,
-                accumulatedTimeoutMs = accumulatedTimeoutMs,
-                onCall = {
-                    val label = call.contactName ?: call.phoneNumber
-                    onCallContact(label, call.phoneNumber)
-                },
-                onAddToDeviceContacts = if (row.contact == null && call.type != CallType.BLOCKED) {
-                    { onAddToContacts(call.phoneNumber) }
-                } else {
-                    null
-                },
-                onAddBlockedToApp = if (call.contactId == null && call.type == CallType.BLOCKED) {
-                    { onAddBlockedToApp(call.phoneNumber, call.contactName) }
-                } else {
-                    null
-                }
-            )
+    val density = LocalDensity.current
+    var listViewportHeightPx by remember { mutableIntStateOf(0) }
+
+    val rowSlotHeightDp =
+        ScaledDimensions.homeContactRowInnerHeight(homeRowCount) + 8.dp
+    val rowSlotHeightPx = with(density) { rowSlotHeightDp.roundToPx() }.coerceAtLeast(1)
+    val entrySlotDp = rowSlotHeightDp + MISSED_ENTRY_BELOW_BUTTON_DP
+    val entrySlotHeightPx = with(density) { entrySlotDp.roundToPx() }.coerceAtLeast(1)
+
+    val rowsThatFit = remember(listViewportHeightPx, entrySlotHeightPx) {
+        if (listViewportHeightPx <= 0) return@remember 0
+        (listViewportHeightPx / entrySlotHeightPx).coerceAtLeast(1)
+    }
+
+    LaunchedEffect(rowsThatFit) {
+        if (rowsThatFit > 0) {
+            viewModel.setMissedCallsPerPageFromLayout(rowsThatFit)
         }
     }
+
+    val handleBack = {
+        if (!viewModel.goBackWithinList()) {
+            onBack()
+        }
+    }
+
+    SecondaryScreenIdleEffect(timeoutMs = INACTIVITY_TIMEOUT_MS, onTimeout = onBack) {
+        ListScreenLayout(
+            backgroundColor = PastelColors.lightBlue,
+            title = "",
+            emptyMessage = "No missed calls",
+            isEmpty = isMissedCallsEmpty,
+            onBack = handleBack,
+            contentScrollable = false,
+            activationPreset = buttonActivation,
+            debounceMs = touchDebounceMs,
+            accumulatedThresholdMs = accumulatedThresholdMs,
+            accumulatedTimeoutMs = accumulatedTimeoutMs,
+            listVerticalArrangement = Arrangement.Top,
+            listViewportModifier = Modifier.onSizeChanged { listViewportHeightPx = it.height },
+            footer = {
+                if (hasNextPage) {
+                    MissedCallsNextPageButton(
+                        activationPreset = buttonActivation,
+                        debounceMs = touchDebounceMs,
+                        accumulatedThresholdMs = accumulatedThresholdMs,
+                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                        onClick = { viewModel.nextPage() },
+                    )
+                } else {
+                    Box(modifier = Modifier.alpha(0f)) {
+                        MissedCallsNextPageButton(
+                            activationPreset = buttonActivation,
+                            debounceMs = touchDebounceMs,
+                            accumulatedThresholdMs = accumulatedThresholdMs,
+                            accumulatedTimeoutMs = accumulatedTimeoutMs,
+                            onClick = {},
+                        )
+                    }
+                }
+            },
+        ) {
+            if (isMissedCallsEmpty) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "No missed calls",
+                        style =
+                            TextStyle(
+                                fontSize = ScaledDimensions.contactNameTextSize,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                        color = Color.Black,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            } else {
+                missedCallRows.forEach { row ->
+                    val call = row.call
+                    MissedCallListItem(
+                        contact = row.contact,
+                        mainLabel = call.contactName ?: call.phoneNumber,
+                        timestamp = call.timestamp,
+                        rowSlotHeightDp = rowSlotHeightDp,
+                        textAlignment = listTextAlignment,
+                        activationPreset = buttonActivation,
+                        debounceMs = touchDebounceMs,
+                        accumulatedThresholdMs = accumulatedThresholdMs,
+                        accumulatedTimeoutMs = accumulatedTimeoutMs,
+                        onCall = {
+                            val label = call.contactName ?: call.phoneNumber
+                            onCallContact(label, call.phoneNumber)
+                        },
+                        onAddBlockedToApp =
+                            if (call.contactId == null && call.type == CallType.BLOCKED) {
+                                { onAddBlockedToApp(call.phoneNumber, call.contactName) }
+                            } else {
+                                null
+                            },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -110,19 +187,18 @@ private fun MissedCallListItem(
     contact: Contact?,
     mainLabel: String,
     timestamp: Long,
-    callRowHeight: Dp,
+    rowSlotHeightDp: Dp,
     textAlignment: ListTextAlignment,
     activationPreset: ButtonActivationPreset,
     debounceMs: Int,
     accumulatedThresholdMs: Int,
     accumulatedTimeoutMs: Int,
     onCall: () -> Unit,
-    onAddToDeviceContacts: (() -> Unit)?,
-    onAddBlockedToApp: (() -> Unit)?
+    onAddBlockedToApp: (() -> Unit)?,
 ) {
     val nameMaxSize = ScaledDimensions.contactNameTextSize
+    val captionSizeSp = (nameMaxSize.value * 0.72f).sp
     val timeText = formatRelativeTimeMissed(timestamp)
-    val timeFontSp = nameMaxSize.value * 0.72f
     val rowColors = missedCallRowColors(contact)
 
     val boxAlignment = when (textAlignment) {
@@ -142,62 +218,76 @@ private fun MissedCallListItem(
 
     Column(
         horizontalAlignment = columnAlignment,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(callRowHeight)
-                .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                .indication(callInteractionSource, rememberRipple())
-                .activationGesture(
-                    preset = activationPreset,
-                    debounceMs = debounceMs,
-                    accumulatedThresholdMs = accumulatedThresholdMs,
-                    accumulatedTimeoutMs = accumulatedTimeoutMs,
-                    onActivate = onCall,
-                    interactionSource = callInteractionSource
-                ),
-            color = rowColors.background,
-            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
+        Column(
+            horizontalAlignment = columnAlignment,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalAlignment = columnAlignment
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(rowSlotHeightDp)
+                        .padding(vertical = 4.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = boxAlignment
+                Surface(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                            .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                            .indication(callInteractionSource, rememberRipple())
+                            .activationGesture(
+                                preset = activationPreset,
+                                debounceMs = debounceMs,
+                                accumulatedThresholdMs = accumulatedThresholdMs,
+                                accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                onActivate = onCall,
+                                interactionSource = callInteractionSource,
+                            ),
+                    color = rowColors.background,
+                    shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
                 ) {
-                    FittedLabelInBox(
-                        text = mainLabel,
-                        color = rowColors.onBackground,
-                        textAlign = textAlign,
-                        maxFontSize = nameMaxSize,
-                        modifier = Modifier.fillMaxSize(),
-                        maxLines = 2,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = boxAlignment,
+                    ) {
+                        FittedLabelInBox(
+                            text = mainLabel,
+                            color = rowColors.onBackground,
+                            textAlign = textAlign,
+                            maxFontSize = nameMaxSize,
+                            modifier = Modifier.fillMaxSize(),
+                            maxLines = 2,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
-                Text(
-                    text = timeText,
-                    style = TextStyle(
-                        fontSize = timeFontSp.sp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = timeFontSp.sp
-                    ),
-                    color = rowColors.onBackground.copy(alpha = 0.88f),
-                    textAlign = textAlign,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
+
+            Text(
+                text = timeText,
+                style =
+                    TextStyle(
+                        fontSize = captionSizeSp,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = captionSizeSp * 1.15f,
+                    ),
+                color = Color.Black.copy(alpha = 0.62f),
+                textAlign = textAlign,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -205,29 +295,31 @@ private fun MissedCallListItem(
         if (onAddBlockedToApp != null) {
             val addBlockedInteraction = remember { MutableInteractionSource() }
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(callRowHeight)
-                    .padding(bottom = 8.dp)
-                    .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                    .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                    .indication(addBlockedInteraction, rememberRipple())
-                    .activationGesture(
-                        preset = activationPreset,
-                        debounceMs = debounceMs,
-                        accumulatedThresholdMs = accumulatedThresholdMs,
-                        accumulatedTimeoutMs = accumulatedTimeoutMs,
-                        onActivate = onAddBlockedToApp,
-                        interactionSource = addBlockedInteraction
-                    ),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(rowSlotHeightDp)
+                        .padding(bottom = 8.dp)
+                        .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                        .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                        .indication(addBlockedInteraction, rememberRipple())
+                        .activationGesture(
+                            preset = activationPreset,
+                            debounceMs = debounceMs,
+                            accumulatedThresholdMs = accumulatedThresholdMs,
+                            accumulatedTimeoutMs = accumulatedTimeoutMs,
+                            onActivate = onAddBlockedToApp,
+                            interactionSource = addBlockedInteraction,
+                        ),
                 color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
+                shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = boxAlignment
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = boxAlignment,
                 ) {
                     FittedLabelInBox(
                         text = "Add to Contacts or Assistants (in this app)",
@@ -236,46 +328,7 @@ private fun MissedCallListItem(
                         maxFontSize = nameMaxSize,
                         modifier = Modifier.fillMaxSize(),
                         maxLines = 2,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-        if (onAddToDeviceContacts != null) {
-            val addInteraction = remember { MutableInteractionSource() }
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(callRowHeight)
-                    .padding(bottom = 8.dp)
-                    .shadow(WandasDimensions.ElevationMedium, RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                    .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                    .indication(addInteraction, rememberRipple())
-                    .activationGesture(
-                        preset = activationPreset,
-                        debounceMs = debounceMs,
-                        accumulatedThresholdMs = accumulatedThresholdMs,
-                        accumulatedTimeoutMs = accumulatedTimeoutMs,
-                        onActivate = onAddToDeviceContacts,
-                        interactionSource = addInteraction
-                    ),
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = boxAlignment
-                ) {
-                    FittedLabelInBox(
-                        text = "Add to phone contacts",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = textAlign,
-                        maxFontSize = nameMaxSize,
-                        modifier = Modifier.fillMaxSize(),
-                        maxLines = 2,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -318,5 +371,54 @@ private fun formatRelativeTimeMissed(timestamp: Long): String {
             val dateFormat = SimpleDateFormat("MMM d", Locale.getDefault())
             dateFormat.format(Date(timestamp))
         }
+    }
+}
+
+@Composable
+private fun MissedCallsNextPageButton(
+    activationPreset: ButtonActivationPreset,
+    debounceMs: Int,
+    accumulatedThresholdMs: Int,
+    accumulatedTimeoutMs: Int,
+    onClick: () -> Unit,
+) {
+    val headerTextSize = ScaledDimensions.contactNameTextSize
+    val iconSize = headerTextSize.value.dp * 1.2f
+
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .indication(interactionSource, rememberRipple())
+                .activationGesture(
+                    preset = activationPreset,
+                    debounceMs = debounceMs,
+                    accumulatedThresholdMs = accumulatedThresholdMs,
+                    accumulatedTimeoutMs = accumulatedTimeoutMs,
+                    onActivate = onClick,
+                    interactionSource = interactionSource,
+                )
+                .padding(top = 8.dp, bottom = 20.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Next",
+            style =
+                TextStyle(
+                    fontSize = headerTextSize,
+                    fontWeight = FontWeight.Bold,
+                ),
+            color = Color.Black,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = "Next",
+            tint = Color.Black,
+            modifier = Modifier.size(iconSize),
+        )
     }
 }

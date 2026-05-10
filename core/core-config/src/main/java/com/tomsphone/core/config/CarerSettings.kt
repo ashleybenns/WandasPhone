@@ -8,11 +8,9 @@ import kotlinx.serialization.Serializable
  * User never sees or changes these settings.
  * Only accessible via PIN-protected carer mode.
  * 
- * SECURITY: Default values are designed for FACTORY RESET scenarios.
- * When the app is reset or newly installed, these defaults ensure:
- * - No automatic call answering (privacy protection)
- * - No access to previous user's data
- * - Safe, accessible configuration
+ * First-install defaults are tuned for **developer/demo testing** (visible home buttons,
+ * readable medical placeholders). Production carers should still review every field
+ * (PIN, emergency numbers, medical text, contacts) before handing the phone to a user.
  * 
  * Settings are organized into logical groups:
  * - User identity
@@ -25,8 +23,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CarerSettings(
     // ========== USER IDENTITY ==========
-    // Default: Generic name, carer should personalize
-    val userName: String = "User",
+    val userName: String = "Tom",
     /** Reserved for future remote / corporate tier; not used for current product gating. */
     val featureLevel: FeatureLevel = FeatureLevel.BASIC,
     
@@ -35,7 +32,7 @@ data class CarerSettings(
     val homeMaxButtons: Int = 6,                    // 1-6 contact buttons on home screen
     val homeShowEmergencyButton: Boolean = true,    // SAFE: Emergency always visible
     /** Mirrored from [homeSlotAssignments] when layout is saved (legacy path until 7 slots exist). */
-    val homeShowMissedCallsButton: Boolean = false,
+    val homeShowMissedCallsButton: Boolean = true,
     val homeShowContactsListButton: Boolean = false,
     val homeShowDialerButton: Boolean = false,
     val homeMissedCallsButtonColor: Long? = null,   // ARGB, null = theme default
@@ -59,13 +56,13 @@ data class CarerSettings(
     val autoAnswerDelaySeconds: Int = 3,  // 1-10 seconds before auto-answer
     // ACCESSIBILITY: Speakerphone on by default for ease of use
     val speakerphoneAlwaysOn: Boolean = true,
-    val speakerVolume: Int = 80,  // 0-100 percent
+    val speakerVolume: Int = 100,  // 0-100 percent
     // LEVEL 2: Speaker toggle button on call screens
     // Allows user to switch speaker on/off during calls (double-tap to prevent accidents)
     val showSpeakerButton: Boolean = false,  // Level 2+: Show speaker toggle button
     val speakerDefaultOn: Boolean = true,    // Default speaker state at call start
-    // SAFETY: Reject unknown calls by default (scam protection)
-    val rejectUnknownCalls: Boolean = true,
+    /** When true, unknown numbers are rejected at screening. False = allow unknown callers. */
+    val rejectUnknownCalls: Boolean = false,
     
     // ========== MISSED CALL NAGGING ==========
     // SAFE: Reminders on - helps user return important calls
@@ -89,7 +86,10 @@ data class CarerSettings(
     
     // ========== UI APPEARANCE ==========
     // Default: High contrast for accessibility
-    val ui: UIConfig = UIConfig(),
+    val ui: UIConfig = UIConfig(
+        theme = ThemeOption.HIGH_CONTRAST_LIGHT,
+        userTextSize = UserTextSize.MEDIUM,
+    ),
     // LEVEL 1: Text alignment for list screens (contacts, missed calls)
     // Left-aligned is easier to scan, center looks more balanced
     val listTextAlignment: ListTextAlignment = ListTextAlignment.CENTER,
@@ -108,8 +108,14 @@ data class CarerSettings(
     val ringtoneVolume: Int = 100,  // Full volume
     
     // ========== SAFETY & SECURITY ==========
-    // SECURITY: No PIN set - carer must create one on first access
+    // SECURITY: No PIN set until the carer chooses to save one
     val carerPin: String = "",
+    /**
+     * When true, opening Assistant settings shows the PIN step (or first-time choice to set a PIN).
+     * When false, only the clock tap sequence is required; the carer accepts weaker protection.
+     * Defaults true so existing installs keep PIN behaviour when the field was absent from JSON.
+     */
+    val assistantPinRequired: Boolean = true,
     // Hidden access: 7 taps on clock (not obvious to user)
     val settingsAccessTapCount: Int = 7,
     val inactivityTimeoutSeconds: Int = 120,  // Return to home after inactivity
@@ -121,17 +127,29 @@ data class CarerSettings(
     val emergencyTapCount: Int = 3,
     // SAFETY: Test mode ON by default - prevents accidental real calls during setup
     val emergencyTestMode: Boolean = true,
+    /**
+     * When true, pressing SOS immediately texts every assistant ([ContactType.CARER] with a stored number)
+     * so they know the user started an emergency flow even if the call is not completed.
+     * Requires SEND_SMS permission (same as battery alerts).
+     */
+    val sosSmsNotifyAssistantsEnabled: Boolean = true,
+    /**
+     * Optional SMS body. Empty = built-in English message including the user’s name.
+     * You may use `{userName}` or `{name}` as placeholders.
+     */
+    val sosSmsNotifyAssistantsMessage: String = "",
     
     // ========== USER EMERGENCY INFO ==========
     // Displayed during emergency call for attending EMTs
     val userPhotoUri: String? = null,       // Photo for EMT verification
-    val userSurname: String = "",            // Surname for ID verification
-    val userAddress: String = "",            // Where to find the user
-    val userBloodType: String = "",          // A+, B-, O+, etc.
-    val userAllergies: String = "",          // Drug/food allergies
-    val userMedications: String = "",        // Current medications
-    val userMedicalConditions: String = "",  // Relevant conditions (dementia, diabetes, etc.)
-    val userEmergencyNotes: String = "",     // Any other info for EMTs
+    val userSurname: String = "— Update in User Profile —",
+    val userAddress: String = "Sample: 1 Demo Street (replace with the user’s real address).",
+    val userBloodType: String = "— Not set — (e.g. O+, A−)",
+    val userAllergies: String = "Example: none recorded — replace with real allergies or “None”.",
+    val userMedications: String = "Example: none listed — replace with current medicines.",
+    val userMedicalConditions: String = "Example: placeholder only — add conditions carers and medics should know.",
+    val userEmergencyNotes: String = "DEMO / NOT REAL — Replace with this user’s real information before use. " +
+        "Use this space for GP surgery, key contacts, mobility, DNACPR or communication needs.",
     
     // Emergency contacts - people to notify in an emergency (not 999)
     val emergencyContact1Name: String = "",

@@ -26,6 +26,7 @@ import com.tomsphone.feature.carer.components.CarerMenuButton
 @Composable
 fun CarerMainMenuScreen(
     onNavigateToTomsPhoneDescription: () -> Unit,
+    onNavigateToAssistantPin: () -> Unit,
     onNavigateToUserProfile: () -> Unit,
     onNavigateToContactsHub: () -> Unit,
     onNavigateToCallHandling: () -> Unit,
@@ -77,6 +78,11 @@ fun CarerMainMenuScreen(
                     title = "User Profile",
                     description = "User Name, Emergency, Medical info, Photo",
                     onClick = onNavigateToUserProfile
+                )
+                CarerMenuButton(
+                    title = "Assistant PIN",
+                    description = "Turn PIN requirement on or off; set or change the 4-digit PIN",
+                    onClick = onNavigateToAssistantPin
                 )
                 CarerMenuButton(
                     title = "Home Screen Layout",
@@ -173,7 +179,7 @@ fun CarerMainMenuScreen(
                 }
 
                 Text(
-                    text = "Unpin (if needed) and close",
+                    text = "Opens Default apps — check Phone app and Home app; unpin if needed",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.padding(top = 4.dp)

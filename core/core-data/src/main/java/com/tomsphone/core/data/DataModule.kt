@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.tomsphone.core.data.local.LocalCallLogRepository
 import com.tomsphone.core.data.local.LocalContactRepository
 import com.tomsphone.core.data.local.WandasDatabase
-import com.tomsphone.core.data.local.entity.ContactEntity
+import com.tomsphone.core.config.ButtonColor
 import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.ContactRepository
 import dagger.Binds
@@ -67,41 +67,29 @@ abstract class DataModule {
 }
 
 /**
- * Seeds the database with test contacts on first creation.
- * 
- * SECURITY NOTE:
- * - Only seeds test contacts in DEBUG builds
- * - Production builds start with empty database
- * - Carer adds contacts via settings
+ * Seeds the database with demo contacts on first DB creation (debug only).
+ * Release builds start with an empty contact table; carers add real contacts in settings.
  */
 private class SeedDatabaseCallback : RoomDatabase.Callback() {
     override fun onCreate(db: SupportSQLiteDatabase) {
         super.onCreate(db)
         
-        // Only seed test data in debug builds
-        // Production builds start completely empty for security
         if (!com.tomsphone.core.data.BuildConfig.DEBUG) {
             return
         }
         
         val now = System.currentTimeMillis()
-        
-        // DEBUG ONLY: Test contacts
-        // 1. Ashley - 07597086211 - CARER (main test contact)
-        // 2. Dev - 07510940646 - CARER (second test contact)
-        
-        // Seed contacts with all columns including new button config fields
-        // Columns: name, phoneNumber, photoUri, priority, contactType, createdAt, updatedAt,
-        //          buttonColor, autoAnswerEnabled, buttonPosition, isHalfWidth
+        val orange = ButtonColor.ORANGE.argb
+        val purple = ButtonColor.PURPLE.argb
         
         db.execSQL(
             "INSERT INTO contacts (name, phoneNumber, photoUri, priority, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, notifyBatteryAlerts, buttonPosition, isHalfWidth) " +
-            "VALUES ('Ashley', '07597086211', NULL, 1, 'CARER', $now, $now, NULL, 0, 0, 0, 0)"
+            "VALUES ('Ashley', '07597086211', NULL, 1, 'CARER', $now, $now, $orange, 0, 1, 0, 0)"
         )
         
         db.execSQL(
             "INSERT INTO contacts (name, phoneNumber, photoUri, priority, contactType, createdAt, updatedAt, buttonColor, autoAnswerEnabled, notifyBatteryAlerts, buttonPosition, isHalfWidth) " +
-            "VALUES ('Dev', '07510940646', NULL, 2, 'CARER', $now, $now, NULL, 0, 0, 1, 0)"
+            "VALUES ('Jane', '07510940646', NULL, 2, 'CARER', $now, $now, $purple, 0, 1, 1, 0)"
         )
     }
 }

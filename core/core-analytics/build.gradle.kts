@@ -34,11 +34,20 @@ dependencies {
     // AndroidX
     implementation(libs.androidx.core.ktx)
     
-    // Firebase
+    // Firebase — exclude Privacy Sandbox ads artifacts pulled by measurement SDK
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
-    implementation(libs.firebase.crashlytics)
-    implementation(libs.firebase.config)
+    implementation(libs.firebase.analytics) {
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices")
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices-java")
+    }
+    implementation(libs.firebase.crashlytics) {
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices")
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices-java")
+    }
+    implementation(libs.firebase.config) {
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices")
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices-java")
+    }
     
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)

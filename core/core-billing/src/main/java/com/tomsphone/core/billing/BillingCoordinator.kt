@@ -105,16 +105,30 @@ class BillingCoordinator @Inject constructor(
 
     private fun queryProductDetails() {
         val client = billingClient ?: return
-        val productList = listOf(
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(skuConfig.standardLifetimeProductId)
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build(),
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(skuConfig.earlyAdopterLifetimeProductId)
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build()
-        )
+        val productList = buildList {
+            if (skuConfig.standardLifetimeProductId.isNotBlank()) {
+                add(
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(skuConfig.standardLifetimeProductId)
+                        .setProductType(BillingClient.ProductType.INAPP)
+                        .build(),
+                )
+            }
+            if (skuConfig.earlyAdopterLifetimeProductId.isNotBlank() &&
+                skuConfig.earlyAdopterLifetimeProductId != skuConfig.standardLifetimeProductId
+            ) {
+                add(
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(skuConfig.earlyAdopterLifetimeProductId)
+                        .setProductType(BillingClient.ProductType.INAPP)
+                        .build(),
+                )
+            }
+        }
+        if (productList.isEmpty()) {
+            Log.w(TAG, "queryProductDetails: no product IDs configured")
+            return
+        }
         val params = QueryProductDetailsParams.newBuilder().setProductList(productList).build()
         client.queryProductDetailsAsync(params) { billingResult, list ->
             if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
@@ -143,9 +157,11 @@ class BillingCoordinator @Inject constructor(
     private fun handlePurchase(purchase: Purchase) {
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
         val productId = purchase.products.firstOrNull() ?: return
-        if (productId != skuConfig.standardLifetimeProductId &&
-            productId != skuConfig.earlyAdopterLifetimeProductId
-        ) {
+        val matchesStandard = productId == skuConfig.standardLifetimeProductId
+        val matchesEarly =
+            skuConfig.earlyAdopterLifetimeProductId.isNotBlank() &&
+                productId == skuConfig.earlyAdopterLifetimeProductId
+        if (!matchesStandard && !matchesEarly) {
             return
         }
         val client = billingClient ?: return

@@ -154,7 +154,7 @@ fun ContactButton(
  * 
  * Shows tap progress when user starts tapping (e.g., "1 / 3", "2 / 3")
  * 
- * @param text Main button text (e.g., "Emergency")
+ * @param text Main button text (e.g., "SOS")
  * @param subtitle Optional subtitle (e.g., "Press 3 times") - shown when tapCount is 0
  * @param tapCount Current number of taps registered (0 = no taps yet)
  * @param requiredTaps Total taps required to activate (default 3)
@@ -218,21 +218,16 @@ fun EmergencyButton(
     }
 }
 
+private val SETTINGS_ACCESS_SIZE_MIN = 48.dp
+private val SETTINGS_ACCESS_SIZE_MAX = 72.dp
+private const val SETTINGS_ACCESS_SIZE_FRACTION = 0.62f
+
 /**
- * Settings access button - square button with settings icon
- * 
- * Requires 7-10 taps to activate (countdown from 7)
- * More than 10 taps cancels and resets
- * 
- * Design:
- * - Square (width = height = emergency button height)
- * - Solid grey background
- * - Settings gear icon
- * - Shows countdown number after first tap
- * - Rounded corners matching emergency button
- * 
- * @param onSettingsAccess Called when 7-10 taps are registered within timeout
- * @param activationPreset How each individual tap is recognized
+ * Settings access button — compact square for assistants (carer settings entry).
+ *
+ * Requires 7–10 taps to activate (countdown from 7); more than 10 taps cancels.
+ *
+ * Square side length scales with SOS row height but is capped so it stays visually secondary to SOS.
  */
 @Composable
 fun SettingsAccessButton(
@@ -243,8 +238,10 @@ fun SettingsAccessButton(
     accumulatedThresholdMs: Int = 500,
     accumulatedTimeoutMs: Int = 3000
 ) {
-    // Square button - size is emergency button height
-    val buttonSize = ScaledDimensions.emergencyButtonHeight
+    val emergencyH = ScaledDimensions.emergencyButtonHeight
+    val scaledSquare = emergencyH * SETTINGS_ACCESS_SIZE_FRACTION
+    val buttonSize =
+        maxOf(SETTINGS_ACCESS_SIZE_MIN, minOf(scaledSquare, SETTINGS_ACCESS_SIZE_MAX))
     val iconSize = buttonSize * 0.4f
     val countdownTextSize = ScaledDimensions.buttonTextSize
     

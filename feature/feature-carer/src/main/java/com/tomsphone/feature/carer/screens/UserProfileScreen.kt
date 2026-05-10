@@ -1,6 +1,8 @@
 package com.tomsphone.feature.carer.screens
 
+import android.Manifest
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -9,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -16,6 +19,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import coil.request.ImageRequest
 import com.tomsphone.core.telecom.EmergencyNumberResolver
 import com.tomsphone.core.ui.theme.WandasDimensions
@@ -32,6 +38,7 @@ import java.io.File
  * - Emergency number (all levels)
  * - Future: blood type, meds, etc. (Level 2+)
  */
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun UserProfileScreen(
     onNavigateToPhotoCapture: () -> Unit,
@@ -41,6 +48,7 @@ fun UserProfileScreen(
     val settings by viewModel.settings.collectAsState()
     val saveToastState = rememberSaveToastState()
     val context = LocalContext.current
+    val smsPermissionState = rememberPermissionState(Manifest.permission.SEND_SMS)
 
     LaunchedEffect(Unit) {
         viewModel.syncEmergencyNumberWithRegionIfNeeded()
@@ -89,6 +97,8 @@ fun UserProfileScreen(
                             },
                             label = { Text("First Name") },
                             singleLine = true,
+                            keyboardOptions =
+                                KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                             modifier = Modifier.fillMaxWidth()
                         )
                         
@@ -103,6 +113,8 @@ fun UserProfileScreen(
                             },
                             label = { Text("Surname") },
                             singleLine = true,
+                            keyboardOptions =
+                                KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                             modifier = Modifier.fillMaxWidth()
                         )
                         
@@ -190,6 +202,62 @@ fun UserProfileScreen(
                                 )
                             }
                         }
+                    }
+
+                    // SOS: text assistants when SOS is pressed
+                    SettingCard(title = "SOS — text assistants") {
+                        SettingToggle(
+                            title = "Send SMS to all assistants when SOS is pressed",
+                            description =
+                                "Texts every saved contact that has a phone number as soon as SOS is tapped " +
+                                    "(even if the emergency call is not completed). Requires SMS permission.",
+                            checked = settings.sosSmsNotifyAssistantsEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setSosSmsNotifyAssistantsEnabled(enabled)
+                                if (enabled) {
+                                    smsPermissionState.launchPermissionRequest()
+                                    saveToastState.show("Grant SMS when prompted so SOS texts can be sent")
+                                } else {
+                                    saveToastState.show("SOS SMS to assistants off")
+                                }
+                            }
+                        )
+                        if (settings.sosSmsNotifyAssistantsEnabled && !smsPermissionState.status.isGranted) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "SMS permission is still off — SOS cannot send texts until you allow SMS for this app (system Settings → Apps → Tom's Phone → Permissions).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.65f),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        var sosSmsBody by remember { mutableStateOf(settings.sosSmsNotifyAssistantsMessage) }
+                        LaunchedEffect(settings.sosSmsNotifyAssistantsMessage) {
+                            sosSmsBody = settings.sosSmsNotifyAssistantsMessage
+                        }
+                        OutlinedTextField(
+                            value = sosSmsBody,
+                            onValueChange = {
+                                sosSmsBody = it
+                                viewModel.setSosSmsNotifyAssistantsMessage(it)
+                            },
+                            label = { Text("Custom message (optional)") },
+                            placeholder = {
+                                Text(
+                                    "Leave blank for default text including user name. Use {userName} in your own message.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2,
+                            maxLines = 5
+                        )
+                        Text(
+                            text = "Blank message uses a default English SMS with the user’s name.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                     
                     // Address for EMTs

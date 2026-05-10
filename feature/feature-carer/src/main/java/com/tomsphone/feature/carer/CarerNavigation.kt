@@ -31,6 +31,7 @@ private fun NavHostController.popCarerBack() {
  */
 object CarerRoutes {
     const val MAIN_MENU = "carer_menu"
+    const val ASSISTANT_PIN = "carer_assistant_pin"
     const val TOMS_PHONE_DESCRIPTION = "carer_toms_phone_description"
     const val USER_PROFILE = "carer_user_profile"
     const val PHOTO_CAPTURE = "carer_photo_capture"
@@ -101,6 +102,7 @@ fun CarerNavigation(
         composable(CarerRoutes.MAIN_MENU) {
             CarerMainMenuScreen(
                 onNavigateToTomsPhoneDescription = { navController.navigate(CarerRoutes.TOMS_PHONE_DESCRIPTION) },
+                onNavigateToAssistantPin = { navController.navigate(CarerRoutes.ASSISTANT_PIN) },
                 onNavigateToUserProfile = { navController.navigate(CarerRoutes.USER_PROFILE) },
                 onNavigateToContactsHub = { navController.navigate(CarerRoutes.ASSISTANTS_HUB) },
                 onNavigateToCallHandling = { navController.navigate(CarerRoutes.CALL_HANDLING) },
@@ -114,6 +116,10 @@ fun CarerNavigation(
                 onExitApp = onExitApp,
                 onBack = onExitCarerSettings
             )
+        }
+
+        composable(CarerRoutes.ASSISTANT_PIN) {
+            AssistantPinScreen(onBack = { navController.popCarerBack() })
         }
         
         // Tom's Phone Description

@@ -76,7 +76,7 @@ sealed class HomeButtonConfig {
      * Emergency button - always at bottom, distinct styling
      */
     data class EmergencyButton(
-        val label: String = "Emergency",
+        val label: String = "SOS",
         /** Digits shown under the title (resolved for region / stored override). */
         val dialDigitsDisplay: String? = null
     ) : HomeButtonConfig()

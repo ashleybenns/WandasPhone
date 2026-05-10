@@ -57,6 +57,11 @@ interface SettingsRepository {
     fun isAutoAnswerAllowed(): Flow<Boolean>
     
     /**
+     * Whether a carer PIN has been stored (persisted key present).
+     */
+    fun hasCarerPin(): Flow<Boolean>
+
+    /**
      * Verify carer PIN
      */
     suspend fun verifyPin(hashedPin: String): Boolean

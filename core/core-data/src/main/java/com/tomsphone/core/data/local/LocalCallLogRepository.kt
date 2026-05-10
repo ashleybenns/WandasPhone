@@ -4,6 +4,8 @@ import com.tomsphone.core.data.local.dao.CallLogDao
 import com.tomsphone.core.data.local.mapper.toCallLogEntry
 import com.tomsphone.core.data.local.mapper.toEntity
 import com.tomsphone.core.data.model.CallLogEntry
+import com.tomsphone.core.data.model.Contact
+import com.tomsphone.core.data.util.PhoneNumberUtils
 import com.tomsphone.core.data.repository.CallLogRepository
 import com.tomsphone.core.data.repository.dedupeOutstandingMissedCalls
 import kotlinx.coroutines.flow.Flow
@@ -95,6 +97,19 @@ class LocalCallLogRepository @Inject constructor(
     override suspend fun deleteAllCallLogs(): Result<Unit> {
         return runCatching {
             callLogDao.deleteAll()
+        }
+    }
+
+    override suspend fun syncCallLogsWithContact(contact: Contact): Result<Unit> {
+        return runCatching {
+            if (contact.id == 0L) return@runCatching
+            callLogDao.updateContactNamesForContactId(contact.id, contact.name)
+            val snapshot = callLogDao.getRecentCallsSnapshot(2000)
+            for (entity in snapshot) {
+                if (entity.contactId != null) continue
+                if (!PhoneNumberUtils.isMatch(entity.phoneNumber, contact.phoneNumber)) continue
+                callLogDao.updateContactLinkage(entity.id, contact.id, contact.name)
+            }
         }
     }
 }

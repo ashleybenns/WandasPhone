@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +35,12 @@ import com.tomsphone.core.ui.components.SecondaryScreenIdleEffect
 import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
+import com.tomsphone.core.ui.theme.rememberEmergencyConfirmBackIconSize
+import com.tomsphone.core.ui.theme.rememberEmergencyConfirmBackRowStyle
+import com.tomsphone.core.ui.theme.rememberEmergencyConfirmDialDiameter
+import com.tomsphone.core.ui.theme.rememberEmergencyConfirmDialTypography
+import com.tomsphone.core.ui.theme.rememberEmergencyConfirmInstructionStyle
+import com.tomsphone.core.ui.theme.rememberEndCallFixedActionTypography
 import com.tomsphone.core.ui.theme.wandasColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -110,13 +117,47 @@ class EmergencyConfirmViewModel @Inject constructor(
     }
 }
 
+@HiltViewModel
+class EmergencyCallScreenViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+) : ViewModel() {
+
+    val buttonActivation: StateFlow<ButtonActivationPreset> =
+        settingsRepository
+            .getSettings()
+            .map { it.buttonActivation }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                ButtonActivationPreset.ON_RELEASE,
+            )
+
+    val touchDebounceMs: StateFlow<Int> =
+        settingsRepository
+            .getSettings()
+            .map { it.touchDebounceMs }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 150)
+
+    val accumulatedTapThresholdMs: StateFlow<Int> =
+        settingsRepository
+            .getSettings()
+            .map { it.accumulatedTapThresholdMs }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 500)
+
+    val accumulatedTapTimeoutMs: StateFlow<Int> =
+        settingsRepository
+            .getSettings()
+            .map { it.accumulatedTapTimeoutMs }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3000)
+}
+
 /**
  * Emergency confirm screen - requires 3 taps to make the call.
  * 
  * Design matches end call screens with styling like ListScreenLayout:
  * - Red background
- * - Back button at top (arrow + "Back" text, white on red)
- * - "Press 3 times" instruction with countdown
+ * - Back row, instruction line, and round dial use screen-fit typography (not carer appearance scale)
+ * - "Press N times" instruction with countdown
  * - Large round button in center
  * - Test mode indicator
  * - Auto-cancels after 30 seconds of inactivity
@@ -130,10 +171,21 @@ fun EmergencyConfirmScreen(
     viewModel: EmergencyConfirmViewModel = hiltViewModel()
 ) {
     val emergencyRed = Color(0xFFD32F2F)
-    val buttonSize = ScaledDimensions.endCallButtonSize * 1.2f // Slightly larger than end call button
-    val headerTextSize = ScaledDimensions.contactNameTextSize
-    val iconSize = headerTextSize.value.dp * 1.2f
-    
+    val configuration = LocalConfiguration.current
+    val buttonSize = rememberEmergencyConfirmDialDiameter()
+    val dialPad = 20.dp
+    val dialInnerW = (buttonSize - dialPad * 2).coerceAtLeast(64.dp)
+    val dialInnerH = (buttonSize - dialPad * 2).coerceAtLeast(52.dp)
+    val dialPrimaryText = if (isTestMode) "TEST" else emergencyNumber
+    val dialTypography =
+        rememberEmergencyConfirmDialTypography(dialPrimaryText, dialInnerW, dialInnerH)
+    val instructionMaxWidth = (configuration.screenWidthDp.dp - 48.dp).coerceAtLeast(100.dp)
+    val instructionBaseStyle =
+        rememberEmergencyConfirmInstructionStyle(instructionMaxWidth, REQUIRED_TAPS)
+    val backRowMaxWidth = (configuration.screenWidthDp.dp * 0.55f).coerceAtLeast(96.dp)
+    val backTextStyle = rememberEmergencyConfirmBackRowStyle(backRowMaxWidth)
+    val backIconSize = rememberEmergencyConfirmBackIconSize()
+
     // Touch response settings
     val buttonActivation by viewModel.buttonActivation.collectAsState()
     val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
@@ -215,16 +267,13 @@ fun EmergencyConfirmScreen(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White,
-                    modifier = Modifier.size(iconSize)
+                    modifier = Modifier.size(backIconSize),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = "Back",
-                    style = TextStyle(
-                        fontSize = headerTextSize,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = Color.White
+                    style = backTextStyle,
+                    color = Color.White,
                 )
             }
             
@@ -243,13 +292,12 @@ fun EmergencyConfirmScreen(
                 
                 Text(
                     text = instructionText,
-                    style = TextStyle(
-                        fontSize = ScaledDimensions.statusTextSize,
-                        fontWeight = if (tapCount > 0) FontWeight.Bold else FontWeight.Medium,
-                        lineHeight = ScaledDimensions.statusTextSize * 1.2f
-                    ),
+                    style =
+                        instructionBaseStyle.copy(
+                            fontWeight = if (tapCount > 0) FontWeight.Bold else FontWeight.Medium,
+                        ),
                     color = Color.White,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
                 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -282,18 +330,18 @@ fun EmergencyConfirmScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = if (isTestMode) "TEST" else emergencyNumber,
-                                fontSize = ScaledDimensions.contactNameTextSize,
-                                fontWeight = FontWeight.Bold,
+                                text = dialPrimaryText,
+                                style = dialTypography.primaryLine,
                                 color = emergencyRed,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
                             )
                             Text(
                                 text = "CALL",
-                                fontSize = ScaledDimensions.statusTextSize,
-                                fontWeight = FontWeight.Medium,
+                                style = dialTypography.callLine,
                                 color = emergencyRed.copy(alpha = 0.8f),
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
                             )
                         }
                     }
@@ -308,17 +356,9 @@ fun EmergencyConfirmScreen(
 }
 
 /**
- * Emergency call screen - shown during an active emergency call.
- * 
- * Displays user's emergency info for attending EMTs:
- * - Scrollable content for extensive medical info
- * - Large user photo (for verification)
- * - Name, address
- * - Blood type, allergies, medications
- * - Medical conditions
- * - Warning about unknown calls being allowed
- * 
- * NO end call button - let EMT end the call
+ * Emergency call screen — medical info for EMTs (scrollable).
+ *
+ * Exit control is pinned to the **top** (double-tap “Back”, same gesture sizing as end-call).
  */
 @Composable
 fun EmergencyCallScreen(
@@ -338,30 +378,131 @@ fun EmergencyCallScreen(
     emergencyContact2Phone: String,
     isTestMode: Boolean,
     isCallActive: Boolean = true,
-    onEndCall: () -> Unit
+    onEndCall: () -> Unit,
+    viewModel: EmergencyCallScreenViewModel = hiltViewModel(),
 ) {
     // Build full name
     val fullName = if (userSurname.isNotBlank()) "$userName $userSurname" else userName
     val emergencyRed = Color(0xFFD32F2F)
     val scrollState = rememberScrollState()
-    
-    Surface(
+
+    val buttonActivation by viewModel.buttonActivation.collectAsState()
+    val touchDebounceMs by viewModel.touchDebounceMs.collectAsState()
+    val accumulatedThresholdMs by viewModel.accumulatedTapThresholdMs.collectAsState()
+    val accumulatedTimeoutMs by viewModel.accumulatedTapTimeoutMs.collectAsState()
+
+    var exitTapCount by remember { mutableIntStateOf(0) }
+    var exitResetJob by remember { mutableStateOf<Job?>(null) }
+    val scope = rememberCoroutineScope()
+    val exitConfirmPending = exitTapCount == 1
+    val latestOnEndCall by rememberUpdatedState(onEndCall)
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exitResetJob?.cancel()
+        }
+    }
+
+    val configuration = LocalConfiguration.current
+    val screenW = configuration.screenWidthDp.dp
+    val barHeight = (configuration.screenHeightDp * 0.13f).dp.coerceIn(56.dp, 132.dp)
+    val innerTextWidth = (screenW - 48.dp).coerceAtLeast(120.dp)
+    val exitTypography = rememberEndCallFixedActionTypography(innerTextWidth, barHeight)
+
+    Scaffold(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.wandasColors.background
-    ) {
+        containerColor = MaterialTheme.wandasColors.background,
+        topBar = {
+            val exitInteractionSource = remember { MutableInteractionSource() }
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = WandasDimensions.SpacingLarge,
+                            vertical = 8.dp,
+                        ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Surface(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(barHeight)
+                            .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
+                            .indication(exitInteractionSource, rememberRipple())
+                            .activationGesture(
+                                preset = buttonActivation,
+                                debounceMs = touchDebounceMs,
+                                accumulatedThresholdMs = accumulatedThresholdMs,
+                                accumulatedTimeoutMs = accumulatedTimeoutMs,
+                                onActivate = {
+                                    if (exitTapCount == 0) {
+                                        exitTapCount = 1
+                                        exitResetJob?.cancel()
+                                        exitResetJob =
+                                            scope.launch {
+                                                delay(3000)
+                                                exitTapCount = 0
+                                            }
+                                    } else {
+                                        exitTapCount = 0
+                                        exitResetJob?.cancel()
+                                        latestOnEndCall()
+                                    }
+                                },
+                                interactionSource = exitInteractionSource,
+                            ),
+                    shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
+                    color = emergencyRed,
+                    shadowElevation = WandasDimensions.ElevationMedium,
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Back",
+                                style = exitTypography.titleStyle,
+                                color = Color.White,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = if (exitConfirmPending) "Tap again" else "Tap twice",
+                                style = exitTypography.subtitleStyle,
+                                color =
+                                    if (exitConfirmPending) {
+                                        Color(0xFFFFEB3B)
+                                    } else {
+                                        Color.White.copy(alpha = 0.9f)
+                                    },
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(ScaledDimensions.edgePadding),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .navigationBarsPadding()
+                    .verticalScroll(scrollState)
+                    .padding(ScaledDimensions.edgePadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Test mode banner
             if (isTestMode) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(0xFFFFEB3B),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
                 ) {
                     Text(
                         text = "⚠️ TEST MODE",
@@ -369,26 +510,13 @@ fun EmergencyCallScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.Black,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(12.dp)
+                        modifier = Modifier.padding(12.dp),
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            
-            // Exit button - always visible (small, at top)
-            TextButton(
-                onClick = onEndCall,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.wandasColors.onBackground.copy(alpha = 0.6f)
-                )
-            ) {
-                Text(
-                    text = "← Back to Home",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            
+
             // IMPORTANT WARNING: Unknown calls allowed
             Surface(
                 modifier = Modifier.fillMaxWidth(),

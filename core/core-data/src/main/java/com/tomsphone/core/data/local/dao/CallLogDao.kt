@@ -57,5 +57,17 @@ interface CallLogDao {
 
     @Query("DELETE FROM call_logs")
     suspend fun deleteAll()
+
+    /** Snapshot for linking orphan rows to a newly saved contact (same limit scale as [getRecentCalls]). */
+    @Query("SELECT * FROM call_logs ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentCallsSnapshot(limit: Int): List<CallLogEntity>
+
+    @Query("UPDATE call_logs SET contactName = :contactName WHERE contactId = :contactId")
+    suspend fun updateContactNamesForContactId(contactId: Long, contactName: String)
+
+    @Query(
+        "UPDATE call_logs SET contactId = :contactId, contactName = :contactName WHERE id = :rowId"
+    )
+    suspend fun updateContactLinkage(rowId: Long, contactId: Long, contactName: String)
 }
 

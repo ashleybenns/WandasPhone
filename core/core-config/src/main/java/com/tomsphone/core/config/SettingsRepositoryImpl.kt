@@ -111,6 +111,12 @@ class SettingsRepositoryImpl @Inject constructor(
         return getSettings().map { it.autoAnswerEnabled }
     }
     
+    override fun hasCarerPin(): Flow<Boolean> {
+        return dataStore.data.map { preferences ->
+            !preferences[CARER_PIN_KEY].isNullOrBlank()
+        }
+    }
+
     override suspend fun verifyPin(hashedPin: String): Boolean {
         val storedPin = dataStore.data.firstOrNull()?.get(CARER_PIN_KEY)
         return storedPin == hashedPin
@@ -120,6 +126,19 @@ class SettingsRepositoryImpl @Inject constructor(
         return runCatching {
             dataStore.edit { preferences ->
                 preferences[CARER_PIN_KEY] = hashedPin
+                val settingsJson = preferences[SETTINGS_KEY]
+                val currentSettings = if (settingsJson != null) {
+                    try {
+                        json.decodeFromString<CarerSettings>(settingsJson)
+                    } catch (e: Exception) {
+                        CarerSettings()
+                    }
+                } else {
+                    CarerSettings()
+                }
+                preferences[SETTINGS_KEY] = json.encodeToString(
+                    currentSettings.copy(carerPin = hashedPin)
+                )
             }
         }
     }

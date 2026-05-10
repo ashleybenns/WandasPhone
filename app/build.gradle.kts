@@ -25,13 +25,16 @@ android {
         applicationId = "com.ashbashapps.tomsphone"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.2"
+        // Increment versionCode for every Play upload (AAB). Must be > any version already on the track.
+        versionCode = 13
+        versionName = "1.0.13"
         // Support & suggestions API (Vercel). Rebuild app after changing.
         buildConfigField("String", "SUPPORT_API_BASE_URL", "\"https://toms-phone.vercel.app\"")
-        // Play Billing in-app product IDs (must match Play Console one-time products).
-        buildConfigField("String", "BILLING_PRODUCT_LIFETIME_STANDARD", "\"wandas_lifetime_standard\"")
-        buildConfigField("String", "BILLING_PRODUCT_LIFETIME_EARLY", "\"wandas_lifetime_early_adopter\"")
+        // Play Billing: product ID must match Monetization → Products → One-time products (exact string).
+        // Price (e.g. £10 UK) is set only in Play Console, not here.
+        buildConfigField("String", "BILLING_PRODUCT_LIFETIME_STANDARD", "\"lifetime_unlock_10a\"")
+        // Optional second one-time product ID. Empty = paywall shows a single lifetime purchase only.
+        buildConfigField("String", "BILLING_PRODUCT_LIFETIME_EARLY", "\"\"")
         // Optional fallback if Remote Config is empty (e.g. reviewer offline). Leave default empty; set only for review builds if needed.
         buildConfigField("String", "PLAY_REVIEW_LICENSE_FALLBACK", "\"\"")
         buildConfigField("Boolean", "BILLING_DEBUG_ENTITLEMENT_BYPASS", "false")
@@ -151,11 +154,20 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
     
-    // Firebase
+    // Firebase (exclude Privacy Sandbox ads libs merged by measurement — triggers Play AD_ID review noise)
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
-    implementation(libs.firebase.crashlytics)
-    implementation(libs.firebase.config)
+    implementation(libs.firebase.analytics) {
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices")
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices-java")
+    }
+    implementation(libs.firebase.crashlytics) {
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices")
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices-java")
+    }
+    implementation(libs.firebase.config) {
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices")
+        exclude(group = "androidx.privacysandbox.ads", module = "ads-adservices-java")
+    }
     
     // Analytics module
     implementation(project(":core:core-analytics"))

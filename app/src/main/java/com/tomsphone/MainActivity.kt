@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.ContactsContract
+import android.provider.Settings
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -310,8 +311,8 @@ class MainActivity : ComponentActivity() {
     }
     
     /**
-     * Exit the app - unpin, disable home launcher, and open settings
-     * Used by carer as an escape hatch when pinning/home launcher causes issues
+     * Exit the app — unpin if needed and open system settings.
+     * Prefer **Default apps** so carers can confirm Tom's Phone is the default Phone app (and adjust Home etc.).
      */
     private fun exitApp() {
         Log.d(TAG, "Carer requested app exit")
@@ -326,29 +327,37 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        // Open Android Settings - this always works even if we're the home launcher
-        // From settings, user can navigate anywhere or change default home app
-        try {
-            val settingsIntent = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            startActivity(settingsIntent)
-            Log.d(TAG, "Opened Android Settings")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to open settings: ${e.message}")
-            // Fallback: try to open home app settings specifically
-            try {
-                val homeSettingsIntent = Intent(android.provider.Settings.ACTION_HOME_SETTINGS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        val launchFlags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val opened = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N -> {
+                try {
+                    startActivity(
+                        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply { flags = launchFlags }
+                    )
+                    Log.d(TAG, "Opened Default apps settings")
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to open default apps settings: ${e.message}")
+                    false
                 }
-                startActivity(homeSettingsIntent)
-                Log.d(TAG, "Opened Home Settings")
-            } catch (e2: Exception) {
-                Log.e(TAG, "Failed to open home settings: ${e2.message}")
+            }
+            else -> false
+        }
+        if (!opened) {
+            try {
+                startActivity(Intent(Settings.ACTION_SETTINGS).apply { flags = launchFlags })
+                Log.d(TAG, "Opened Android Settings (fallback)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to open settings: ${e.message}")
+                try {
+                    startActivity(Intent(Settings.ACTION_HOME_SETTINGS).apply { flags = launchFlags })
+                    Log.d(TAG, "Opened Home settings (fallback)")
+                } catch (e2: Exception) {
+                    Log.e(TAG, "Failed to open home settings: ${e2.message}")
+                }
             }
         }
         
-        // Finish the activity
         finish()
     }
     
@@ -586,7 +595,6 @@ fun WandasPhoneApp(
                     buttonRowCount = homeButtonRowCount,
                     userScaleReduction = userTextScale.coerceIn(0.7f, 1.0f)
                 ) {
-                    val addContactContext = LocalContext.current
                     com.tomsphone.feature.home.MissedCallsListScreen(
                         onBack = exitMissedCalls@{
                             // #region agent log
@@ -601,22 +609,6 @@ fun WandasPhoneApp(
                             scope.launch {
                                 missedCallNagManager.markMissedCallsAsReadAndDismiss(phoneNumber)
                                 callManager.placeCall(phoneNumber)
-                            }
-                        },
-                        onAddToContacts = { phoneNumber ->
-                            val intent = Intent(Intent.ACTION_INSERT).apply {
-                                type = ContactsContract.Contacts.CONTENT_TYPE
-                                putExtra(ContactsContract.Intents.Insert.PHONE, phoneNumber)
-                            }
-                            try {
-                                addContactContext.startActivity(intent)
-                            } catch (e: Exception) {
-                                Log.e("MainActivity", "Add to contacts failed", e)
-                                Toast.makeText(
-                                    addContactContext,
-                                    "Could not open contacts app",
-                                    Toast.LENGTH_SHORT
-                                ).show()
                             }
                         },
                         onAddBlockedToApp = { phoneNumber, suggestedName ->
@@ -827,7 +819,11 @@ fun WandasPhoneApp(
                         onEndCall = {
                             Log.d("WandasPhoneApp", "Emergency screen exit requested")
                             callManager.setEmergencyMode(false)
-                            navController.popBackStack("home", inclusive = false)
+                            // Call still live: [LaunchedEffect] will navigate to endOutgoing once emergency mode clears.
+                            // Call already ended: stay on info until Back — pop to home.
+                            if (!isCallActive) {
+                                navController.popBackStack("home", inclusive = false)
+                            }
                         }
                     )
                 }

@@ -2,19 +2,12 @@ package com.tomsphone.feature.phone
 
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.indication
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ripple.rememberRipple
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -25,8 +18,6 @@ import androidx.lifecycle.viewModelScope
 import com.tomsphone.core.config.ButtonActivationPreset
 import com.tomsphone.core.telecom.CallManager
 import com.tomsphone.core.telecom.CallState
-import com.tomsphone.core.ui.components.InertBorderLayout
-import com.tomsphone.core.ui.components.activationGesture
 import com.tomsphone.core.ui.theme.ScaledDimensions
 import com.tomsphone.core.ui.theme.WandasDimensions
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +32,7 @@ import javax.inject.Inject
  * 
  * Shown when an incoming call has been ANSWERED.
  * 
- * Layout matches [IncomingCallScreen] and [EndOutgoingCallScreen] (rounded full-width buttons, two-line labels).
+ * Status matches Home scale; action bar text uses device-fit typography ([rememberEndCallFixedActionTypography]).
  */
 @Composable
 fun EndIncomingCallScreen(
@@ -53,6 +44,7 @@ fun EndIncomingCallScreen(
     val confirmPending by viewModel.confirmPending.collectAsState()
     val showSpeakerToggle by viewModel.showSpeakerToggle.collectAsState()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsState()
+    val speakerConfirmPending by viewModel.speakerConfirmPending.collectAsState()
     val wasAutoAnswered by viewModel.wasAutoAnswered.collectAsState()
     
     // Touch response settings
@@ -121,142 +113,19 @@ fun EndIncomingCallScreen(
                 }
             }
             
-            InertBorderLayout(modifier = Modifier.weight(1f)) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(WandasDimensions.SpacingLarge),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(WandasDimensions.SpacingLarge),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        val endCallInteractionSource = remember { MutableInteractionSource() }
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(ScaledDimensions.contactButtonHeight)
-                                .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                                .indication(endCallInteractionSource, rememberRipple())
-                                .activationGesture(
-                                    preset = buttonActivation,
-                                    debounceMs = touchDebounceMs,
-                                    accumulatedThresholdMs = accumulatedThresholdMs,
-                                    accumulatedTimeoutMs = accumulatedTimeoutMs,
-                                    onActivate = { viewModel.onEndCallTap() },
-                                    interactionSource = endCallInteractionSource
-                                ),
-                            shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
-                            color = Color(0xFFD32F2F),
-                            shadowElevation = WandasDimensions.ElevationMedium,
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "End call",
-                                        style = TextStyle(
-                                            fontSize = ScaledDimensions.contactNameTextSize,
-                                            fontWeight = FontWeight.Bold,
-                                            lineHeight = ScaledDimensions.contactNameTextSize * 1.1f,
-                                            platformStyle = PlatformTextStyle(
-                                                includeFontPadding = false
-                                            ),
-                                        ),
-                                        color = Color.White,
-                                        textAlign = TextAlign.Center,
-                                    )
-                                    Text(
-                                        text = if (confirmPending) "Tap again" else "Tap twice",
-                                        style = TextStyle(
-                                            fontSize = ScaledDimensions.statusTextSize,
-                                            fontWeight = FontWeight.Medium,
-                                            lineHeight = ScaledDimensions.statusTextSize * 1.2f,
-                                            platformStyle = PlatformTextStyle(
-                                                includeFontPadding = false
-                                            ),
-                                        ),
-                                        color = if (confirmPending) {
-                                            Color(0xFFFFEB3B)
-                                        } else {
-                                            Color.White.copy(alpha = 0.9f)
-                                        },
-                                        textAlign = TextAlign.Center,
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showSpeakerToggle) {
-                            val speakerConfirmPending by viewModel.speakerConfirmPending.collectAsState()
-                            val speakerInteractionSource = remember { MutableInteractionSource() }
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(ScaledDimensions.contactButtonHeight)
-                                    .clip(RoundedCornerShape(WandasDimensions.CornerRadiusLarge))
-                                    .indication(speakerInteractionSource, rememberRipple())
-                                    .activationGesture(
-                                        preset = buttonActivation,
-                                        debounceMs = touchDebounceMs,
-                                        accumulatedThresholdMs = accumulatedThresholdMs,
-                                        accumulatedTimeoutMs = accumulatedTimeoutMs,
-                                        onActivate = { viewModel.onSpeakerTap() },
-                                        interactionSource = speakerInteractionSource
-                                    ),
-                                shape = RoundedCornerShape(WandasDimensions.CornerRadiusLarge),
-                                color = Color(0xFF455A64),
-                                shadowElevation = WandasDimensions.ElevationMedium,
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            text = if (isSpeakerOn) "Speaker on" else "Speaker off",
-                                            style = TextStyle(
-                                                fontSize = ScaledDimensions.contactNameTextSize,
-                                                fontWeight = FontWeight.Bold,
-                                                lineHeight = ScaledDimensions.contactNameTextSize * 1.1f,
-                                                platformStyle = PlatformTextStyle(
-                                                    includeFontPadding = false
-                                                ),
-                                            ),
-                                            color = Color.White,
-                                            textAlign = TextAlign.Center,
-                                        )
-                                        Text(
-                                            text = if (speakerConfirmPending) "Tap again" else "Tap twice",
-                                            style = TextStyle(
-                                                fontSize = ScaledDimensions.statusTextSize,
-                                                fontWeight = FontWeight.Medium,
-                                                lineHeight = ScaledDimensions.statusTextSize * 1.2f,
-                                                platformStyle = PlatformTextStyle(
-                                                    includeFontPadding = false
-                                                ),
-                                            ),
-                                            color = if (speakerConfirmPending) {
-                                                Color(0xFFFFEB3B)
-                                            } else {
-                                                Color.White.copy(alpha = 0.9f)
-                                            },
-                                            textAlign = TextAlign.Center,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(ScaledDimensions.emergencyButtonHeight))
-                }
-            }
+            EndCallScreenActionArea(
+                modifier = Modifier.weight(1f),
+                showSpeakerToggle = showSpeakerToggle,
+                confirmPending = confirmPending,
+                isSpeakerOn = isSpeakerOn,
+                speakerConfirmPending = speakerConfirmPending,
+                buttonActivation = buttonActivation,
+                touchDebounceMs = touchDebounceMs,
+                accumulatedThresholdMs = accumulatedThresholdMs,
+                accumulatedTimeoutMs = accumulatedTimeoutMs,
+                onEndCallTap = { viewModel.onEndCallTap() },
+                onSpeakerTap = { viewModel.onSpeakerTap() },
+            )
         }
     }
 }

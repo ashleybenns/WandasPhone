@@ -584,15 +584,13 @@ fun HomeScreen(
                         }
                     }
                     
-                    // BOTTOM: Emergency button + Settings access button
-                    // Emergency: Tap 3 times = emergency
-                    // Settings: Tap 7-10 times = carer settings access
+                    // BOTTOM: SOS + compact settings (assistants); align bottoms so smaller square sits on baseline.
                     if (emergencyButton != null && callingContact == null) {
                         Spacer(modifier = Modifier.height(ScaledDimensions.buttonSpacing))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Bottom
                         ) {
                             // Emergency button - single tap opens emergency screen
                             EmergencyButton(
