@@ -172,20 +172,22 @@ class MissedCallNagManager @Inject constructor(
     suspend fun dismissIfTalkingToMissedCaller(phoneNumber: String): Boolean {
         val talkingToNormalized = normalizePhoneNumber(phoneNumber)
 
-        // Match against ALL active (helper) missed calls, not just the most recent. A helper's miss
-        // is now cleared ONLY here — on a real connection (it is deliberately NOT cleared at dial
-        // time). So connecting to an OLDER outstanding helper must clear them too, not only whoever
-        // is newest; otherwise a helper the senior just spoke to would keep nagging.
-        val match = _activeMissedCalls.value.firstOrNull {
+        // Match ALL active (helper) misses from this caller, not just the most recent, and tolerant
+        // of number format. A helper's miss is now cleared ONLY here — on a real connection (it is
+        // deliberately NOT cleared at dial time) — so we must clear every outstanding row for them:
+        //  - connecting to an OLDER outstanding helper must clear them too, not only whoever is newest;
+        //  - a helper can have several unread rows stored in DIFFERENT formats (+4477… and 077…), and
+        //    if any survives the nag resumes ~1s after hanging up with someone just spoken to.
+        val matches = _activeMissedCalls.value.filter {
             normalizePhoneNumber(it.phoneNumber) == talkingToNormalized
         }
 
-        if (match == null) {
+        if (matches.isEmpty()) {
             Log.d(TAG, "Call ACTIVE with $phoneNumber - not one of the active missed callers; any nag resumes after the call")
             return false
         }
 
-        Log.d(TAG, "Now connected to missed caller (${match.contactName}) - DISMISSING nag permanently, id=${match.id}")
+        Log.d(TAG, "Now connected to missed caller (${matches.first().contactName}) - DISMISSING ${matches.size} row(s) permanently")
 
         // Suppress nag restart permanently for this call (until next missed call)
         nagSuppressedUntil = Long.MAX_VALUE
@@ -196,13 +198,16 @@ class MissedCallNagManager @Inject constructor(
         stopAllAudio()
         stopNagging()
 
-        // Mark all missed calls from this caller as read (covers repeat callers / multiple rows).
-        // Use the matched row's stored number so it definitely hits the DB rows; try normalized too.
-        callLogRepository.markMissedCallsFromNumberAsRead(match.phoneNumber)
-        val matchNormalized = normalizePhoneNumber(match.phoneNumber)
-        if (matchNormalized != match.phoneNumber) {
-            callLogRepository.markMissedCallsFromNumberAsRead(matchNormalized)
+        // Mark every matching row read by id — exact and format-independent, so no sibling row in a
+        // different stored format survives. Number-based clear as a backstop for any same-format rows
+        // not currently tracked in _activeMissedCalls.
+        matches.forEach { call ->
+            val result = callLogRepository.markAsRead(call.id)
+            if (result.isFailure) {
+                Log.e(TAG, "FAILED to mark call ${call.id} as read: ${result.exceptionOrNull()}")
+            }
         }
+        callLogRepository.markMissedCallsFromNumberAsRead(phoneNumber)
 
         return true
     }
@@ -233,14 +238,20 @@ class MissedCallNagManager @Inject constructor(
         // dismissIfTalkingToMissedCaller when the call becomes ACTIVE). So if the call-back rings
         // out, the helper stays outstanding and the nag resumes after the call — never leave a
         // helper unsure the senior is OK. A non-helper (other contact / unknown) DOES clear on the
-        // attempt: they've done their part. If the number can't be resolved to a home-slot helper,
-        // we clear (the safe default — degrades to the old behaviour rather than over-nagging).
-        val contact = contactRepository.getContactByPhone(phoneNumber).first()
-        val settings = settingsRepository.getSettings().first()
-        val isHomeSlotHelper = contact != null && contact.id in contactIdsWithHomeCallButton(settings)
-        if (isHomeSlotHelper) {
-            Log.d(TAG, "Calling back home-slot helper $phoneNumber - NOT marking read; clears only on connect")
-            stopNagging() // quiet the nag for the attempt; onCallEnded lets it resume if unconnected
+        // attempt: they've done their part.
+        //
+        // "Is this a home-slot helper miss?" is answered from _activeMissedCalls — the SAME set the
+        // nag itself is built from (unread home-slot misses, resolved by contactId in the init flow)
+        // — rather than re-resolving the number via getContactByPhone. That keeps the dial-time
+        // decision exactly consistent with the nag's own decision and avoids a resolution asymmetry
+        // that could wrongly clear a real helper. If the number isn't a currently-tracked helper
+        // miss, we clear (safe default).
+        val isTrackedHelperMiss = _activeMissedCalls.value.any {
+            normalizePhoneNumber(it.phoneNumber) == normalizedPhone
+        }
+        if (isTrackedHelperMiss) {
+            Log.d(TAG, "Calling back tracked helper miss $phoneNumber - NOT marking read; clears only on connect")
+            stopNagging() // quiet the nag for the attempt; it resumes if the call doesn't connect
             return
         }
 
@@ -252,16 +263,7 @@ class MissedCallNagManager @Inject constructor(
         }
 
         Log.d(TAG, "Marked all missed calls from $phoneNumber as read")
-
-        // Stop nagging if this was the person being nagged about
-        val mostRecentMissedCall = _activeMissedCalls.value.firstOrNull()
-        if (mostRecentMissedCall != null) {
-            val missedNormalized = normalizePhoneNumber(mostRecentMissedCall.phoneNumber)
-            if (normalizedPhone == missedNormalized) {
-                Log.d(TAG, "Calling back the missed caller - stopping nag")
-                stopNagging()
-            }
-        }
+        // No tracked helper miss matched, so there is no home-slot nag to stop beyond the audio above.
     }
     
     /**
