@@ -193,8 +193,11 @@ class HomeViewModel @Inject constructor(
         )
     
     /**
-     * One-tap return target: same source as the missed-calls menu count (unread missed + declined,
-     * one row per caller, newest first). Includes assistants — aligns with nag and button label.
+     * One-tap return target for the missed-call button + status line. Drawn from the same source
+     * as the menu count (unread missed + declined, one row per caller, newest first), but picked
+     * **helper-first**: the newest outstanding caller who has a home call button, else the newest
+     * of any caller. Helper-first keeps the button pointing at whoever the nag is nagging about, so
+     * the status line (which shows the helper nag) and the button never name different people.
      */
     data class PrimaryMissedReturnCall(
         val callerName: String,
@@ -203,18 +206,26 @@ class HomeViewModel @Inject constructor(
     )
 
     private val primaryMissedReturnCall: StateFlow<PrimaryMissedReturnCall?> =
-        callLogRepository.getOutstandingMissedCallsPerCaller(MISSED_CALLS_COUNT_QUERY_LIMIT)
-            .map { outstanding ->
-                outstanding.firstOrNull()?.let { e ->
-                    PrimaryMissedReturnCall(
-                        // Senior-facing: an unknown caller is "Unknown", never the raw number
-                        // (matches the in-call screens). The number is kept below for the call-back.
-                        callerName = e.contactName ?: "Unknown",
-                        phoneNumber = e.phoneNumber,
-                        timestamp = e.timestamp
-                    )
-                }
+        combine(
+            callLogRepository.getOutstandingMissedCallsPerCaller(MISSED_CALLS_COUNT_QUERY_LIMIT),
+            settings
+        ) { outstanding, carerSettings ->
+            // Helper-first: prefer the newest caller who has a home call button (the SAME set the
+            // nag uses — contactIdsOnHome), else the newest of any caller. `outstanding` is already
+            // newest-first, so firstOrNull over the home-slot callers is the most-recent helper.
+            val homeCallButtonIds = HomeSlotAssignments.contactIdsOnHome(carerSettings.homeSlotAssignments)
+            val pick = outstanding.firstOrNull { it.contactId != null && it.contactId in homeCallButtonIds }
+                ?: outstanding.firstOrNull()
+            pick?.let { e ->
+                PrimaryMissedReturnCall(
+                    // Senior-facing: an unknown caller is "Unknown", never the raw number
+                    // (matches the in-call screens). The number is kept below for the call-back.
+                    callerName = e.contactName ?: "Unknown",
+                    phoneNumber = e.phoneNumber,
+                    timestamp = e.timestamp
+                )
             }
+        }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
