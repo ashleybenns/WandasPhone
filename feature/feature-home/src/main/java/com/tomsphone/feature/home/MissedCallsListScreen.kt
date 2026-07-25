@@ -157,7 +157,8 @@ fun MissedCallsListScreen(
                     val call = row.call
                     MissedCallListItem(
                         contact = row.contact,
-                        mainLabel = call.contactName ?: call.phoneNumber,
+                        // Senior-facing: unknown callers show as "Unknown", never the raw number.
+                        mainLabel = call.contactName ?: "Unknown",
                         timestamp = call.timestamp,
                         rowSlotHeightDp = rowSlotHeightDp,
                         textAlignment = listTextAlignment,
@@ -166,7 +167,8 @@ fun MissedCallsListScreen(
                         accumulatedThresholdMs = accumulatedThresholdMs,
                         accumulatedTimeoutMs = accumulatedTimeoutMs,
                         onCall = {
-                            val label = call.contactName ?: call.phoneNumber
+                            // Display name for the call-back ("Calling …"); never the raw number.
+                            val label = call.contactName ?: "Unknown"
                             onCallContact(label, call.phoneNumber)
                         },
                         onAddBlockedToApp =

@@ -207,7 +207,9 @@ class HomeViewModel @Inject constructor(
             .map { outstanding ->
                 outstanding.firstOrNull()?.let { e ->
                     PrimaryMissedReturnCall(
-                        callerName = e.contactName ?: e.phoneNumber,
+                        // Senior-facing: an unknown caller is "Unknown", never the raw number
+                        // (matches the in-call screens). The number is kept below for the call-back.
+                        callerName = e.contactName ?: "Unknown",
                         phoneNumber = e.phoneNumber,
                         timestamp = e.timestamp
                     )
