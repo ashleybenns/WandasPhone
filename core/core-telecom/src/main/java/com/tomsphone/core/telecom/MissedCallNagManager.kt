@@ -170,44 +170,41 @@ class MissedCallNagManager @Inject constructor(
      * Returns true if nag was dismissed, false if talking to someone else
      */
     suspend fun dismissIfTalkingToMissedCaller(phoneNumber: String): Boolean {
-        val mostRecentMissedCall = _activeMissedCalls.value.firstOrNull()
-        
-        if (mostRecentMissedCall == null) {
-            Log.d(TAG, "No active missed calls to dismiss")
-            return false
-        }
-        
-        // Normalize both numbers for comparison
         val talkingToNormalized = normalizePhoneNumber(phoneNumber)
-        val missedNormalized = normalizePhoneNumber(mostRecentMissedCall.phoneNumber)
-        
-        Log.d(TAG, "Call ACTIVE - comparing: talkingTo='$talkingToNormalized' vs missed='$missedNormalized'")
-        
-        if (talkingToNormalized == missedNormalized) {
-            Log.d(TAG, "Now talking to missed caller (${mostRecentMissedCall.contactName}) - DISMISSING nag permanently, id=${mostRecentMissedCall.id}")
-            
-            // Suppress nag restart permanently for this call (until next missed call)
-            nagSuppressedUntil = Long.MAX_VALUE
-            
-            // IMMEDIATELY clear state to prevent race conditions with Room Flow
-            _activeMissedCalls.value = emptyList()
-            
-            stopAllAudio()
-            stopNagging()
-            
-            // Mark as read in database (Room Flow will confirm the state)
-            val result = callLogRepository.markAsRead(mostRecentMissedCall.id)
-            if (result.isSuccess) {
-                Log.d(TAG, "Successfully marked call ${mostRecentMissedCall.id} as read")
-            } else {
-                Log.e(TAG, "FAILED to mark call ${mostRecentMissedCall.id} as read: ${result.exceptionOrNull()}")
-            }
-            
-            return true
-        } else {
-            Log.d(TAG, "Talking to ${phoneNumber}, but missed call is from ${mostRecentMissedCall.contactName} - nag will resume after call")
+
+        // Match against ALL active (helper) missed calls, not just the most recent. A helper's miss
+        // is now cleared ONLY here — on a real connection (it is deliberately NOT cleared at dial
+        // time). So connecting to an OLDER outstanding helper must clear them too, not only whoever
+        // is newest; otherwise a helper the senior just spoke to would keep nagging.
+        val match = _activeMissedCalls.value.firstOrNull {
+            normalizePhoneNumber(it.phoneNumber) == talkingToNormalized
+        }
+
+        if (match == null) {
+            Log.d(TAG, "Call ACTIVE with $phoneNumber - not one of the active missed callers; any nag resumes after the call")
             return false
         }
+
+        Log.d(TAG, "Now connected to missed caller (${match.contactName}) - DISMISSING nag permanently, id=${match.id}")
+
+        // Suppress nag restart permanently for this call (until next missed call)
+        nagSuppressedUntil = Long.MAX_VALUE
+
+        // IMMEDIATELY clear state to prevent race conditions with Room Flow
+        _activeMissedCalls.value = emptyList()
+
+        stopAllAudio()
+        stopNagging()
+
+        // Mark all missed calls from this caller as read (covers repeat callers / multiple rows).
+        // Use the matched row's stored number so it definitely hits the DB rows; try normalized too.
+        callLogRepository.markMissedCallsFromNumberAsRead(match.phoneNumber)
+        val matchNormalized = normalizePhoneNumber(match.phoneNumber)
+        if (matchNormalized != match.phoneNumber) {
+            callLogRepository.markMissedCallsFromNumberAsRead(matchNormalized)
+        }
+
+        return true
     }
     
     /**
@@ -225,21 +222,37 @@ class MissedCallNagManager @Inject constructor(
      * Called when user places a call to that number (they're calling back)
      */
     suspend fun markMissedCallsAsReadAndDismiss(phoneNumber: String) {
-        // Stop all audio immediately
+        // Stop all audio immediately (don't nag over the call the senior is placing).
         stopAllAudio()
-        
+
         // Normalize the phone number for matching
         val normalizedPhone = normalizePhoneNumber(phoneNumber)
-        
-        // Mark all missed calls from this number as read
-        // Try both the original format and normalized format
+
+        // Helper reassurance: a home-slot helper's miss is NOT cleared just because the senior
+        // tried calling back — only a genuine two-way connection clears it (that happens in
+        // dismissIfTalkingToMissedCaller when the call becomes ACTIVE). So if the call-back rings
+        // out, the helper stays outstanding and the nag resumes after the call — never leave a
+        // helper unsure the senior is OK. A non-helper (other contact / unknown) DOES clear on the
+        // attempt: they've done their part. If the number can't be resolved to a home-slot helper,
+        // we clear (the safe default — degrades to the old behaviour rather than over-nagging).
+        val contact = contactRepository.getContactByPhone(phoneNumber).first()
+        val settings = settingsRepository.getSettings().first()
+        val isHomeSlotHelper = contact != null && contact.id in contactIdsWithHomeCallButton(settings)
+        if (isHomeSlotHelper) {
+            Log.d(TAG, "Calling back home-slot helper $phoneNumber - NOT marking read; clears only on connect")
+            stopNagging() // quiet the nag for the attempt; onCallEnded lets it resume if unconnected
+            return
+        }
+
+        // Non-helper: mark all missed calls from this number as read (clears on the attempt).
+        // Try both the original format and normalized format.
         callLogRepository.markMissedCallsFromNumberAsRead(phoneNumber)
         if (normalizedPhone != phoneNumber) {
             callLogRepository.markMissedCallsFromNumberAsRead(normalizedPhone)
         }
-        
+
         Log.d(TAG, "Marked all missed calls from $phoneNumber as read")
-        
+
         // Stop nagging if this was the person being nagged about
         val mostRecentMissedCall = _activeMissedCalls.value.firstOrNull()
         if (mostRecentMissedCall != null) {
