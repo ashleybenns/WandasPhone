@@ -33,7 +33,9 @@ class MissedCallNagManager @Inject constructor(
     private val contactRepository: ContactRepository,
     private val settingsRepository: SettingsRepository,
     private val tts: WandasTTS,
-    private val ringtonePlayer: RingtonePlayer
+    private val ringtonePlayer: RingtonePlayer,
+    // Lazy to break the DI cycle (CallManagerImpl injects Lazy<MissedCallNagManager>).
+    private val callManager: dagger.Lazy<CallManager>
 ) {
     
     private companion object {
@@ -68,6 +70,40 @@ class MissedCallNagManager @Inject constructor(
             }
         }
         
+        // Authoritative call-in-progress tracking from the real call state. onCallStarted()/
+        // onCallEnded() still give immediate dial-time suppression and the normal reset, but a
+        // rung-out call-back that is interrupted before the app returns home can miss onCallEnded
+        // and leave callInProgress stuck true — silently suppressing a helper's reassurance nag.
+        // Observing currentCall guarantees the flag is released whenever a call that WAS ongoing
+        // ends, regardless of whether anyone calls onCallEnded. It never undoes the dial-time
+        // suppression: while no call has yet appeared on the flow it leaves callInProgress alone.
+        scope.launch {
+            var wasOngoing = false
+            callManager.get().currentCall.collect { call ->
+                val ongoing = call != null &&
+                    call.state != CallState.DISCONNECTED &&
+                    call.state != CallState.IDLE
+                if (ongoing) {
+                    wasOngoing = true
+                    callInProgress = true
+                } else if (wasOngoing) {
+                    // A call that was ongoing has ended — release suppression even if onCallEnded was
+                    // never delivered. Brief nag-suppression window to let the DB Flow settle, matching
+                    // onCallEnded (and keeping a permanent on-connect dismissal permanent).
+                    wasOngoing = false
+                    callInProgress = false
+                    nagSuppressedUntil = if (nagSuppressedUntil == Long.MAX_VALUE) {
+                        System.currentTimeMillis() + 1000
+                    } else {
+                        System.currentTimeMillis() + 3000
+                    }
+                    Log.d(TAG, "currentCall ended - callInProgress released (authoritative)")
+                }
+                // ongoing == false && wasOngoing == false: no call has begun on the flow yet — leave
+                // callInProgress alone so onCallStarted()'s dial-time suppression is not undone.
+            }
+        }
+
         // Monitor unread missed + declined; nag only for contacts with a home call slot
         scope.launch {
             combine(
