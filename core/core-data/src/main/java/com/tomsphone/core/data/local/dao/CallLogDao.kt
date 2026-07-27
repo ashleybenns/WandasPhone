@@ -21,10 +21,14 @@ interface CallLogDao {
     fun getMissedCallsList(limit: Int): Flow<List<CallLogEntity>>
 
     /**
-     * Unread missed + declined, newest first. Large [limit] supports deduping to unique callers in code.
+     * Unread outstanding callers, newest first: every unread MISSED, plus unread REJECTED **only from
+     * a known caller** (contactId set). A decline from an unknown number is a deliberate "no" to a
+     * stranger and must not become an outstanding call the senior is nudged to return, so it is
+     * excluded here. Large [limit] supports deduping to unique callers in code.
      */
     @Query(
-        "SELECT * FROM call_logs WHERE type IN ('MISSED', 'REJECTED') AND isRead = 0 " +
+        "SELECT * FROM call_logs WHERE isRead = 0 " +
+            "AND (type = 'MISSED' OR (type = 'REJECTED' AND contactId IS NOT NULL)) " +
             "ORDER BY timestamp DESC LIMIT :limit"
     )
     fun getUnreadMissedAndRejected(limit: Int): Flow<List<CallLogEntity>>
@@ -52,7 +56,12 @@ interface CallLogDao {
     @Query("DELETE FROM call_logs WHERE timestamp < :timestamp")
     suspend fun deleteOlderThan(timestamp: Long)
     
-    @Query("DELETE FROM call_logs WHERE type = 'MISSED' AND timestamp < :timestamp")
+    /**
+     * Age out outstanding-worthy rows — missed **and declined** — older than [timestamp]. Previously
+     * only MISSED aged out, so a declined-caller row lingered in the DB indefinitely; now a decline
+     * ages out too, so a declined known caller stops being surfaced after the same window.
+     */
+    @Query("DELETE FROM call_logs WHERE type IN ('MISSED', 'REJECTED') AND timestamp < :timestamp")
     suspend fun deleteMissedCallsOlderThan(timestamp: Long)
 
     @Query("DELETE FROM call_logs")
