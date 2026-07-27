@@ -87,6 +87,28 @@ fun HomeScreenLayoutScreen(
                     color = MaterialTheme.wandasColors.onSurface.copy(alpha = 0.8f),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
+                // Warn when there is no way to return a call from someone not on the home page.
+                // The "Missed calls list" is the only button that reaches every outstanding caller;
+                // without it, a missed call from anyone who isn't a home button (and isn't the single
+                // most-relevant miss the return button shows) can't be returned from the phone. Show
+                // this so leaving misses unreturnable is a deliberate choice, not an accident.
+                if (HomeSlotAssignments.MISSED_CALLS_LIST !in list) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = "No “Missed calls list” button on the home screen. Missed calls " +
+                                "from people who aren’t on the home screen can’t be returned from the " +
+                                "phone. Add a “Missed calls list” to a slot below if that matters.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(WandasDimensions.SpacingMedium)
+                        )
+                    }
+                }
                 list.forEachIndexed { index, value ->
                     SlotRow(
                         slotNumber = index + 1,
